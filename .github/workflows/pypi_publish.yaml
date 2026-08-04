@@ -1,0 +1,76 @@
+name: Build and Publish Wheels
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Using cibuildwheel to build the wheels for different Python versions
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.17.0
+        env:
+          CIBW_SKIP: "cp36-* cp37-* cp38-* cp39-* pp* *-musllinux_*"
+          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          CIBW_ARCHS_LINUX: "x86_64 aarch64"
+          CIBW_ARCHS_WINDOWS: "AMD64"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
+
+  publish_and_index:
+    name: Publish to PyPI and Generate Index
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    if: github.event_name == 'release' && github.event.action == 'published'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: ./wheels
+          pattern: cibw-wheels-*
+          merge-multiple: true
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./wheels
+          # We only push standard (CPU) wheels to PyPI. 
+          # GPU wheels (when added) will be skipped by PyPI due to size, 
+          # so we rely on the custom index.
+
+      - name: Upload wheels to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./wheels/*.whl
+
+      - name: Generate Custom Index (PyTorch style)
+        run: |
+          python .github/scripts/generate_indexes.py ./wheels ${{ github.repository }} ${{ github.ref_name }}
+
+      - name: Deploy Custom Index to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./whl_out
+          destination_dir: whl
+          keep_files: true  # CRITICAL: Keeps docs (site/) intact!

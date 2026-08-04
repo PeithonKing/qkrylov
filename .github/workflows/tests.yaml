@@ -1,0 +1,49 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'bindings/python/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/tests.yaml'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test-cpp-and-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest numpy scipy
+
+    - name: Build C++ and Python bindings
+      run: |
+        pip install .
+
+    - name: Run Python tests
+      run: |
+        pytest bindings/python/tests/ -v
+
+    # Note: If there are pure C++ tests in the future, they would be built and run via CMake here:
+    # - name: Run C++ tests
+    #   run: |
+    #     cmake -B build -S .
+    #     cmake --build build
+    #     cd build && ctest --output-on-failure
