@@ -21,6 +21,14 @@ public:
         return *this;
     }
 
+    OpSum& operator+=(const OpSumExpr& expr)
+    {
+        for (const auto& t : expr.terms) {
+            add_term(t);
+        }
+        return *this;
+    }
+
     void clear();
 
     std::size_t size() const;

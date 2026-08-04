@@ -31,7 +31,7 @@ using namespace nb::literals;
 
 using namespace qkrylov;
 
-NB_MODULE(qkrylov_cpp, m) {
+NB_MODULE(_qkrylov_cpp, m) {
     nb::class_<Sector>(m, "Sector")
         .def(nb::init<>())
         .def_rw("use_sz", &Sector::use_sz)

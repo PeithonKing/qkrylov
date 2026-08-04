@@ -14,6 +14,7 @@ set(QKRYLOV_TESTS
     test_tj_basis
     test_tj_site
     test_ftlm
+    test_workflow
 )
 
 foreach(test_name IN LISTS QKRYLOV_TESTS)
