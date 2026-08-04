@@ -20,8 +20,8 @@ CUDAHamiltonian::~CUDAHamiltonian()
 }
 
 void CUDAHamiltonian::apply(
-    const std::vector<Complex>& x,
-    std::vector<Complex>& y
+    const Complex* x,
+    Complex* y
 ) const
 {
     std::cout << "CUDA Hamiltonian apply would execute kernels on the GPU.\n";

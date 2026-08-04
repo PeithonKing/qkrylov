@@ -28,7 +28,7 @@ DynamicsResult continued_fraction_coeffs(
     res.norm_phi0 = norm_phi;
 
     for (int iter = 0; iter < n_iter; ++iter) {
-        H.apply(v_curr, w);
+        H.apply(v_curr.data(), w.data());
 
         double alpha = std::real(dot(v_curr, w));
         res.alphas.push_back(alpha);
@@ -51,15 +51,17 @@ DynamicsResult continued_fraction_coeffs(
 }
 
 double evaluate_spectral_function(
-    const DynamicsResult& res,
+    const double* alphas,
+    const double* betas,
+    size_t n,
+    double norm_phi0,
     double omega,
     double E0,
     double eta
 )
 {
-    if (res.alphas.empty()) return 0.0;
+    if (n == 0) return 0.0;
 
-    const int n = res.alphas.size();
     std::complex<double> z(omega + E0, eta);
 
     // Backward recursion for continued fraction
@@ -69,13 +71,13 @@ double evaluate_spectral_function(
     std::complex<double> f = 0.0;
     for (int i = n - 1; i >= 0; --i) {
         if (i == n - 1) {
-            f = 1.0 / (z - res.alphas[i]);
+            f = 1.0 / (z - alphas[i]);
         } else {
-            f = 1.0 / (z - res.alphas[i] - res.betas[i] * res.betas[i] * f);
+            f = 1.0 / (z - alphas[i] - betas[i] * betas[i] * f);
         }
     }
 
-    return -1.0 / M_PI * std::imag(res.norm_phi0 * res.norm_phi0 * f);
+    return -1.0 / M_PI * std::imag(norm_phi0 * norm_phi0 * f);
 }
 
 }

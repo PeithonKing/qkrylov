@@ -23,8 +23,8 @@ public:
     ~CUDAHamiltonian();
 
     void apply(
-        const std::vector<Complex>& x,
-        std::vector<Complex>& y
+        const Complex* x,
+        Complex* y
     ) const;
 
     Index dimension() const;

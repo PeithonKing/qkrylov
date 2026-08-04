@@ -29,7 +29,7 @@ Tridiag compute_tridiag(const MatrixFreeHamiltonian& H, const Vector& v_start, i
     Tridiag res;
 
     for (int i = 0; i < n_steps; ++i) {
-        H.apply(v_curr, w);
+        H.apply(v_curr.data(), w.data());
         double alpha = std::real(dot(v_curr, w));
         res.alphas.push_back(alpha);
 

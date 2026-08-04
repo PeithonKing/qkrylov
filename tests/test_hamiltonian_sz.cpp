@@ -53,11 +53,11 @@ int main()
     x[0] = 1.0;
     x[1] = 1.0;
 
-    MatrixFreeHamiltonian::Vector y;
+    MatrixFreeHamiltonian::Vector y(2);
 
     H.apply(
-        x,
-        y
+        x.data(),
+        y.data()
     );
 
     std::cout

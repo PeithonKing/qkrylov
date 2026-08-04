@@ -159,10 +159,8 @@ NB_MODULE(_qkrylov_cpp, m) {
         // freshly-allocated NumPy array via capsule (no Python list round-trip).
         .def("apply", [](const MatrixFreeHamiltonian& H, CxArray x) {
             const Index n = H.dimension();
-            // Build input std::vector<Complex> pointing into NumPy buffer (one copy).
-            const MatrixFreeHamiltonian::Vector x_vec(x.data(), x.data() + n);
-            MatrixFreeHamiltonian::Vector y_vec;
-            H.apply(x_vec, y_vec);          // C++ kernel fills y_vec
+            MatrixFreeHamiltonian::Vector y_vec(n);
+            H.apply(x.data(), y_vec.data()); // C++ kernel fills y_vec directly from NumPy buffer
             return vec_to_numpy(std::move(y_vec));   // zero-copy hand-off to NumPy
         })
         .def("dimension", &MatrixFreeHamiltonian::dimension)
@@ -234,11 +232,10 @@ NB_MODULE(_qkrylov_cpp, m) {
     m.def("evaluate_spectral_function",
         [](DblArray alphas, DblArray betas, double norm_phi0,
            double omega, double E0, double eta) {
-            DynamicsResult res;
-            res.alphas.assign(alphas.data(), alphas.data() + alphas.shape(0));
-            res.betas.assign(betas.data(), betas.data() + betas.shape(0));
-            res.norm_phi0 = norm_phi0;
-            return evaluate_spectral_function(res, omega, E0, eta);
+            return evaluate_spectral_function(
+                alphas.data(), betas.data(), alphas.shape(0),
+                norm_phi0, omega, E0, eta
+            );
         },
         "alphas"_a, "betas"_a, "norm_phi0"_a, "omega"_a, "E0"_a, "eta"_a = 0.1);
 
