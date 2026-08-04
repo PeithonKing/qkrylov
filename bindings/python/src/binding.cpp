@@ -40,14 +40,14 @@ using CxArray = nb::ndarray<const Complex, nb::shape<-1>, nb::c_contig, nb::devi
 static nb::ndarray<nb::numpy, Complex, nb::shape<-1>>
 vec_to_numpy(std::vector<Complex>&& v)
 {
-    // Allocate a heap copy that NumPy will own via a capsule destructor.
-    // This is ONE allocation (no element-wise boxing into Python objects).
-    auto* data = new std::vector<Complex>(std::move(v));
-    nb::capsule owner(data, [](void* p) noexcept {
+    auto data = std::make_unique<std::vector<Complex>>(std::move(v));
+    auto* raw_ptr = data.get();
+    nb::capsule owner(raw_ptr, [](void* p) noexcept {
         delete static_cast<std::vector<Complex>*>(p);
     });
+    data.release();
     return nb::ndarray<nb::numpy, Complex, nb::shape<-1>>(
-        data->data(), { data->size() }, owner
+        raw_ptr->data(), { raw_ptr->size() }, owner
     );
 }
 
@@ -55,12 +55,14 @@ vec_to_numpy(std::vector<Complex>&& v)
 static nb::ndarray<nb::numpy, double, nb::shape<-1>>
 dvec_to_numpy(std::vector<double>&& v)
 {
-    auto* data = new std::vector<double>(std::move(v));
-    nb::capsule owner(data, [](void* p) noexcept {
+    auto data = std::make_unique<std::vector<double>>(std::move(v));
+    auto* raw_ptr = data.get();
+    nb::capsule owner(raw_ptr, [](void* p) noexcept {
         delete static_cast<std::vector<double>*>(p);
     });
+    data.release();
     return nb::ndarray<nb::numpy, double, nb::shape<-1>>(
-        data->data(), { data->size() }, owner
+        raw_ptr->data(), { raw_ptr->size() }, owner
     );
 }
 
@@ -92,7 +94,9 @@ NB_MODULE(_qkrylov_cpp, m) {
         .def(nb::init<>())
         .def("add_term", &OpSum::add_term)
         .def("__iadd__", [](OpSum& os, nb::tuple tuple) {
-            if (tuple.size() < 3) throw std::runtime_error("OpSum += requires at least (coeff, op, site)");
+            if (tuple.size() < 3 || tuple.size() % 2 == 0) {
+                throw std::invalid_argument("OpSum += requires (coeff, op1, site1, [op2, site2, ...]) with odd tuple length >= 3");
+            }
             OperatorTerm term;
             term.coeff = nb::cast<Complex>(tuple[0]);
             for (size_t i = 1; i < tuple.size(); i += 2) {
@@ -159,6 +163,10 @@ NB_MODULE(_qkrylov_cpp, m) {
         // freshly-allocated NumPy array via capsule (no Python list round-trip).
         .def("apply", [](const MatrixFreeHamiltonian& H, CxArray x) {
             const Index n = H.dimension();
+            if (x.shape(0) != static_cast<size_t>(n)) {
+                throw std::invalid_argument("Input array size (" + std::to_string(x.shape(0)) +
+                                           ") does not match Hamiltonian dimension (" + std::to_string(n) + ")");
+            }
             MatrixFreeHamiltonian::Vector y_vec(n);
             H.apply(x.data(), y_vec.data()); // C++ kernel fills y_vec directly from NumPy buffer
             return vec_to_numpy(std::move(y_vec));   // zero-copy hand-off to NumPy
@@ -216,6 +224,10 @@ NB_MODULE(_qkrylov_cpp, m) {
     // continued_fraction_coeffs: accepts zero-copy NumPy input for phi0
     m.def("continued_fraction_coeffs",
         [](const MatrixFreeHamiltonian& H, CxArray phi0, int n_iter) {
+            if (phi0.shape(0) != static_cast<size_t>(H.dimension())) {
+                throw std::invalid_argument("phi0 vector size (" + std::to_string(phi0.shape(0)) +
+                                           ") does not match Hamiltonian dimension (" + std::to_string(H.dimension()) + ")");
+            }
             const Vector phi0_vec(phi0.data(), phi0.data() + phi0.shape(0));
             auto res = continued_fraction_coeffs(H, phi0_vec, n_iter);
             return nb::make_tuple(
@@ -232,6 +244,9 @@ NB_MODULE(_qkrylov_cpp, m) {
     m.def("evaluate_spectral_function",
         [](DblArray alphas, DblArray betas, double norm_phi0,
            double omega, double E0, double eta) {
+            if (alphas.shape(0) != betas.shape(0)) {
+                throw std::invalid_argument("alphas and betas arrays must have the same length");
+            }
             return evaluate_spectral_function(
                 alphas.data(), betas.data(), alphas.shape(0),
                 norm_phi0, omega, E0, eta

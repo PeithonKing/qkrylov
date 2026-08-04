@@ -27,3 +27,21 @@ def test_hamiltonian():
 def test_tj_basis():
     basis = qkrylov.TJBasis(2)
     assert basis.size == 9
+
+def test_safety_validation():
+    import numpy as np
+    basis = qkrylov.SpinHalfBasis(2)
+    site = qkrylov.SpinHalfSite()
+    os = qkrylov.OpSum()
+    os += (1.0, "Sz", 0, "Sz", 1)
+    
+    # Test invalid tuple length for OpSum +=
+    with pytest.raises(ValueError):
+        os += (1.0, "Sz")
+        
+    H = qkrylov.MatrixFreeHamiltonian(basis, site, os)
+    
+    # Test wrong dimension vector passed to H.apply
+    x_wrong = np.zeros(10, dtype=np.complex128)
+    with pytest.raises(ValueError):
+        H.apply(x_wrong)
