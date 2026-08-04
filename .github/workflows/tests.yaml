@@ -35,7 +35,8 @@ jobs:
 
     - name: Build C++ and Python bindings
       run: |
-        cmake -B build -S . -DQKRYLOV_BUILD_TESTS=ON -DQKRYLOV_BUILD_PYTHON=ON
+        NANOBIND_DIR=$(python -c "import nanobind; print(nanobind.cmake_dir())")
+        cmake -B build -S . -DQKRYLOV_BUILD_TESTS=ON -DQKRYLOV_BUILD_PYTHON=ON -Dnanobind_DIR="$NANOBIND_DIR"
         cmake --build build --config Release
         cp build/_qkrylov_cpp*.so bindings/python/qkrylov/
         pip install -e bindings/python
