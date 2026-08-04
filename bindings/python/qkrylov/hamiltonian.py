@@ -43,17 +43,15 @@ class MatrixFreeHamiltonian:
         Parameters
         ----------
         x : np.ndarray
-            Input state vector of size `dimension`.
+            Input state vector of size `dimension`. Must be complex128 and C-contiguous.
             
         Returns
         -------
         np.ndarray
-            The resulting state vector `y = H(x)`.
+            The resulting state vector `y = H(x)`. Zero-copy: backed by C++ memory.
         """
-        # Ensure x is a list of complex numbers as expected by the C++ wrapper
-        x_list = x.tolist()
-        y = self._cpp_obj.apply(x_list)
-        return np.array(y, dtype=np.complex128)
+        x = np.ascontiguousarray(x, dtype=np.complex128)
+        return self._cpp_obj.apply(x)
 
     def diagonal(self) -> np.ndarray:
         """Compute the diagonal of the Hamiltonian.
@@ -61,10 +59,9 @@ class MatrixFreeHamiltonian:
         Returns
         -------
         np.ndarray
-            The diagonal elements.
+            The diagonal elements. Zero-copy: backed by C++ memory.
         """
-        diag_list = self._cpp_obj.diagonal()
-        return np.array(diag_list, dtype=np.complex128)
+        return self._cpp_obj.diagonal()
 
     def __repr__(self) -> str:
         return f"MatrixFreeHamiltonian(dim={self.dimension})"

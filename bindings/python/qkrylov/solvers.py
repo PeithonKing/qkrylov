@@ -42,10 +42,10 @@ def lanczos_ground_state(
     LanczosResult
         The ground state energy and eigenvector.
     """
-    res = _cpp.lanczos_ground_state(H._cpp_obj, maxiter, tol)
+    energy, eigenvector = _cpp.lanczos_ground_state(H._cpp_obj, maxiter, tol)
     return LanczosResult(
-        energy=res.energy,
-        eigenvector=np.array(res.eigenvector, dtype=np.complex128)
+        energy=energy,
+        eigenvector=eigenvector  # zero-copy NumPy array backed by C++ memory
     )
 
 
@@ -94,28 +94,27 @@ def davidson_lowest(
     res = _cpp.davidson_lowest(H._cpp_obj, n_eig, max_subspace, tol)
     
     return DavidsonResult(
-        eigenvalues=np.array(res.eigenvalues, dtype=float),
-        eigenvectors=[np.array(ev, dtype=np.complex128) for ev in res.eigenvectors]
+        eigenvalues=np.array(res.eigenvalues, dtype=float),  # small, copy is fine
+        eigenvectors=[np.asarray(ev) for ev in res.eigenvectors]
     )
 
 # For Dynamics and FTLM, we wrap them directly as well.
 
 class DynamicsResult:
     """Result of continued fraction Lanczos."""
-    def __init__(self, cpp_res):
-        self._cpp_obj = cpp_res
-        self.alphas = np.array(cpp_res.alphas, dtype=float)
-        self.betas = np.array(cpp_res.betas, dtype=float)
-        self.norm_phi0 = cpp_res.norm_phi0
+    def __init__(self, alphas, betas, norm_phi0):
+        self.alphas = np.asarray(alphas)     # zero-copy view from C++
+        self.betas  = np.asarray(betas)      # zero-copy view from C++
+        self.norm_phi0 = norm_phi0
 
 def continued_fraction_coeffs(
     H: MatrixFreeHamiltonian,
     phi0: np.ndarray,
     n_iter: int = 100
 ) -> DynamicsResult:
-    phi0_list = phi0.tolist()
-    res = _cpp.continued_fraction_coeffs(H._cpp_obj, phi0_list, n_iter)
-    return DynamicsResult(res)
+    phi0 = np.ascontiguousarray(phi0, dtype=np.complex128)
+    alphas, betas, norm_phi0 = _cpp.continued_fraction_coeffs(H._cpp_obj, phi0, n_iter)
+    return DynamicsResult(alphas, betas, norm_phi0)
 
 def evaluate_spectral_function(
     res: DynamicsResult,
@@ -123,7 +122,9 @@ def evaluate_spectral_function(
     E0: float,
     eta: float = 0.1
 ) -> float:
-    return _cpp.evaluate_spectral_function(res._cpp_obj, omega, E0, eta)
+    alphas = np.ascontiguousarray(res.alphas, dtype=np.float64)
+    betas  = np.ascontiguousarray(res.betas,  dtype=np.float64)
+    return _cpp.evaluate_spectral_function(alphas, betas, res.norm_phi0, omega, E0, eta)
 
 class FTLMResult:
     def __init__(self, cpp_res):
