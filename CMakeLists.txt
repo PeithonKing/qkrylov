@@ -67,31 +67,33 @@ write_basic_package_version_file(
     COMPATIBILITY SameMajorVersion
 )
 
-install(
-    TARGETS qkrylov
-    EXPORT qkrylovTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+if(NOT DEFINED SKBUILD_PROJECT_NAME)
+    install(
+        TARGETS qkrylov
+        EXPORT qkrylovTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
 
-install(
-    DIRECTORY include/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
+    install(
+        DIRECTORY include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
 
-install(
-    EXPORT qkrylovTargets
-    NAMESPACE qkrylov::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/qkrylov
-)
+    install(
+        EXPORT qkrylovTargets
+        NAMESPACE qkrylov::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/qkrylov
+    )
 
-install(
-    FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/qkrylovConfig.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/qkrylovConfigVersion.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/qkrylov
-)
+    install(
+        FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/qkrylovConfig.cmake
+            ${CMAKE_CURRENT_BINARY_DIR}/qkrylovConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/qkrylov
+    )
+endif()
 
 if(QKRYLOV_BUILD_TESTS)
     enable_testing()
@@ -99,13 +101,32 @@ if(QKRYLOV_BUILD_TESTS)
 endif()
 
 if(QKRYLOV_BUILD_PYTHON)
-    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.11 REQUIRED
+        COMPONENTS Interpreter Development.Module
+        OPTIONAL_COMPONENTS Development.SABIModule
+    )
     find_package(nanobind CONFIG REQUIRED)
 
     nanobind_add_module(
         _qkrylov_cpp
+        STABLE_ABI
+        NB_DOMAIN qkrylov
         bindings/python/src/binding.cpp
     )
 
     target_link_libraries(_qkrylov_cpp PRIVATE qkrylov::qkrylov)
+
+    install(
+        TARGETS _qkrylov_cpp
+        LIBRARY DESTINATION qkrylov
+        RUNTIME DESTINATION qkrylov
+    )
+
+    install(
+        DIRECTORY bindings/python/qkrylov/
+        DESTINATION qkrylov
+        FILES_MATCHING
+            PATTERN "*.py"
+            PATTERN "py.typed"
+    )
 endif()

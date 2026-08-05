@@ -33,7 +33,7 @@ To this end, the library embraces a "zero-overhead" philosophy where possible, p
 
 === "C++"
     ```bash
-    git clone https://github.com/qkrylov/qkrylov.git
+    git clone https://github.com/sjp95/qkrylov.git
     cd qkrylov
     mkdir build && cd build
     cmake .. -DCMAKE_BUILD_TYPE=Release
@@ -105,7 +105,7 @@ By applying operators directly to the state vectors on-the-fly, `qkrylov`'s memo
 
 ## Contributing
 
-We welcome contributions! If you have a feature request, bug report, or want to contribute code, please check out our [GitHub repository](https://github.com/qkrylov/qkrylov) and open an issue or pull request. 
+We welcome contributions! If you have a feature request, bug report, or want to contribute code, please check out our [GitHub repository](https://github.com/sjp95/qkrylov) and open an issue or pull request. 
 
 ## Citation
 
@@ -115,6 +115,6 @@ If you use `qkrylov` in your research, please consider citing it:
 @software{qkrylov,
   author = {Pal, Subhajyoti and Mukhopadhyay, Aritra},
   title = {qkrylov: Matrix-free Krylov methods for quantum many-body physics},
-  url = {https://github.com/qkrylov/qkrylov}
+  url = {https://github.com/sjp95/qkrylov}
 }
 ```
