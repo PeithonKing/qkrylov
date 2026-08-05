@@ -26,7 +26,11 @@ from .solvers import (
     ftlm,
 )
 
-__version__ = "0.1.0"
+try:
+    from importlib.metadata import version as _metadata_version
+    __version__ = _metadata_version("qkrylov")
+except Exception:
+    __version__ = "0.0.0"
 
 __all__ = [
     # Operators

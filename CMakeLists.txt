@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
 
+if(DEFINED SKBUILD_PROJECT_VERSION)
+    set(QKRYLOV_PROJECT_VERSION "${SKBUILD_PROJECT_VERSION}")
+else()
+    set(QKRYLOV_PROJECT_VERSION "0.0.0")
+endif()
+
 project(
     qkrylov
-    VERSION 0.1.0
+    VERSION ${QKRYLOV_PROJECT_VERSION}
     DESCRIPTION "Matrix-free Krylov methods for quantum many-body physics"
     LANGUAGES CXX
 )
