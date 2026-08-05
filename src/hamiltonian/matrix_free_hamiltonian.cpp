@@ -22,17 +22,14 @@ Index MatrixFreeHamiltonian::dimension() const
 }
 
 void MatrixFreeHamiltonian::apply(
-    const Vector& x,
-    Vector& y
+    const Complex* x,
+    Complex* y
 ) const
 {
     const Index dim =
         basis_->size();
 
-    y.assign(
-        dim,
-        Complex(0.0,0.0)
-    );
+    std::fill(y, y + dim, Complex(0.0, 0.0));
 
     #pragma omp parallel for
     for(Index alpha=0;
@@ -88,8 +85,12 @@ void MatrixFreeHamiltonian::apply(
             const Index beta =
                 basis_->index(state);
 
-            y[beta] +=
-                amp*xin;
+            Complex delta = amp * xin;
+            double* y_ptr = reinterpret_cast<double*>(&y[beta]);
+            #pragma omp atomic
+            y_ptr[0] += delta.real();
+            #pragma omp atomic
+            y_ptr[1] += delta.imag();
         }
     }
 }

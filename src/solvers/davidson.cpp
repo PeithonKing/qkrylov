@@ -123,7 +123,7 @@ DavidsonResult davidson_lowest(
         scal(1.0/nrm, v);
         V.push_back(v);
         Vector hv(dim);
-        H.apply(v, hv);
+        H.apply(v.data(), hv.data());
         HV.push_back(hv);
     }
 
@@ -201,7 +201,7 @@ DavidsonResult davidson_lowest(
                 scal(1.0/nrm, t);
                 V.push_back(t);
                 Vector ht(dim);
-                H.apply(t, ht);
+                H.apply(t.data(), ht.data());
                 HV.push_back(ht);
             }
         }

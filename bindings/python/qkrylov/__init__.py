@@ -1,29 +1,20 @@
-"""Python interface for qkrylov."""
+"""Python interface for qkrylov.
 
-from .qkrylov_cpp import (
-    Sector,
-    OperatorFactor,
-    OperatorTerm,
-    OpSum,
-    Basis,
-    SpinHalfBasis,
-    FermionBasis,
-    HubbardBasis,
-    TJBasis,
-    Site,
-    SpinHalfSite,
-    FermionSite,
-    HubbardSite,
-    TJSite,
-    MatrixFreeHamiltonian,
+A modern C++20 framework for matrix-free Krylov methods in quantum many-body physics,
+now with a Pythonic wrapper layer.
+"""
+
+from .operators import (
+    Op, OpSum,
+    Sz, Sp, Sm, Sx, Sy,
+    CdagUp, CUp, CdagDn, CDn,
+    Nup, Ndn, Nupdn,
+    Bdag, B, N
 )
-
-try:
-    from .qkrylov_cpp import CUDAHamiltonian
-except ImportError:
-    CUDAHamiltonian = None
-
-from .qkrylov_cpp import (
+from .site import Site, SpinHalfSite, FermionSite, HubbardSite, TJSite
+from .basis import Basis, SpinHalfBasis, FermionBasis, HubbardBasis, TJBasis
+from .hamiltonian import MatrixFreeHamiltonian
+from .solvers import (
     LanczosResult,
     lanczos_ground_state,
     DavidsonResult,
@@ -38,22 +29,34 @@ from .qkrylov_cpp import (
 __version__ = "0.1.0"
 
 __all__ = [
-    "Sector",
-    "OperatorFactor",
-    "OperatorTerm",
+    # Operators
+    "Op",
     "OpSum",
-    "Basis",
-    "SpinHalfBasis",
-    "FermionBasis",
-    "HubbardBasis",
-    "TJBasis",
+    
+    # Operator Generators
+    "Sz", "Sp", "Sm", "Sx", "Sy",
+    "CdagUp", "CUp", "CdagDn", "CDn",
+    "Nup", "Ndn", "Nupdn",
+    "Bdag", "B", "N",
+    
+    # Sites
     "Site",
     "SpinHalfSite",
     "FermionSite",
     "HubbardSite",
     "TJSite",
+    
+    # Bases
+    "Basis",
+    "SpinHalfBasis",
+    "FermionBasis",
+    "HubbardBasis",
+    "TJBasis",
+    
+    # Hamiltonian
     "MatrixFreeHamiltonian",
-    "CUDAHamiltonian",
+    
+    # Solvers
     "LanczosResult",
     "lanczos_ground_state",
     "DavidsonResult",

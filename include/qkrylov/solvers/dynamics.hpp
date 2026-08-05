@@ -26,7 +26,10 @@ DynamicsResult continued_fraction_coeffs(
 // Helper function to evaluate S(omega) from coefficients
 // S(omega) = -1/pi * Im <phi0 | (omega - H + E0 + i*eta)^-1 | phi0>
 double evaluate_spectral_function(
-    const DynamicsResult& res,
+    const double* alphas,
+    const double* betas,
+    size_t n,
+    double norm_phi0,
     double omega,
     double E0,
     double eta = 0.1

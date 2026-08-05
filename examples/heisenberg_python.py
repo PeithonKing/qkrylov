@@ -4,15 +4,15 @@ import numpy as np
 def main():
     N = 4
     # Create basis and site
-    basis = qkrylov.SpinHalfBasis(N)
+    basis = qkrylov.SpinHalfBasis(N=N)
     site = qkrylov.SpinHalfSite()
 
     # Create Heisenberg Hamiltonian
     os = qkrylov.OpSum()
     for i in range(N - 1):
-        os += 1.0, "Sz", i, "Sz", i+1
-        os += 0.5, "Sp", i, "Sm", i+1
-        os += 0.5, "Sm", i, "Sp", i+1
+        os += 1.0, qkrylov.Op.Sz, i, qkrylov.Op.Sz, i+1
+        os += 0.5, qkrylov.Op.Sp, i, qkrylov.Op.Sm, i+1
+        os += 0.5, qkrylov.Op.Sm, i, qkrylov.Op.Sp, i+1
 
     H = qkrylov.MatrixFreeHamiltonian(basis, site, os)
 

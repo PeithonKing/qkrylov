@@ -46,7 +46,7 @@ int main() {
 
     // Verify Ritz vector: H * v should be energy * v
     Vector Hv(H.dimension());
-    H.apply(res.eigenvector, Hv);
+    H.apply(res.eigenvector.data(), Hv.data());
 
     for (Index i = 0; i < H.dimension(); ++i) {
         Complex diff = Hv[i] - res.energy * res.eigenvector[i];

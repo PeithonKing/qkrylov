@@ -3,6 +3,7 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/shared_ptr.h>
+#include <nanobind/ndarray.h>
 
 #include "qkrylov/symmetry/sector.hpp"
 #include "qkrylov/operators/operator_term.hpp"
@@ -31,7 +32,41 @@ using namespace nb::literals;
 
 using namespace qkrylov;
 
-NB_MODULE(qkrylov_cpp, m) {
+// Convenience alias for a 1-D complex128 C-contiguous ndarray (read-only view)
+using CxArray = nb::ndarray<const Complex, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+
+// Helper: wrap an existing std::vector<Complex> as a zero-copy NumPy array.
+// The returned ndarray keeps the vector alive via a capsule.
+static nb::ndarray<nb::numpy, Complex, nb::shape<-1>>
+vec_to_numpy(std::vector<Complex>&& v)
+{
+    auto data = std::make_unique<std::vector<Complex>>(std::move(v));
+    auto* raw_ptr = data.get();
+    nb::capsule owner(raw_ptr, [](void* p) noexcept {
+        delete static_cast<std::vector<Complex>*>(p);
+    });
+    data.release();
+    return nb::ndarray<nb::numpy, Complex, nb::shape<-1>>(
+        raw_ptr->data(), { raw_ptr->size() }, owner
+    );
+}
+
+// Same for double vectors (e.g. alphas/betas in dynamics)
+static nb::ndarray<nb::numpy, double, nb::shape<-1>>
+dvec_to_numpy(std::vector<double>&& v)
+{
+    auto data = std::make_unique<std::vector<double>>(std::move(v));
+    auto* raw_ptr = data.get();
+    nb::capsule owner(raw_ptr, [](void* p) noexcept {
+        delete static_cast<std::vector<double>*>(p);
+    });
+    data.release();
+    return nb::ndarray<nb::numpy, double, nb::shape<-1>>(
+        raw_ptr->data(), { raw_ptr->size() }, owner
+    );
+}
+
+NB_MODULE(_qkrylov_cpp, m) {
     nb::class_<Sector>(m, "Sector")
         .def(nb::init<>())
         .def_rw("use_sz", &Sector::use_sz)
@@ -59,7 +94,9 @@ NB_MODULE(qkrylov_cpp, m) {
         .def(nb::init<>())
         .def("add_term", &OpSum::add_term)
         .def("__iadd__", [](OpSum& os, nb::tuple tuple) {
-            if (tuple.size() < 3) throw std::runtime_error("OpSum += requires at least (coeff, op, site)");
+            if (tuple.size() < 3 || tuple.size() % 2 == 0) {
+                throw std::invalid_argument("OpSum += requires (coeff, op1, site1, [op2, site2, ...]) with odd tuple length >= 3");
+            }
             OperatorTerm term;
             term.coeff = nb::cast<Complex>(tuple[0]);
             for (size_t i = 1; i < tuple.size(); i += 2) {
@@ -122,36 +159,100 @@ NB_MODULE(qkrylov_cpp, m) {
 
     nb::class_<MatrixFreeHamiltonian>(m, "MatrixFreeHamiltonian")
         .def(nb::init<std::shared_ptr<Basis>, std::shared_ptr<Site>, const OpSum&>())
-        .def("apply", &MatrixFreeHamiltonian::apply)
+        // Zero-copy apply: accept a read-only NumPy buffer, write into a
+        // freshly-allocated NumPy array via capsule (no Python list round-trip).
+        .def("apply", [](const MatrixFreeHamiltonian& H, CxArray x) {
+            const Index n = H.dimension();
+            if (x.shape(0) != static_cast<size_t>(n)) {
+                throw std::invalid_argument("Input array size (" + std::to_string(x.shape(0)) +
+                                           ") does not match Hamiltonian dimension (" + std::to_string(n) + ")");
+            }
+            MatrixFreeHamiltonian::Vector y_vec(n);
+            H.apply(x.data(), y_vec.data()); // C++ kernel fills y_vec directly from NumPy buffer
+            return vec_to_numpy(std::move(y_vec));   // zero-copy hand-off to NumPy
+        })
         .def("dimension", &MatrixFreeHamiltonian::dimension)
-        .def("diagonal", &MatrixFreeHamiltonian::diagonal);
+        // diagonal(): zero-copy hand-off of the result vector to NumPy
+        .def("diagonal", [](const MatrixFreeHamiltonian& H) {
+            return vec_to_numpy(H.diagonal());
+        });
 
 #ifdef QKRYLOV_ENABLE_CUDA
     nb::class_<CUDAHamiltonian>(m, "CUDAHamiltonian")
         .def(nb::init<std::shared_ptr<Basis>, std::shared_ptr<Site>, const OpSum&>())
-        .def("apply", &CUDAHamiltonian::apply)
+        .def("apply", [](const CUDAHamiltonian& H, CxArray x) {
+            const Index n = H.dimension();
+            const MatrixFreeHamiltonian::Vector x_vec(x.data(), x.data() + n);
+            MatrixFreeHamiltonian::Vector y_vec;
+            H.apply(x_vec, y_vec);
+            return vec_to_numpy(std::move(y_vec));
+        })
         .def("dimension", &CUDAHamiltonian::dimension);
 #endif
 
+    // LanczosResult: keep as simple struct; wrap eigenvector at call site
     nb::class_<LanczosResult>(m, "LanczosResult")
         .def_rw("energy", &LanczosResult::energy)
         .def_rw("eigenvector", &LanczosResult::eigenvector);
 
-    m.def("lanczos_ground_state", &lanczos_ground_state, "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12);
+    // Wrap lanczos_ground_state to return eigenvector as zero-copy ndarray
+    m.def("lanczos_ground_state",
+        [](const MatrixFreeHamiltonian& H, int maxiter, double tol) {
+            auto res = lanczos_ground_state(H, maxiter, tol);
+            // Wrap struct into a Python dict-like object via a small holder
+            struct Result {
+                double energy;
+                nb::ndarray<nb::numpy, Complex, nb::shape<-1>> eigenvector;
+            };
+            return nb::make_tuple(res.energy, vec_to_numpy(std::move(res.eigenvector)));
+        },
+        "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12);
 
     nb::class_<DavidsonResult>(m, "DavidsonResult")
         .def_rw("eigenvalues", &DavidsonResult::eigenvalues)
         .def_rw("eigenvectors", &DavidsonResult::eigenvectors);
 
-    m.def("davidson_lowest", &davidson_lowest, "H"_a, "n_eig"_a = 1, "max_subspace"_a = 20, "tol"_a = 1e-8);
+    m.def("davidson_lowest", &davidson_lowest,
+          "H"_a, "n_eig"_a = 1, "max_subspace"_a = 20, "tol"_a = 1e-8);
 
+    // DynamicsResult: expose alphas/betas as zero-copy NumPy arrays via lambda
     nb::class_<DynamicsResult>(m, "DynamicsResult")
+        .def_rw("norm_phi0", &DynamicsResult::norm_phi0)
         .def_rw("alphas", &DynamicsResult::alphas)
-        .def_rw("betas", &DynamicsResult::betas)
-        .def_rw("norm_phi0", &DynamicsResult::norm_phi0);
+        .def_rw("betas", &DynamicsResult::betas);
 
-    m.def("continued_fraction_coeffs", &continued_fraction_coeffs, "H"_a, "phi0"_a, "n_iter"_a = 100);
-    m.def("evaluate_spectral_function", &evaluate_spectral_function, "res"_a, "omega"_a, "E0"_a, "eta"_a = 0.1);
+    // continued_fraction_coeffs: accepts zero-copy NumPy input for phi0
+    m.def("continued_fraction_coeffs",
+        [](const MatrixFreeHamiltonian& H, CxArray phi0, int n_iter) {
+            if (phi0.shape(0) != static_cast<size_t>(H.dimension())) {
+                throw std::invalid_argument("phi0 vector size (" + std::to_string(phi0.shape(0)) +
+                                           ") does not match Hamiltonian dimension (" + std::to_string(H.dimension()) + ")");
+            }
+            const Vector phi0_vec(phi0.data(), phi0.data() + phi0.shape(0));
+            auto res = continued_fraction_coeffs(H, phi0_vec, n_iter);
+            return nb::make_tuple(
+                dvec_to_numpy(std::move(res.alphas)),
+                dvec_to_numpy(std::move(res.betas)),
+                res.norm_phi0
+            );
+        },
+        "H"_a, "phi0"_a, "n_iter"_a = 100);
+
+    // evaluate_spectral_function: accept alphas/betas as NumPy arrays directly
+    // (avoids needing the C++ DynamicsResult struct on the Python side)
+    using DblArray = nb::ndarray<const double, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
+    m.def("evaluate_spectral_function",
+        [](DblArray alphas, DblArray betas, double norm_phi0,
+           double omega, double E0, double eta) {
+            if (alphas.shape(0) != betas.shape(0)) {
+                throw std::invalid_argument("alphas and betas arrays must have the same length");
+            }
+            return evaluate_spectral_function(
+                alphas.data(), betas.data(), alphas.shape(0),
+                norm_phi0, omega, E0, eta
+            );
+        },
+        "alphas"_a, "betas"_a, "norm_phi0"_a, "omega"_a, "E0"_a, "eta"_a = 0.1);
 
     nb::class_<FTLMResult>(m, "FTLMResult")
         .def_rw("beta", &FTLMResult::beta)
@@ -159,5 +260,6 @@ NB_MODULE(qkrylov_cpp, m) {
         .def_rw("internal_energy", &FTLMResult::internal_energy)
         .def_rw("specific_heat", &FTLMResult::specific_heat);
 
-    m.def("ftlm", &ftlm, "H"_a, "beta"_a, "n_random"_a = 50, "n_steps"_a = 100);
+    m.def("ftlm", &ftlm,
+          "H"_a, "beta"_a, "n_random"_a = 50, "n_steps"_a = 100);
 }

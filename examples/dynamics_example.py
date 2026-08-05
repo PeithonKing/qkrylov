@@ -1,37 +1,25 @@
 import qkrylov
 import numpy as np
-# import matplotlib.pyplot as plt
 
 def main():
     N = 4
-    basis = qkrylov.SpinHalfBasis(N)
+    basis = qkrylov.SpinHalfBasis(N=N)
     site = qkrylov.SpinHalfSite()
 
     # Heisenberg model
     os = qkrylov.OpSum()
     for i in range(N - 1):
-        # Sz_i Sz_{i+1}
-        t = qkrylov.OperatorTerm()
-        t.coeff = 1.0
-        t.factors = [qkrylov.OperatorFactor("Sz", i), qkrylov.OperatorFactor("Sz", i+1)]
-        os.add_term(t)
-        # 0.5(Sp_i Sm_{j} + Sm_i Sp_j)
-        t = qkrylov.OperatorTerm()
-        t.coeff = 0.5
-        t.factors = [qkrylov.OperatorFactor("Sp", i), qkrylov.OperatorFactor("Sm", i+1)]
-        os.add_term(t)
-        t = qkrylov.OperatorTerm()
-        t.coeff = 0.5
-        t.factors = [qkrylov.OperatorFactor("Sm", i), qkrylov.OperatorFactor("Sp", i+1)]
-        os.add_term(t)
+        os += 1.0, qkrylov.Op.Sz, i, qkrylov.Op.Sz, i+1
+        os += 0.5, qkrylov.Op.Sp, i, qkrylov.Op.Sm, i+1
+        os += 0.5, qkrylov.Op.Sm, i, qkrylov.Op.Sp, i+1
 
     H = qkrylov.MatrixFreeHamiltonian(basis, site, os)
     gs = qkrylov.lanczos_ground_state(H)
 
     print(f"Ground state energy: {gs.energy}")
 
-    # Initial vector phi0 = A |gs> where A = Sz_0
-    phi0 = list(gs.eigenvector)
+    # Initial vector phi0 = gs eigenvector
+    phi0 = gs.eigenvector
 
     res = qkrylov.continued_fraction_coeffs(H, phi0, n_iter=20)
 

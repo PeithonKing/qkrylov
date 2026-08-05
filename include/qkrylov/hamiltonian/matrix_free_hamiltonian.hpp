@@ -24,8 +24,8 @@ public:
     );
 
     void apply(
-        const Vector& x,
-        Vector& y
+        const Complex* x,
+        Complex* y
     ) const;
 
     Vector diagonal() const;

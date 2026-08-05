@@ -33,3 +33,19 @@ __pycache__/
 
 # Project specific
 *.h5
+
+# Documentation
+site/
+
+# Packaging & Distribution
+dist/
+wheelhouse/
+whl_out/
+*.whl
+*.tar.gz
+
+# IDE & Editor files
+.vscode/
+.idea/
+.ipynb_checkpoints/
+

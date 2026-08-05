@@ -125,7 +125,7 @@ LanczosResult lanczos_ground_state(
     for(int iter=0; iter < std::min<int>(maxiter, dim); ++iter)
     {
         actual_iters = iter + 1;
-        H.apply(v_curr, w);
+        H.apply(v_curr.data(), w.data());
 
         double alpha = std::real(dot(v_curr, w));
         alphas.push_back(alpha);

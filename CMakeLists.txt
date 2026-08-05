@@ -9,6 +9,7 @@ project(
 
 option(QKRYLOV_BUILD_TESTS "Build qkrylov test executables" ON)
 option(QKRYLOV_BUILD_EXAMPLES "Build qkrylov examples" OFF)
+option(QKRYLOV_BUILD_PYTHON "Build Python bindings" OFF)
 option(QKRYLOV_ENABLE_CUDA "Enable CUDA acceleration" OFF)
 
 if(QKRYLOV_ENABLE_CUDA)
@@ -97,12 +98,14 @@ if(QKRYLOV_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-find_package(Python COMPONENTS Interpreter Development REQUIRED)
-find_package(nanobind CONFIG REQUIRED)
+if(QKRYLOV_BUILD_PYTHON)
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    find_package(nanobind CONFIG REQUIRED)
 
-nanobind_add_module(
-    qkrylov_cpp
-    bindings/python/src/binding.cpp
-)
+    nanobind_add_module(
+        _qkrylov_cpp
+        bindings/python/src/binding.cpp
+    )
 
-target_link_libraries(qkrylov_cpp PRIVATE qkrylov::qkrylov)
+    target_link_libraries(_qkrylov_cpp PRIVATE qkrylov::qkrylov)
+endif()

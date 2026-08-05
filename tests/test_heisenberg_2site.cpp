@@ -88,9 +88,9 @@ for(Index col=0;
 
     x[col] = 1.0;
 
-    MatrixFreeHamiltonian::Vector y;
+    MatrixFreeHamiltonian::Vector y(dim);
 
-    H.apply(x,y);
+    H.apply(x.data(), y.data());
 
     for(Index row=0;
         row<dim;
