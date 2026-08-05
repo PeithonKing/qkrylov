@@ -49,6 +49,11 @@ add_library(qkrylov::qkrylov ALIAS qkrylov)
 target_compile_features(qkrylov PUBLIC cxx_std_20)
 set_target_properties(qkrylov PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# MSVC needs _USE_MATH_DEFINES for M_PI and friends
+if(MSVC)
+    target_compile_definitions(qkrylov PUBLIC _USE_MATH_DEFINES)
+endif()
+
 find_package(OpenMP REQUIRED)
 target_link_libraries(qkrylov PUBLIC OpenMP::OpenMP_CXX)
 

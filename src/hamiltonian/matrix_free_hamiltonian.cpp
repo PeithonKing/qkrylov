@@ -32,8 +32,8 @@ void MatrixFreeHamiltonian::apply(
     std::fill(y, y + dim, Complex(0.0, 0.0));
 
     #pragma omp parallel for
-    for(Index alpha=0;
-        alpha<dim;
+    for(std::ptrdiff_t alpha=0;
+        alpha<static_cast<std::ptrdiff_t>(dim);
         ++alpha)
     {
         const StateID initial_state =

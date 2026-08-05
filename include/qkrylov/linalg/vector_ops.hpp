@@ -3,6 +3,7 @@
 #include "qkrylov/core/types.hpp"
 
 #include <cmath>
+#include <cstddef>
 #include <vector>
 
 namespace qkrylov
@@ -20,7 +21,7 @@ inline Complex dot(
     double im = 0.0;
 
     #pragma omp parallel for reduction(+:re, im)
-    for(std::size_t i=0;i<x.size();++i)
+    for(std::ptrdiff_t i=0;i<static_cast<std::ptrdiff_t>(x.size());++i)
     {
         Complex val = std::conj(x[i]) * y[i];
         re += val.real();
@@ -47,7 +48,7 @@ inline void scal(
 )
 {
     #pragma omp parallel for
-    for(std::size_t i=0; i<x.size(); ++i)
+    for(std::ptrdiff_t i=0; i<static_cast<std::ptrdiff_t>(x.size()); ++i)
     {
         x[i] *= a;
     }
@@ -60,7 +61,7 @@ inline void axpy(
 )
 {
     #pragma omp parallel for
-    for(std::size_t i=0;i<x.size();++i)
+    for(std::ptrdiff_t i=0;i<static_cast<std::ptrdiff_t>(x.size());++i)
     {
         y[i] += a*x[i];
     }

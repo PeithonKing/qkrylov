@@ -1,6 +1,5 @@
 #include "qkrylov/solvers/dynamics.hpp"
 
-#define _USE_MATH_DEFINES
 #include <cmath>
 #include <complex>
 
