@@ -52,8 +52,9 @@ jobs:
 
       - name: Build wheels via cibuildwheel
         uses: pypa/cibuildwheel@v4.1.0
+        with:
+          package-dir: bindings/python
         env:
-          CIBW_PACKAGE_DIR: "bindings/python"
           CIBW_BUILD: ${{ matrix.python.build }}
           CIBW_SKIP: "pp* *-musllinux_*"
           CIBW_ARCHS: ${{ matrix.platform.arch }}
