@@ -56,9 +56,10 @@ jobs:
           package-dir: bindings/python
         env:
           CIBW_BUILD: ${{ matrix.python.build }}
-          CIBW_SKIP: "pp* *-musllinux_*"
+          CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS: ${{ matrix.platform.arch }}
           CIBW_TEST_COMMAND: "python -c \"import qkrylov; print(qkrylov.__version__)\""
+          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.os == 'macos-14' && '14.0' || '13.0' }}"
           CMAKE_PREFIX_PATH: "/opt/homebrew/opt/libomp:/usr/local/opt/libomp"
           SKBUILD_WHEEL_PY_API: ${{ matrix.python.py_api }}
 
