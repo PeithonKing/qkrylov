@@ -14,7 +14,7 @@ Before we begin, ensure you have installed the library:
     ```bash
     # Ensure you have a modern C++ compiler (C++17+) and OpenMP installed.
     # Clone the repository and include the headers in your project.
-    git clone https://github.com/qkrylov/qkrylov
+    git clone https://github.com/sjp95/qkrylov
     ```
 === "Julia"
     !!! note "Coming Soon"

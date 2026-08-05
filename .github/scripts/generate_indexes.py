@@ -1,5 +1,6 @@
 import os
 import sys
+from collections import defaultdict
 
 def generate_index_html(package_name, wheels, repo_slug, tag):
     """
@@ -12,6 +13,15 @@ def generate_index_html(package_name, wheels, repo_slug, tag):
         html += f'  <a href="{url}">{wheel}</a><br/>\n'
     html += "</body>\n</html>\n"
     return html
+
+def wheel_variant(wheel):
+    parts = wheel.split("-")
+    if len(parts) < 2:
+        return None
+    version = parts[1]
+    if "+" not in version:
+        return "cpu"
+    return version.split("+", 1)[1]
 
 def main():
     if len(sys.argv) != 4:
@@ -30,25 +40,21 @@ def main():
         print(f"No wheels found in {wheel_dir}")
         sys.exit(0)
 
-    # We will simulate the PyTorch index structure:
-    # We create index.html files in whl_out/cpu/qkrylov/index.html
-    # and scaffolding for whl_out/cu12/qkrylov/index.html
-    
-    variants = ['cpu', 'cu12', 'rocm6']
-    
-    for variant in variants:
-        # In the future, we would filter 'wheels' to only include those matching the variant (e.g. +cpu or +cu12).
-        # For now, since we only build CPU wheels, we'll put them in all indices to test the scaffolding,
-        # or just put them in 'cpu' and empty indices for the others.
-        # Let's filter: if a wheel has a local version +cu12, it goes to cu12.
-        # If it has no local version, it's cpu.
-        
-        variant_wheels = []
-        for w in wheels:
-            if f'+{variant}' in w:
-                variant_wheels.append(w)
-            elif variant == 'cpu' and '+' not in w:
-                variant_wheels.append(w)
+    variants = defaultdict(list)
+    for wheel in wheels:
+        variant = wheel_variant(wheel)
+        if variant:
+            variants[variant].append(wheel)
+
+    preferred_order = ["cpu", "cu12", "cu13", "rocm6"]
+    ordered_variants = [
+        variant for variant in preferred_order if variant in variants
+    ] + sorted(
+        variant for variant in variants if variant not in preferred_order
+    )
+
+    for variant in ordered_variants:
+        variant_wheels = sorted(variants[variant])
                 
         out_dir = os.path.join("whl_out", variant, package_name)
         os.makedirs(out_dir, exist_ok=True)

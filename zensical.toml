@@ -1,8 +1,8 @@
 [project]
-site_url = "https://qkrylov.github.io/qkrylov/"
+site_url = "https://sjp95.github.io/qkrylov/"
 site_name = "qkrylov"
 site_description = "Matrix-free quantum exact diagonalization & dynamics engine in modern C++ and Python."
-repo_url = "https://github.com/qkrylov/qkrylov"
+repo_url = "https://github.com/sjp95/qkrylov"
 repo_name = "qkrylov/qkrylov"
 
 nav = [

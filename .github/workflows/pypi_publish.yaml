@@ -8,27 +8,60 @@ on:
 
 jobs:
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Build ${{ matrix.python.build }} on ${{ matrix.platform.name }}
+    runs-on: ${{ matrix.platform.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+        platform:
+          - name: linux-x86_64
+            os: ubuntu-latest
+            arch: x86_64
+          - name: linux-aarch64
+            os: ubuntu-latest
+            arch: aarch64
+          - name: windows-amd64
+            os: windows-latest
+            arch: AMD64
+          - name: macos-x86_64
+            os: macos-13
+            arch: x86_64
+          - name: macos-arm64
+            os: macos-14
+            arch: arm64
+        python:
+          - build: cp311-*
+            py_api: ""
+            tag: cp311
+          - build: cp312-*
+            py_api: cp312
+            tag: cp312-abi3
 
     steps:
       - uses: actions/checkout@v4
-      
-      # Using cibuildwheel to build the wheels for different Python versions
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.17.0
+
+      - name: Set up QEMU for Linux ARM64
+        if: matrix.platform.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Install macOS OpenMP
+        if: startsWith(matrix.platform.os, 'macos')
+        run: brew install libomp
+
+      - name: Build wheels via cibuildwheel
+        uses: pypa/cibuildwheel@v4.1.0
         env:
-          CIBW_SKIP: "cp36-* cp37-* cp38-* cp39-* pp* *-musllinux_*"
-          CIBW_ARCHS_MACOS: "x86_64 arm64"
-          CIBW_ARCHS_LINUX: "x86_64 aarch64"
-          CIBW_ARCHS_WINDOWS: "AMD64"
+          CIBW_PACKAGE_DIR: "bindings/python"
+          CIBW_BUILD: ${{ matrix.python.build }}
+          CIBW_SKIP: "pp* *-musllinux_*"
+          CIBW_ARCHS: ${{ matrix.platform.arch }}
+          CIBW_TEST_COMMAND: "python -c \"import qkrylov; print(qkrylov.__version__)\""
+          CMAKE_PREFIX_PATH: "/opt/homebrew/opt/libomp:/usr/local/opt/libomp"
+          SKBUILD_WHEEL_PY_API: ${{ matrix.python.py_api }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          name: cibw-wheels-${{ matrix.platform.name }}-${{ matrix.python.tag }}
           path: ./wheelhouse/*.whl
 
   publish_and_index:
@@ -38,7 +71,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: (github.event_name == 'release' && github.event.action == 'published') || github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
@@ -50,27 +83,50 @@ jobs:
           pattern: cibw-wheels-*
           merge-multiple: true
 
+      - name: Select PyPI wheels
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          src = Path("wheels")
+          dst = Path("pypi-wheels")
+          dst.mkdir(exist_ok=True)
+
+          for wheel in src.glob("*.whl"):
+              version = wheel.name.split("-")[1]
+              if "+" not in version:
+                  shutil.copy2(wheel, dst / wheel.name)
+
+          selected = sorted(p.name for p in dst.glob("*.whl"))
+          if not selected:
+              raise SystemExit("No public CPU wheels selected for PyPI upload")
+          print("Selected PyPI wheels:")
+          for name in selected:
+              print(f"  {name}")
+          PY
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: ./wheels
-          # We only push standard (CPU) wheels to PyPI. 
-          # GPU wheels (when added) will be skipped by PyPI due to size, 
-          # so we rely on the custom index.
+          packages-dir: ./pypi-wheels
 
       - name: Upload wheels to GitHub Release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: ./wheels/*.whl
 
       - name: Generate Custom Index (PyTorch style)
+        if: github.event_name == 'release'
         run: |
           python .github/scripts/generate_indexes.py ./wheels ${{ github.repository }} ${{ github.ref_name }}
 
       - name: Deploy Custom Index to gh-pages branch
+        if: github.event_name == 'release'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./whl_out
           destination_dir: whl
-          keep_files: true  # CRITICAL: Keeps docs (site/) intact!
+          keep_files: true

@@ -13,7 +13,7 @@ Contributions are very welcome! qkrylov is an open-source project and we appreci
 ## Development Setup
 
 ```bash
-git clone https://github.com/qkrylov/qkrylov
+git clone https://github.com/sjp95/qkrylov
 cd qkrylov
 python -m venv .venv
 source .venv/bin/activate
