@@ -42,8 +42,12 @@ To this end, the library embraces a "zero-overhead" philosophy where possible, p
     ```
 
 === "Julia"
-    !!! note "Coming Soon"
-        Julia bindings are planned via `extern "C"` FFI. See the [roadmap](#).
+    ```bash
+    git clone https://github.com/sjp95/qkrylov.git
+    cd qkrylov
+    cmake -B build -DBUILD_SHARED_LIBS=ON && cmake --build build
+    julia --project=bindings/julia -e 'using Pkg; Pkg.test()'
+    ```
 
 ## Quick Example: 2-Site Heisenberg Model
 
@@ -94,8 +98,24 @@ Here is a simple example computing the ground state energy of a 2-site anti-ferr
     ```
 
 === "Julia"
-    !!! note "Coming Soon"
-        Julia bindings are planned via `extern "C"` FFI. See the [roadmap](#).
+    ```julia
+    using QKrylov
+
+    sec = Sector()
+    set_sz!(sec, 0)
+
+    basis = SpinHalfBasis(2, sec)
+    site  = SpinHalfSite()
+
+    op = OpSum()
+    add_term!(op, 1.0, "Sz", 0, "Sz", 1)
+    add_term!(op, 0.5, "Sp", 0, "Sm", 1)
+    add_term!(op, 0.5, "Sm", 0, "Sp", 1)
+
+    H = MatrixFreeHamiltonian(basis, site, op)
+    res = lanczos_ground_state(H)
+    println("Ground state energy: ", res.energy)  # -0.75
+    ```
 
 ## Performance
 

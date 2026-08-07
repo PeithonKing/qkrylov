@@ -33,3 +33,10 @@ The Python bindings expose all core qkrylov functionality with zero-copy memory 
 | `continued_fraction_coeffs` | Lanczos coefficients for spectral functions |
 | `evaluate_spectral_function` | Evaluate A(ω) from Lanczos coefficients |
 | `ftlm` | Finite Temperature Lanczos Method |
+
+---
+
+## Julia API Reference
+
+For complete function-by-function Julia documentation, see [Julia API Reference](julia_api.md) or [`bindings/julia/README.md`](../../bindings/julia/README.md).
+
