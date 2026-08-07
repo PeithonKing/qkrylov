@@ -49,3 +49,5 @@ whl_out/
 .idea/
 .ipynb_checkpoints/
 
+# private work
+private/

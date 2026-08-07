@@ -37,6 +37,7 @@ add_library(qkrylov
     src/solvers/davidson.cpp
     src/solvers/dynamics.cpp
     src/solvers/ftlm.cpp
+    src/c_api.cpp
 )
 
 if(QKRYLOV_ENABLE_CUDA)

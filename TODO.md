@@ -17,6 +17,6 @@
 - [x] Add Issue Templates and Pull Request Templates under `.github/`.
 
 ## 4. Universal `extern "C"` API Layer for Julia and even more languages
-- [ ] Create `include/qkrylov/c_api.h` exposing flat `extern "C"` functions for Basis, Site, OpSum, and MatrixFreeHamiltonian.
-- [ ] Implement `src/c_api.cpp` to bridge C calls to internal C++ classes without copying array buffers.
-- [ ] Support seamless zero-copy interoperability for Julia (`ccall`), Rust (`bindgen`), C, and Go.
+- [x] Create `include/qkrylov/c_api.h` exposing flat `extern "C"` functions for Basis, Site, OpSum, and MatrixFreeHamiltonian.
+- [x] Implement `src/c_api.cpp` to bridge C calls to internal C++ classes without copying array buffers.
+- [x] Support seamless zero-copy interoperability for Julia (`ccall`), Rust (`bindgen`), C, and Go.
