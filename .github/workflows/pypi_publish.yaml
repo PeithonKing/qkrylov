@@ -5,6 +5,11 @@ on:
     types:
       - published
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 0.1.0). Leave blank to auto-detect from git tag."
+        required: false
+        default: ""
 
 jobs:
   build_wheels:
@@ -18,7 +23,7 @@ jobs:
             os: ubuntu-latest
             arch: x86_64
           - name: linux-aarch64
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
             arch: aarch64
           - name: windows-amd64
             os: windows-latest
@@ -42,8 +47,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Compute the clean version string from the release tag (e.g. "v0.1.0" -> "0.1.0")
+      # This is injected into the container so setuptools_scm gets the right version
+      # even inside Docker where .git is not available.
+      - name: Compute version string
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VER="${{ github.event.inputs.version }}"
+          elif [ -n "${{ github.event.release.tag_name }}" ]; then
+            VER="${{ github.event.release.tag_name }}"
+          else
+            VER=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          fi
+          # Strip leading 'v' prefix
+          VER="${VER#v}"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Building version: $VER"
+
       - name: Set up QEMU for Linux ARM64
-        if: matrix.platform.arch == 'aarch64'
+        if: matrix.platform.arch == 'aarch64' && matrix.platform.os == 'ubuntu-latest'
         uses: docker/setup-qemu-action@v3
 
       - name: Install macOS OpenMP
@@ -59,7 +83,14 @@ jobs:
           CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS: ${{ matrix.platform.arch }}
           CIBW_TEST_COMMAND: "python -c \"import qkrylov; print(qkrylov.__version__)\""
-          CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.os == 'macos-14' && '14.0' || '13.0' }}"
+          # Inject version into the build environment (works inside Docker too!)
+          CIBW_ENVIRONMENT: >-
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
+          CIBW_ENVIRONMENT_MACOS: >-
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
+            MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.os == 'macos-14' && '14.0' || '13.0' }}
+          CIBW_ENVIRONMENT_WINDOWS: >-
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
           CMAKE_PREFIX_PATH: "/opt/homebrew/opt/libomp:/usr/local/opt/libomp"
           SKBUILD_WHEEL_PY_API: ${{ matrix.python.py_api }}
 
@@ -72,6 +103,9 @@ jobs:
     name: Publish to PyPI and Generate Index
     needs: build_wheels
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/qkrylov
     permissions:
       contents: write
       id-token: write
@@ -87,33 +121,13 @@ jobs:
           pattern: cibw-wheels-*
           merge-multiple: true
 
-      - name: Select PyPI wheels
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import shutil
-
-          src = Path("wheels")
-          dst = Path("pypi-wheels")
-          dst.mkdir(exist_ok=True)
-
-          for wheel in src.glob("*.whl"):
-              version = wheel.name.split("-")[1]
-              if "+" not in version:
-                  shutil.copy2(wheel, dst / wheel.name)
-
-          selected = sorted(p.name for p in dst.glob("*.whl"))
-          if not selected:
-              raise SystemExit("No public CPU wheels selected for PyPI upload")
-          print("Selected PyPI wheels:")
-          for name in selected:
-              print(f"  {name}")
-          PY
+      - name: List wheels being published
+        run: ls -lh ./wheels/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: ./pypi-wheels
+          packages-dir: ./wheels
 
       - name: Upload wheels to GitHub Release
         if: github.event_name == 'release'
