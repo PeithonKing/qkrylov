@@ -36,13 +36,12 @@ jobs:
 
       - name: Build sdist
         run: |
-          cd bindings/python
           SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }} pipx run build --sdist
 
       - uses: actions/upload-artifact@v4
         with:
           name: cibw-wheels-sdist
-          path: bindings/python/dist/*.tar.gz
+          path: dist/*.tar.gz
 
   build_wheels:
     name: Build ${{ matrix.python.build }} on ${{ matrix.platform.name }}
@@ -109,7 +108,7 @@ jobs:
       - name: Build wheels via cibuildwheel
         uses: pypa/cibuildwheel@v4.1.0
         with:
-          package-dir: bindings/python
+          package-dir: .
         env:
           CIBW_BUILD: ${{ matrix.python.build }}
           CIBW_SKIP: "*-musllinux_*"
