@@ -23,7 +23,7 @@ double FermionSite::phase(
     // Here we assume sites are indexed 0, 1, 2, ...
     // So "to the left" means indices < site.
     StateID mask = (1ULL << site) - 1;
-    int count = std::popcount(state & mask);
+    int count = popcount(state & mask);
     return (count % 2 == 0) ? 1.0 : -1.0;
 }
 

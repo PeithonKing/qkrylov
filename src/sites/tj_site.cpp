@@ -28,7 +28,7 @@ double TJSite::phase_up(
 )
 {
     StateID mask = (1ULL << (2 * site)) - 1;
-    int count = std::popcount(state & mask);
+    int count = popcount(state & mask);
     return (count % 2 == 0) ? 1.0 : -1.0;
 }
 
@@ -38,7 +38,7 @@ double TJSite::phase_dn(
 )
 {
     StateID mask = (1ULL << (2 * site + 1)) - 1;
-    int count = std::popcount(state & mask);
+    int count = popcount(state & mask);
     return (count % 2 == 0) ? 1.0 : -1.0;
 }
 
