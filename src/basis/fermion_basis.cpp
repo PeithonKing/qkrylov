@@ -50,7 +50,7 @@ Index FermionBasis::index(StateID s) const
 
 bool FermionBasis::contains(StateID s) const
 {
-    return lookup_.contains(s);
+    return lookup_.find(s) != lookup_.end();
 }
 
 void FermionBasis::build_full_basis()
@@ -75,7 +75,7 @@ void FermionBasis::build_n_basis()
 
     for(StateID s = 0; s < dim; ++s)
     {
-        if(std::popcount(s) == sector_.n)
+        if(popcount(s) == sector_.n)
         {
             lookup_[s] =
                 states_.size();

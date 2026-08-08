@@ -50,7 +50,7 @@ Index HubbardBasis::index(StateID s) const
 
 bool HubbardBasis::contains(StateID s) const
 {
-    return lookup_.contains(s);
+    return lookup_.find(s) != lookup_.end();
 }
 
 void HubbardBasis::build_full_basis()
@@ -83,8 +83,8 @@ void HubbardBasis::build_nup_ndn_basis()
             dn_mask |= (1ULL << (2*i + 1));
         }
 
-        bool match_up = !sector_.use_nup || (std::popcount(s & up_mask) == sector_.nup);
-        bool match_dn = !sector_.use_ndn || (std::popcount(s & dn_mask) == sector_.ndn);
+        bool match_up = !sector_.use_nup || (popcount(s & up_mask) == sector_.nup);
+        bool match_dn = !sector_.use_ndn || (popcount(s & dn_mask) == sector_.ndn);
 
         if(match_up && match_dn)
         {

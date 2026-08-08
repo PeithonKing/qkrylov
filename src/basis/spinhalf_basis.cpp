@@ -50,7 +50,7 @@ Index SpinHalfBasis::index(StateID s) const
 
 bool SpinHalfBasis::contains(StateID s) const
 {
-    return lookup_.contains(s);
+    return lookup_.find(s) != lookup_.end();
 }
 
 void SpinHalfBasis::build_full_basis()
@@ -72,7 +72,7 @@ int SpinHalfBasis::compute_sz2(
 )
 {
     const int nup =
-        std::popcount(state);
+        popcount(state);
 
     const int ndown =
         N - nup;
