@@ -7,6 +7,7 @@ on:
       - 'src/**'
       - 'include/**'
       - 'bindings/python/**'
+      - 'bindings/julia/**'
       - 'CMakeLists.txt'
       - '.github/workflows/tests.yaml'
   pull_request:
@@ -53,3 +54,23 @@ jobs:
         TMP_TESTS="$(mktemp -d)"
         cp -R bindings/python/tests "$TMP_TESTS/tests"
         python -m pytest "$TMP_TESTS/tests" -v
+
+  test-julia:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Julia
+      uses: julia-actions/setup-julia@v2
+      with:
+        version: '1.10'
+
+    - name: Build C++ library
+      run: |
+        cmake -B build -S . -DBUILD_SHARED_LIBS=ON -DQKRYLOV_BUILD_TESTS=OFF
+        cmake --build build --config Release
+
+    - name: Run Julia tests
+      run: |
+        julia --project=bindings/julia -e 'using Pkg; Pkg.test()'
+

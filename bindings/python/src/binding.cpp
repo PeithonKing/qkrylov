@@ -244,8 +244,8 @@ NB_MODULE(_qkrylov_cpp, m) {
     m.def("evaluate_spectral_function",
         [](DblArray alphas, DblArray betas, double norm_phi0,
            double omega, double E0, double eta) {
-            if (alphas.shape(0) != betas.shape(0)) {
-                throw std::invalid_argument("alphas and betas arrays must have the same length");
+            if (alphas.shape(0) != betas.shape(0) && alphas.shape(0) != betas.shape(0) + 1) {
+                throw std::invalid_argument("alphas array length must match betas array length or betas array length + 1");
             }
             return evaluate_spectral_function(
                 alphas.data(), betas.data(), alphas.shape(0),
