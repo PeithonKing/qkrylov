@@ -12,6 +12,38 @@ on:
         default: ""
 
 jobs:
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version string
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VER="${{ github.event.inputs.version }}"
+          elif [ -n "${{ github.event.release.tag_name }}" ]; then
+            VER="${{ github.event.release.tag_name }}"
+          else
+            VER=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          fi
+          VER="${VER#v}"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Build sdist
+        run: |
+          cd bindings/python
+          SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }} pipx run build --sdist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-sdist
+          path: bindings/python/dist/*.tar.gz
+
   build_wheels:
     name: Build ${{ matrix.python.build }} on ${{ matrix.platform.name }}
     runs-on: ${{ matrix.platform.os }}
@@ -86,6 +118,7 @@ jobs:
           # Inject version into the build environment (works inside Docker too!)
           CIBW_ENVIRONMENT: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
+            SKBUILD_WHEEL_PY_API=${{ matrix.python.py_api }}
           CIBW_ENVIRONMENT_MACOS: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
             MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.os == 'macos-14' && '14.0' || '13.0' }}
@@ -101,7 +134,7 @@ jobs:
 
   publish_and_index:
     name: Publish to PyPI and Generate Index
-    needs: build_wheels
+    needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
     environment:
       name: pypi
