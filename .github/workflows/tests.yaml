@@ -57,15 +57,20 @@ jobs:
 
   test-julia:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        julia-version: ['1.10', '1.11', '1.12']
+      fail-fast: false
+
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Julia
+    - name: Set up Julia ${{ matrix.julia-version }}
       uses: julia-actions/setup-julia@v2
       with:
-        version: '1.10'
+        version: ${{ matrix.julia-version }}
 
-    - name: Build C++ library
+    - name: Build C++ shared library
       run: |
         cmake -B build -S . -DBUILD_SHARED_LIBS=ON -DQKRYLOV_BUILD_TESTS=OFF
         cmake --build build --config Release
@@ -73,4 +78,5 @@ jobs:
     - name: Run Julia tests
       run: |
         julia --project=bindings/julia -e 'using Pkg; Pkg.test()'
+
 
