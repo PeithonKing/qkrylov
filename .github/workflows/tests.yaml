@@ -43,7 +43,7 @@ jobs:
 
     - name: Install Python package
       run: |
-        pip install bindings/python
+        pip install .[test]
 
     - name: Run C++ tests
       run: |
