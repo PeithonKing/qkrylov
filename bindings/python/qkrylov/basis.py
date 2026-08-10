@@ -25,7 +25,7 @@ def _build_sector(dtype,
     conserve_ndn: bool = False, ndn: int = 0,
     conserve_n: bool = False, n: int = 0,
     conserve_nb: bool = False, nb: int = 0
-) -> _cpp.Sector:
+) -> "_cpp.Sector":
     """Helper to build a C++ Sector object from Python kwargs."""
     suffix = "_FP64" if dtype == np.float64 else "_FP32"
     sec = getattr(_cpp, f"Sector{suffix}")()
