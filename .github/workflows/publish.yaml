@@ -44,7 +44,7 @@ jobs:
           path: dist/*.tar.gz
 
   build_wheels:
-    name: Build ${{ matrix.python.build }} on ${{ matrix.platform.name }}
+    name: Build CPU ${{ matrix.python.build }} on ${{ matrix.platform.name }}
     runs-on: ${{ matrix.platform.os }}
     strategy:
       fail-fast: false
@@ -62,6 +62,9 @@ jobs:
           - name: macos-arm64
             os: macos-14
             arch: arm64
+          # - name: macos-x86_64
+          #   os: macos-13
+          #   arch: x86_64
         python:
           - build: cp311-*
             py_api: ""
@@ -75,9 +78,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Compute the clean version string from the release tag (e.g. "v0.1.0" -> "0.1.0")
-      # This is injected into the container so setuptools_scm gets the right version
-      # even inside Docker where .git is not available.
       - name: Compute version string
         id: version
         shell: bash
@@ -89,10 +89,8 @@ jobs:
           else
             VER=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           fi
-          # Strip leading 'v' prefix
           VER="${VER#v}"
           echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "Building version: $VER"
 
       - name: Set up QEMU for Linux ARM64
         if: matrix.platform.arch == 'aarch64' && matrix.platform.os == 'ubuntu-latest'
@@ -102,7 +100,7 @@ jobs:
         if: startsWith(matrix.platform.os, 'macos')
         run: brew install libomp
 
-      - name: Build wheels via cibuildwheel
+      - name: Build CPU wheels via cibuildwheel
         uses: pypa/cibuildwheel@v4.1.0
         with:
           package-dir: .
@@ -111,7 +109,6 @@ jobs:
           CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS: ${{ matrix.platform.arch }}
           CIBW_TEST_COMMAND: "python -c \"import qkrylov; print(qkrylov.__version__)\""
-          # Inject version into the build environment (works inside Docker too!)
           CIBW_ENVIRONMENT: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
             SKBUILD_WHEEL_PY_API=${{ matrix.python.py_api }}
@@ -125,12 +122,64 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.platform.name }}-${{ matrix.python.tag }}
+          name: cibw-wheels-cpu-${{ matrix.platform.name }}-${{ matrix.python.tag }}
+          path: ./wheelhouse/*.whl
+
+  build_cuda:
+    name: Build CUDA 12 ${{ matrix.python.build }} on Linux x86_64
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python:
+          - build: cp311-*
+          - build: cp312-*
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version string
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VER="${{ github.event.inputs.version }}"
+          elif [ -n "${{ github.event.release.tag_name }}" ]; then
+            VER="${{ github.event.release.tag_name }}"
+          else
+            VER=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          fi
+          VER="${VER#v}"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Build CUDA wheels via cibuildwheel
+        uses: pypa/cibuildwheel@v4.1.0
+        env:
+          CIBW_BUILD: ${{ matrix.python.build }}
+          CIBW_ARCHS: "x86_64"
+          CIBW_MANYLINUX_X86_64_IMAGE: "quay.io/pypa/manylinux2014_x86_64"
+          # Install NVIDIA CUDA Toolkit into the manylinux container before building!
+          CIBW_BEFORE_ALL_LINUX: >-
+            yum install -y wget && 
+            wget https://developer.download.nvidia.com/compute/cuda/12.1.1/local_installers/cuda_12.1.1_530.30.02_linux.run && 
+            sh cuda_12.1.1_530.30.02_linux.run --silent --toolkit
+          CIBW_ENVIRONMENT: >-
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
+            CMAKE_ARGS="-DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_OPENMP=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.1/bin/nvcc"
+            PATH="/usr/local/cuda-12.1/bin:$PATH"
+          # Tell auditwheel to NOT bundle nvidia libraries (keep wheel small)
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair --exclude libcublas.so.12 --exclude libcudart.so.12 -w {dest_dir} {wheel}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-cuda-${{ matrix.python.build }}
           path: ./wheelhouse/*.whl
 
   publish_and_index:
     name: Publish to PyPI and Generate Index
-    needs: [build_wheels, build_sdist]
+    needs: [build_wheels, build_cuda, build_sdist]
     runs-on: ubuntu-latest
     environment:
       name: pypi
