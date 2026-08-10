@@ -69,7 +69,11 @@ if(NOT Kokkos_FOUND)
     
     # If no backend was explicitly passed by the user, default to OpenMP for CPU fallback
     if(NOT DEFINED Kokkos_ENABLE_CUDA AND NOT DEFINED Kokkos_ENABLE_HIP AND NOT DEFINED Kokkos_ENABLE_SYCL)
-        set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Enable Kokkos OpenMP backend" FORCE)
+        if(MSVC)
+            set(Kokkos_ENABLE_OPENMP OFF CACHE BOOL "Disable Kokkos OpenMP on MSVC" FORCE)
+        else()
+            set(Kokkos_ENABLE_OPENMP ON CACHE BOOL "Enable Kokkos OpenMP backend" FORCE)
+        endif()
         set(Kokkos_ENABLE_SERIAL ON CACHE BOOL "Enable Kokkos Serial backend" FORCE)
     endif()
     # Suppress Kokkos warnings during FetchContent

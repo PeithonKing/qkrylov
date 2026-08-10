@@ -47,7 +47,7 @@ Issues = "https://github.com/sjp95/qkrylov/issues"
 [tool.scikit-build]
 # CMakeLists.txt is two levels up from bindings/python/
 cmake.source-dir = "."
-wheel.packages = []
+wheel.packages = ["bindings/python/qkrylov"]
 
 # Version comes from git tag via scikit-build-core's vcs provider.
 # On a tagged commit (e.g. v0.1.0 or 0.1.0), version = "0.1.0".
