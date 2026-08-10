@@ -1,5 +1,7 @@
 #pragma once
 
+#include "qkrylov/core/types.hpp"
+
 #include "qkrylov/basis/basis.hpp"
 #include "qkrylov/operators/opsum.hpp"
 #include "qkrylov/sites/site.hpp"
@@ -9,8 +11,9 @@
 #include <memory>
 #include <vector>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 /// Matrix-free Hamiltonian with pre-compiled operator action.
 ///
@@ -73,4 +76,7 @@ private:
     OpSum ops_;
 };
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

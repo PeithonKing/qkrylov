@@ -4,6 +4,7 @@
 #include "qkrylov/basis/spinhalf_basis.hpp"
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main()
 {

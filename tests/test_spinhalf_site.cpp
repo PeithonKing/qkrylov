@@ -3,6 +3,7 @@
 #include "qkrylov/sites/spinhalf_site.hpp"
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main()
 {

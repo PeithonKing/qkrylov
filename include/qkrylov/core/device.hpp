@@ -1,5 +1,7 @@
 #pragma once
 
+#include "qkrylov/core/types.hpp"
+
 #include <Kokkos_Core.hpp>
 
 #include <string>
@@ -12,6 +14,8 @@
 #endif
 
 namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 /// Selects which device to target.
 ///
@@ -112,4 +116,7 @@ inline void initialize_kokkos(const Device& dev = Device()) {
 }
 
 } // namespace detail
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

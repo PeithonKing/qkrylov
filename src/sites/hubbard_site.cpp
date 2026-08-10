@@ -1,10 +1,12 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/sites/hubbard_site.hpp"
 
 #include <stdexcept>
 #include <bit>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 // We'll use a mapping where site i has:
 // Up electron at bit 2*i
@@ -26,7 +28,7 @@ bool HubbardSite::occupied_dn(
     return (state >> (2 * site + 1)) & 1ULL;
 }
 
-double HubbardSite::phase_up(
+Real HubbardSite::phase_up(
     StateID state,
     int site
 )
@@ -36,7 +38,7 @@ double HubbardSite::phase_up(
     return (count % 2 == 0) ? 1.0 : -1.0;
 }
 
-double HubbardSite::phase_dn(
+Real HubbardSite::phase_dn(
     StateID state,
     int site
 )
@@ -120,6 +122,8 @@ LocalAction HubbardSite::apply(
     throw std::runtime_error(
         "Unknown Hubbard operator: " + op
     );
+}
+
 }
 
 }

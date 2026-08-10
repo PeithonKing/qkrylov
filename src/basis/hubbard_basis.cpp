@@ -1,10 +1,13 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/basis/hubbard_basis.hpp"
 
 #include <stdexcept>
 #include <bit>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
+
 
 HubbardBasis::HubbardBasis(
     int N,
@@ -96,4 +99,7 @@ void HubbardBasis::build_nup_ndn_basis()
     }
 }
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

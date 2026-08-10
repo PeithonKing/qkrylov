@@ -3,6 +3,7 @@
 #include <cassert>
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main() {
     TJSite site;
@@ -10,7 +11,7 @@ int main() {
 
     // Test CUp
     auto a = site.apply("CUp", 0, s);
-    assert(a.valid && a.new_state == 0 && a.matrix_element == 1.0);
+    assert(a.valid && a.new_state == 0 && a.matrix_element == Complex(1.0, 0.0));
 
     // Test CdagDn - should be invalid because Up is already there
     auto b = site.apply("CdagDn", 0, s);

@@ -1,6 +1,9 @@
 # Build artifacts
 bin/
 build/
+build_test/
+_skbuild/
+_deps/
 out/
 CMakeFiles/
 CMakeCache.txt
@@ -33,6 +36,8 @@ __pycache__/
 
 # Project specific
 *.h5
+patch_sycl.py
+refactor_float.py
 
 # Documentation
 site/

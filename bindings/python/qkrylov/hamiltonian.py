@@ -22,36 +22,38 @@ class MatrixFreeHamiltonian:
         The interaction terms.
     """
     
-    def __init__(self, basis: Basis, site: Site, ops: OpSum, device: str = "cpu"):
+    def __init__(self, basis: Basis, site: Site, ops: OpSum, device: str = "cpu", dtype=np.float32):
         self.basis = basis
         self.site = site
         self.ops = ops
         self.device = device
+        self.dtype = dtype
+        s_dtype = "_FP64" if dtype == np.float64 else "_FP32"
         
-        dev_obj = _cpp.Device(device)
+        dev_obj = getattr(_cpp, f"Device{s_dtype}")(device)
         d_lower = device.lower()
         if "cuda" in d_lower:
-            if hasattr(_cpp, "MatrixFreeHamiltonianCUDA"):
-                self._cpp_obj = _cpp.MatrixFreeHamiltonianCUDA(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+            if hasattr(_cpp, f"MatrixFreeHamiltonianCUDA{s_dtype}"):
+                self._cpp_obj = getattr(_cpp, f"MatrixFreeHamiltonianCUDA{s_dtype}")(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
                 self._backend_suffix = "CUDA"
             else:
                 raise ValueError("QKrylov was not built with CUDA support. Install the CUDA wheel: pip install qkrylov --extra-index-url .../cuda")
         elif "hip" in d_lower:
-            if hasattr(_cpp, "MatrixFreeHamiltonianHIP"):
-                self._cpp_obj = _cpp.MatrixFreeHamiltonianHIP(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+            if hasattr(_cpp, f"MatrixFreeHamiltonianHIP{s_dtype}"):
+                self._cpp_obj = getattr(_cpp, f"MatrixFreeHamiltonianHIP{s_dtype}")(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
                 self._backend_suffix = "HIP"
             else:
                 raise ValueError("QKrylov was not built with HIP support. Install the ROCm wheel: pip install qkrylov --extra-index-url .../rocm")
         elif "sycl" in d_lower:
-            if hasattr(_cpp, "MatrixFreeHamiltonianSYCL"):
-                self._cpp_obj = _cpp.MatrixFreeHamiltonianSYCL(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+            if hasattr(_cpp, f"MatrixFreeHamiltonianSYCL{s_dtype}"):
+                self._cpp_obj = getattr(_cpp, f"MatrixFreeHamiltonianSYCL{s_dtype}")(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
                 self._backend_suffix = "SYCL"
             else:
                 raise ValueError("QKrylov was not built with SYCL support. Install the SYCL wheel: pip install qkrylov --extra-index-url .../sycl")
         elif d_lower.startswith("gpu"):
             # Generic "gpu" alias: try CUDA -> HIP -> SYCL in priority order
             for suffix in ("CUDA", "HIP", "SYCL"):
-                cls_name = f"MatrixFreeHamiltonian{suffix}"
+                cls_name = f"MatrixFreeHamiltonian{suffix}{s_dtype}"
                 if hasattr(_cpp, cls_name):
                     self._cpp_obj = getattr(_cpp, cls_name)(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
                     self._backend_suffix = suffix
@@ -60,14 +62,14 @@ class MatrixFreeHamiltonian:
                 raise ValueError("No GPU backend available. This wheel was built for CPU only. Install a GPU wheel via --extra-index-url.")
         else:
             # Default: CPU backends (OpenMP -> Threads -> Serial)
-            if hasattr(_cpp, "MatrixFreeHamiltonianCPU"):
-                self._cpp_obj = _cpp.MatrixFreeHamiltonianCPU(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+            if hasattr(_cpp, f"MatrixFreeHamiltonianCPU{s_dtype}"):
+                self._cpp_obj = getattr(_cpp, f"MatrixFreeHamiltonianCPU{s_dtype}")(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
                 self._backend_suffix = "CPU"
-            elif hasattr(_cpp, "MatrixFreeHamiltonianThreads"):
-                self._cpp_obj = _cpp.MatrixFreeHamiltonianThreads(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+            elif hasattr(_cpp, f"MatrixFreeHamiltonianThreads{s_dtype}"):
+                self._cpp_obj = getattr(_cpp, f"MatrixFreeHamiltonianThreads{s_dtype}")(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
                 self._backend_suffix = "Threads"
-            elif hasattr(_cpp, "MatrixFreeHamiltonianSerial"):
-                self._cpp_obj = _cpp.MatrixFreeHamiltonianSerial(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+            elif hasattr(_cpp, f"MatrixFreeHamiltonianSerial{s_dtype}"):
+                self._cpp_obj = getattr(_cpp, f"MatrixFreeHamiltonianSerial{s_dtype}")(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
                 self._backend_suffix = "Serial"
             else:
                 raise ValueError("No CPU backend available. This wheel may be a GPU-only build. Try: pip install qkrylov (from PyPI) for the CPU version.")
@@ -90,7 +92,7 @@ class MatrixFreeHamiltonian:
         np.ndarray
             The resulting state vector `y = H(x)`. Zero-copy: backed by C++ memory.
         """
-        x = np.ascontiguousarray(x, dtype=np.complex128)
+        x = np.ascontiguousarray(x, dtype=np.complex128 if self.dtype == np.float64 else np.complex64)
         return self._cpp_obj.apply(x)
 
     def diagonal(self) -> np.ndarray:
@@ -105,6 +107,15 @@ class MatrixFreeHamiltonian:
 
     def __repr__(self) -> str:
         return f"MatrixFreeHamiltonian(dim={self.dimension})"
+
+    def to(self, device: str = None, dtype = None):
+        """Return a new MatrixFreeHamiltonian with the specified device and dtype."""
+        new_device = device if device is not None else self.device
+        new_dtype = dtype if dtype is not None else self.dtype
+        return MatrixFreeHamiltonian(self.basis, self.site, self.ops, device=new_device, dtype=new_dtype)
+
+    def __matmul__(self, x: np.ndarray) -> np.ndarray:
+        return self.apply(x)
 
     def aslinearoperator(self):
         """Convert this Hamiltonian into a SciPy LinearOperator.
@@ -129,7 +140,7 @@ class MatrixFreeHamiltonian:
         return sla.LinearOperator(
             shape=(self.dimension, self.dimension),
             matvec=matvec,
-            dtype=np.complex128
+            dtype=np.complex128 if self.dtype == np.float64 else np.complex64
         )
         
     def to_sparse(self):
@@ -153,7 +164,7 @@ class MatrixFreeHamiltonian:
         rows, cols, data = [], [], []
         
         for i in range(dim):
-            x = np.zeros(dim, dtype=np.complex128)
+            x = np.zeros(dim, dtype=np.complex128 if self.dtype == np.float64 else np.complex64)
             x[i] = 1.0
             y = self.apply(x)
             
@@ -163,4 +174,4 @@ class MatrixFreeHamiltonian:
                 cols.extend([i] * len(non_zeros))
                 data.extend(y[non_zeros])
                 
-        return sp.csr_matrix((data, (rows, cols)), shape=(dim, dim), dtype=np.complex128)
+        return sp.csr_matrix((data, (rows, cols)), shape=(dim, dim), dtype=np.complex128 if self.dtype == np.float64 else np.complex64)

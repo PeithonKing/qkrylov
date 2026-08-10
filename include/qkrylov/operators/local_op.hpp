@@ -1,9 +1,12 @@
 #pragma once
 
+#include "qkrylov/core/types.hpp"
+
 #include "operator_term.hpp"
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 // Helper functions for common operators to enable algebraic syntax
 inline LocalOp Sz(int i) { return {"Sz", i}; }
@@ -24,5 +27,7 @@ inline LocalOp Nupdn(int i) { return {"Nupdn", i}; }
 inline LocalOp Bdag(int i) { return {"Bdag", i}; }
 inline LocalOp B(int i) { return {"B", i}; }
 inline LocalOp N(int i) { return {"N", i}; }
+
+}
 
 }

@@ -1,7 +1,9 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/operators/opsum.hpp"
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 void OpSum::add_term(
     const OperatorTerm& term
@@ -34,4 +36,5 @@ OpSum::terms() const
     return terms_;
 }
 
+}
 }

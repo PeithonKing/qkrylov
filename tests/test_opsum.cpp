@@ -3,6 +3,7 @@
 #include "qkrylov/operators/opsum.hpp"
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main()
 {

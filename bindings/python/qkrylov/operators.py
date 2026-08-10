@@ -1,4 +1,5 @@
 import enum
+import numpy as np
 from typing import List, Tuple, Union, Sequence
 from . import _qkrylov_cpp as _cpp
 
@@ -130,8 +131,10 @@ def N(i: int) -> LocalOpExpr: return LocalOpExpr("N", i)
 class OpSum:
     """Symbolic expression builder for quantum interactions."""
 
-    def __init__(self):
-        self._cpp_obj = _cpp.OpSum()
+    def __init__(self, dtype=np.float32):
+        suffix = '_FP64' if dtype == np.float64 else '_FP32'
+        self.dtype = dtype
+        self._cpp_obj = getattr(_cpp, f'OpSum{suffix}')()
 
     def add_term(self, coeff: complex, *ops: Union[str, Op, int]):
         if len(ops) % 2 != 0:

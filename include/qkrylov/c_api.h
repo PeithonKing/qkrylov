@@ -58,9 +58,9 @@ void             qkrylov_site_destroy(qkrylov_site_h site);
 qkrylov_opsum_h  qkrylov_opsum_create(void);
 void             qkrylov_opsum_destroy(qkrylov_opsum_h opsum);
 int              qkrylov_opsum_clear(qkrylov_opsum_h opsum);
-int              qkrylov_opsum_add_term_1body(qkrylov_opsum_h opsum, double coeff_real, double coeff_imag,
+int              qkrylov_opsum_add_term_1body(qkrylov_opsum_h opsum, float coeff_real, float coeff_imag,
                                              const char* op1, int site1);
-int              qkrylov_opsum_add_term_2body(qkrylov_opsum_h opsum, double coeff_real, double coeff_imag,
+int              qkrylov_opsum_add_term_2body(qkrylov_opsum_h opsum, float coeff_real, float coeff_imag,
                                              const char* op1, int site1,
                                              const char* op2, int site2);
 
@@ -74,26 +74,26 @@ void                  qkrylov_hamiltonian_destroy(qkrylov_hamiltonian_h h);
 uint64_t              qkrylov_hamiltonian_dimension(qkrylov_hamiltonian_h h);
 
 /* Zero-copy matrix-vector apply: y = H * x */
-/* x and y are pointers to complex double arrays of size dimension() */
+/* x and y are pointers to complex float arrays of size dimension() */
 int                   qkrylov_hamiltonian_apply(qkrylov_hamiltonian_h h,
-                                                const double* x_real, const double* x_imag,
-                                                double* y_real, double* y_imag);
+                                                const float* x_real, const float* x_imag,
+                                                float* y_real, float* y_imag);
 
 /* Direct zero-copy complex apply: x_complex and y_complex are contiguous arrays of 2*dimension() doubles [re, im, re, im...] */
 int                   qkrylov_hamiltonian_apply_complex(qkrylov_hamiltonian_h h,
-                                                        const double* x_complex,
-                                                        double* y_complex);
+                                                        const float* x_complex,
+                                                        float* y_complex);
 
 /* -----------------------------------------------------------------------------
  * Solvers API
  * ----------------------------------------------------------------------------- */
 typedef struct {
-    double energy;
+    float energy;
 } qkrylov_lanczos_result_c_t;
 
 int qkrylov_lanczos_ground_state(qkrylov_hamiltonian_h h,
                                  int maxiter,
-                                 double tol,
+                                 float tol,
                                  qkrylov_lanczos_result_c_t* result);
 
 #ifdef __cplusplus

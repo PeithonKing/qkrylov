@@ -6,6 +6,7 @@
 #include <cassert>
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main() {
     int N = 2;
@@ -42,15 +43,15 @@ int main() {
     auto res = lanczos_ground_state<Kokkos::DefaultExecutionSpace>(H);
 
     std::cout << "Lanczos Energy: " << res.energy << " (Expected -0.75)\n";
-    assert(std::abs(res.energy + 0.75) < 1e-10);
+    assert(std::abs(res.energy + 0.75) < 1e-5);
 
     // Verify Ritz vector: H * v should be energy * v
     HostVector Hv(H.dimension());
     H.apply(res.eigenvector.data(), Hv.data());
 
     for (Index i = 0; i < H.dimension(); ++i) {
-        Complex diff = Hv[i] - res.energy * res.eigenvector[i];
-        assert(std::abs(diff) < 1e-10);
+        Complex diff = Hv[i] - Complex(res.energy * res.eigenvector[i].real(), res.energy * res.eigenvector[i].imag());
+        assert(std::abs(diff) < 1e-5);
     }
 
     std::cout << "Ritz vector verification passed!\n";

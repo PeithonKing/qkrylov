@@ -26,7 +26,7 @@ from .solvers import (
     ftlm,
 )
 
-from ._qkrylov_cpp import Device
+from ._qkrylov_cpp import Device_FP32 as Device
 
 def find_gpu():
     """Return the name of the GPU backend ('cuda', 'hip', 'sycl') if available, else None."""

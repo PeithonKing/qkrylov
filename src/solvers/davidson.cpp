@@ -1,3 +1,4 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/solvers/davidson.hpp"
 
 #include <random>
@@ -6,13 +7,14 @@
 #include <cmath>
 #include <Kokkos_Core.hpp>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 namespace
 {
 struct SmallEigensystem {
-    std::vector<double> eigenvalues;
+    std::vector<Real> eigenvalues;
     std::vector<std::vector<Complex>> eigenvectors;
 };
 
@@ -24,7 +26,7 @@ SmallEigensystem solve_small_hermitian(const std::vector<std::vector<Complex>>& 
     for (int i = 0; i < n; ++i) V[i][i] = 1.0;
 
     for (int iter = 0; iter < 1000; ++iter) {
-        double max_off = 0.0;
+        Real max_off = 0.0;
         int p = 0, q = 0;
         for (int i = 0; i < n; ++i) {
             for (int j = i + 1; j < n; ++j) {
@@ -41,7 +43,7 @@ SmallEigensystem solve_small_hermitian(const std::vector<std::vector<Complex>>& 
         Complex aqq = A[q][q];
         Complex apq = A[p][q];
 
-        double phi = 0.5 * std::atan2(2.0 * std::abs(apq), std::real(app - aqq));
+        Real phi = 0.5 * std::atan2(2.0 * std::abs(apq), std::real(app - aqq));
         Complex c = std::cos(phi);
         Complex s = std::sin(phi) * apq / std::abs(apq);
 
@@ -58,9 +60,9 @@ SmallEigensystem solve_small_hermitian(const std::vector<std::vector<Complex>>& 
                 A[i][q] = A[q][i] = -std::conj(s) * aip + c * aiq;
             }
         }
-        A[p][p] = c * c * app + s * std::conj(s) * aqq + 2.0 * std::real(c * s * std::conj(apq));
-        A[q][q] = s * std::conj(s) * app + c * c * aqq - 2.0 * std::real(c * s * std::conj(apq));
-        A[p][q] = A[q][p] = 0.0;
+        A[p][p] = c * c * app + s * std::conj(s) * aqq + Real(2.0) * std::real(c * s * std::conj(apq));
+        A[q][q] = s * std::conj(s) * app + c * c * aqq - Real(2.0) * std::real(c * s * std::conj(apq));
+        A[p][q] = A[q][p] = Real(0.0);
     }
 
     SmallEigensystem res;
@@ -85,7 +87,7 @@ DavidsonResult davidson_lowest(
     const MatrixFreeHamiltonian<ExecSpace>& H,
     int n_eig,
     int max_subspace,
-    double tol
+    Real tol
 )
 {
     const Index dim = H.dimension();
@@ -102,7 +104,7 @@ DavidsonResult davidson_lowest(
     std::vector<VectorView<ExecSpace>> HV;
 
     std::mt19937 rng(1234);
-    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    std::uniform_real_distribution<Real> dist(-1.0, 1.0);
 
     // Initial subspace: use some diagonal dominance if possible,
     // or just unit vectors for the smallest diagonal elements
@@ -120,7 +122,7 @@ DavidsonResult davidson_lowest(
         
         // Orthogonalize against previous V
         for (const auto& v_prev : V) axpy(-dot(v_prev, v), v_prev, v);
-        double nrm = norm(v);
+        Real nrm = norm(v);
         if (nrm < 1e-10) {
             // Fallback to random if unit vector is not linearly independent
             for (Index j = 0; j < dim; ++j) v_host(j) = KComplex(dist(rng), dist(rng));
@@ -153,7 +155,7 @@ DavidsonResult davidson_lowest(
         std::vector<VectorView<ExecSpace>> next_corrections;
 
         for (int k = 0; k < n_eig; ++k) {
-            double lambda = eig.eigenvalues[k];
+            Real lambda = eig.eigenvalues[k];
             const auto& s = eig.eigenvectors[k];
 
             VectorView<ExecSpace> r("r", dim);
@@ -162,7 +164,7 @@ DavidsonResult davidson_lowest(
                 axpy(KComplex(-lambda * s[i].real(), -lambda * s[i].imag()), V[i], r);
             }
 
-            double res_norm = norm(r);
+            Real res_norm = norm(r);
             if (res_norm > tol) {
                 all_converged = false;
                 VectorView<ExecSpace> t("t", dim);
@@ -208,7 +210,7 @@ DavidsonResult davidson_lowest(
 
         for (auto& t : next_corrections) {
             for (const auto& v : V) axpy(-dot(v, t), v, t);
-            double nrm = norm(t);
+            Real nrm = norm(t);
             if (nrm > 1e-10) {
                 scal(1.0/nrm, t);
                 V.push_back(t);
@@ -225,18 +227,23 @@ DavidsonResult davidson_lowest(
 
 // Explicit instantiations
 #ifdef KOKKOS_ENABLE_SERIAL
-template DavidsonResult davidson_lowest<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, int, int, double);
+template DavidsonResult davidson_lowest<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, int, int, Real);
 #endif
 #ifdef KOKKOS_ENABLE_OPENMP
-template DavidsonResult davidson_lowest<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, int, int, double);
+template DavidsonResult davidson_lowest<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, int, int, Real);
 #endif
 #ifdef KOKKOS_ENABLE_THREADS
-template DavidsonResult davidson_lowest<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, int, int, double);
+template DavidsonResult davidson_lowest<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, int, int, Real);
 #endif
 #ifdef KOKKOS_ENABLE_CUDA
-template DavidsonResult davidson_lowest<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, int, int, double);
+template DavidsonResult davidson_lowest<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, int, int, Real);
 #endif
 #ifdef KOKKOS_ENABLE_HIP
-template DavidsonResult davidson_lowest<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, int, int, double);
+template DavidsonResult davidson_lowest<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, int, int, Real);
 #endif
+#ifdef KOKKOS_ENABLE_SYCL
+template DavidsonResult davidson_lowest<Kokkos::Experimental::SYCL>(const MatrixFreeHamiltonian<Kokkos::Experimental::SYCL>&, int, int, Real);
+#endif
+}
+
 }

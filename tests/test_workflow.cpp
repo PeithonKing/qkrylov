@@ -14,6 +14,7 @@
 #include "qkrylov/solvers/lanczos.hpp"
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 void test_heisenberg_workflow() {
     std::cout << "Running test_heisenberg_workflow..." << std::endl;
@@ -42,7 +43,7 @@ void test_heisenberg_workflow() {
 
     // Exact ground state energy for 4-site Heisenberg chain (OBC) = 1 - sqrt(2) ≈ -0.6160254038
     // but restricted to Sz=0 sector the ground state is still -1.6160254038
-    double exact_energy = -1.6160254038;
+    Real exact_energy = -1.6160254038;
     std::cout << "Computed Energy: " << res.energy << " Exact: " << exact_energy << std::endl;
     assert(std::abs(res.energy - exact_energy) < 1e-5 && "Ground state energy should match exact 4-site Heisenberg value");
     assert(res.eigenvector.size() == 6 && "Eigenvector dimension should match Sz=0 sector size");

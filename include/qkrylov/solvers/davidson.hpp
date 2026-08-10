@@ -6,12 +6,13 @@
 
 #include <vector>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 struct DavidsonResult
 {
-    std::vector<double> eigenvalues;
+    std::vector<Real> eigenvalues;
     std::vector<HostVector> eigenvectors;
 };
 
@@ -20,7 +21,9 @@ DavidsonResult davidson_lowest(
     const MatrixFreeHamiltonian<ExecSpace>& H,
     int n_eig = 1,
     int max_subspace = 20,
-    double tol = 1.0e-8
+    Real tol = 1.0e-8
 );
+
+}
 
 }

@@ -1,10 +1,13 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/basis/fermion_basis.hpp"
 
 #include <stdexcept>
 #include <bit>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
+
 
 FermionBasis::FermionBasis(
     int N,
@@ -85,4 +88,7 @@ void FermionBasis::build_n_basis()
     }
 }
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

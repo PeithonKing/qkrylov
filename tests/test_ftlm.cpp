@@ -6,6 +6,7 @@
 #include <cassert>
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main() {
     int N = 2;
@@ -20,7 +21,7 @@ int main() {
     }
     MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> H(basis, site, os);
 
-    double beta = 1.0;
+    Real beta = 1.0;
     auto res = ftlm<Kokkos::DefaultExecutionSpace>(H, beta, 100, 10);
 
     std::cout << "FTLM Partition Function Z: " << res.partition_function << "\n";

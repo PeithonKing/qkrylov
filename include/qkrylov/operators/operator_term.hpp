@@ -5,8 +5,10 @@
 #include <string>
 #include <vector>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
+
 
 struct OperatorFactor
 {
@@ -42,7 +44,7 @@ inline OperatorTerm operator*(Complex coeff, const LocalOp& op) {
     return t;
 }
 
-inline OperatorTerm operator*(double coeff, const LocalOp& op) {
+inline OperatorTerm operator*(Real coeff, const LocalOp& op) {
     return Complex(coeff, 0.0) * op;
 }
 
@@ -105,4 +107,7 @@ inline OpSumExpr operator-(OpSumExpr expr, OperatorTerm t) {
     return expr;
 }
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

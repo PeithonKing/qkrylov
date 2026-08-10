@@ -1,7 +1,11 @@
 #pragma once
 
-namespace qkrylov
-{
+#include "qkrylov/core/types.hpp"
+
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
+
 
 struct Sector
 {
@@ -36,4 +40,7 @@ struct Sector
     int nb = 0;
 };
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

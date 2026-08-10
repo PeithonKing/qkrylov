@@ -1,10 +1,12 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/sites/fermion_site.hpp"
 
 #include <stdexcept>
 #include <bit>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 bool FermionSite::occupied(
     StateID state,
@@ -14,7 +16,7 @@ bool FermionSite::occupied(
     return (state >> site) & 1ULL;
 }
 
-double FermionSite::phase(
+Real FermionSite::phase(
     StateID state,
     int site
 )
@@ -79,6 +81,8 @@ LocalAction FermionSite::apply(
     throw std::runtime_error(
         "Unknown fermion operator: " + op
     );
+}
+
 }
 
 }

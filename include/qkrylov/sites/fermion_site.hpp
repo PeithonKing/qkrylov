@@ -1,9 +1,12 @@
 #pragma once
 
+#include "qkrylov/core/types.hpp"
+
 #include "site.hpp"
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 class FermionSite : public Site
 {
@@ -22,10 +25,12 @@ private:
         int site
     );
 
-    static double phase(
+    static Real phase(
         StateID state,
         int site
     );
 };
+
+}
 
 }

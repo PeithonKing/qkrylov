@@ -5,6 +5,7 @@
 #include <iostream>
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main() {
     int N = 4;

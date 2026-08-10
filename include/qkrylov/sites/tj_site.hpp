@@ -1,9 +1,12 @@
 #pragma once
 
+#include "qkrylov/core/types.hpp"
+
 #include "site.hpp"
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 class TJSite : public Site
 {
@@ -27,15 +30,17 @@ private:
         int site
     );
 
-    static double phase_up(
+    static Real phase_up(
         StateID state,
         int site
     );
 
-    static double phase_dn(
+    static Real phase_dn(
         StateID state,
         int site
     );
 };
+
+}
 
 }

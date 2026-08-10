@@ -1,10 +1,13 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/basis/spinhalf_basis.hpp"
 
 #include <stdexcept>
 #include <bit>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
+
 
 SpinHalfBasis::SpinHalfBasis(
     int N,
@@ -100,4 +103,7 @@ void SpinHalfBasis::build_sz_basis()
     }
 }
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

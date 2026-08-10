@@ -1,3 +1,4 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/solvers/lanczos.hpp"
 
 #include <random>
@@ -8,26 +9,27 @@
 #include <cmath>
 #include <Kokkos_Core.hpp>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 namespace
 {
 
 struct TridiagResult {
-    double energy;
-    std::vector<double> eigenvector;
+    Real energy;
+    std::vector<Real> eigenvector;
 };
 
 // Diagonalize symmetric tridiagonal matrix and return ground state energy and eigenvector
-TridiagResult tridiag_ground_state_full(const std::vector<double>& alpha, const std::vector<double>& beta, int n)
+TridiagResult tridiag_ground_state_full(const std::vector<Real>& alpha, const std::vector<Real>& beta, int n)
 {
     if (n == 0) return {0.0, {}};
     if (n == 1) return {alpha[0], {1.0}};
 
-    std::vector<double> d = alpha;
-    std::vector<double> e = beta;
-    std::vector<std::vector<double>> z(n, std::vector<double>(n, 0.0));
+    std::vector<Real> d = alpha;
+    std::vector<Real> e = beta;
+    std::vector<std::vector<Real>> z(n, std::vector<Real>(n, 0.0));
     for (int i = 0; i < n; ++i) z[i][i] = 1.0;
 
     for (int iter = 0; iter < 1000; ++iter) {
@@ -44,25 +46,25 @@ TridiagResult tridiag_ground_state_full(const std::vector<double>& alpha, const 
         int l = m - 1;
         while (l > 0 && e[l-1] != 0.0) l--;
 
-        double b = (d[m-1] - d[m]) / 2.0;
-        double c = e[m-1] * e[m-1];
-        double s = std::sqrt(b*b + c);
-        double shift = (b > 0) ? d[m] - c / (b + s) : d[m] - c / (b - s);
+        Real b = (d[m-1] - d[m]) / 2.0;
+        Real c = e[m-1] * e[m-1];
+        Real s = std::sqrt(b*b + c);
+        Real shift = (b > 0) ? d[m] - c / (b + s) : d[m] - c / (b - s);
 
-        double p = d[l] - shift;
-        double g = e[l];
+        Real p = d[l] - shift;
+        Real g = e[l];
 
         for (int i = l; i < m; ++i) {
-            double r = std::hypot(p, g);
-            double cos_theta = p / r;
-            double sin_theta = g / r;
+            Real r = std::hypot(p, g);
+            Real cos_theta = p / r;
+            Real sin_theta = g / r;
 
             if (i > l) e[i-1] = r;
 
-            double f = cos_theta * d[i] + sin_theta * e[i];
-            double g_next = cos_theta * e[i] + sin_theta * d[i+1];
-            double h = sin_theta * d[i] - cos_theta * e[i];
-            double k = sin_theta * e[i] - cos_theta * d[i+1];
+            Real f = cos_theta * d[i] + sin_theta * e[i];
+            Real g_next = cos_theta * e[i] + sin_theta * d[i+1];
+            Real h = sin_theta * d[i] - cos_theta * e[i];
+            Real k = sin_theta * e[i] - cos_theta * d[i+1];
 
             d[i] = cos_theta * f + sin_theta * g_next;
             e[i] = cos_theta * h + sin_theta * k;
@@ -70,8 +72,8 @@ TridiagResult tridiag_ground_state_full(const std::vector<double>& alpha, const 
 
             // Update eigenvectors z
             for (int j = 0; j < n; ++j) {
-                double z1 = z[j][i];
-                double z2 = z[j][i+1];
+                Real z1 = z[j][i];
+                Real z2 = z[j][i+1];
                 z[j][i] = cos_theta * z1 + sin_theta * z2;
                 z[j][i+1] = sin_theta * z1 - cos_theta * z2;
             }
@@ -89,7 +91,7 @@ TridiagResult tridiag_ground_state_full(const std::vector<double>& alpha, const 
         if (d[i] < d[min_idx]) min_idx = i;
     }
 
-    std::vector<double> res_v(n);
+    std::vector<Real> res_v(n);
     for (int i = 0; i < n; ++i) res_v[i] = z[i][min_idx];
 
     return {d[min_idx], res_v};
@@ -100,7 +102,7 @@ template <typename ExecSpace>
 LanczosResult lanczos_ground_state(
     const MatrixFreeHamiltonian<ExecSpace>& H,
     int maxiter,
-    double tol
+    Real tol
 )
 {
     const Index dim = H.dimension();
@@ -111,7 +113,7 @@ LanczosResult lanczos_ground_state(
     VectorView<ExecSpace> w("w", dim);
 
     std::mt19937 rng(1234);
-    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    std::uniform_real_distribution<Real> dist(-1.0, 1.0);
     
     auto v_curr_host = Kokkos::create_mirror_view(v_curr);
     for(Index i=0; i<dim; ++i) v_curr_host(i) = KComplex(dist(rng), dist(rng));
@@ -123,10 +125,10 @@ LanczosResult lanczos_ground_state(
     Kokkos::deep_copy(v_curr_copy, v_curr);
     basis_vectors.push_back(v_curr_copy);
 
-    std::vector<double> alphas;
-    std::vector<double> betas;
+    std::vector<Real> alphas;
+    std::vector<Real> betas;
 
-    double energy_old = 1e100;
+    Real energy_old = 1e100;
     int actual_iters = 0;
 
     for(int iter=0; iter < std::min<int>(maxiter, dim); ++iter)
@@ -134,7 +136,7 @@ LanczosResult lanczos_ground_state(
         actual_iters = iter + 1;
         H.apply(v_curr, w);
 
-        double alpha = dot(v_curr, w).real();
+        Real alpha = dot(v_curr, w).real();
         alphas.push_back(alpha);
 
         axpy(-alpha, v_curr, w);
@@ -147,7 +149,7 @@ LanczosResult lanczos_ground_state(
             axpy(-dot(bv, w), bv, w);
         }
 
-        double beta = norm(w);
+        Real beta = norm(w);
 
         if (beta < 1e-15 || iter + 1 == std::min<int>(maxiter, dim)) {
              break;
@@ -194,18 +196,23 @@ LanczosResult lanczos_ground_state(
 
 // Explicit instantiations
 #ifdef KOKKOS_ENABLE_SERIAL
-template LanczosResult lanczos_ground_state<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, int, double);
+template LanczosResult lanczos_ground_state<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, int, Real);
 #endif
 #ifdef KOKKOS_ENABLE_OPENMP
-template LanczosResult lanczos_ground_state<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, int, double);
+template LanczosResult lanczos_ground_state<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, int, Real);
 #endif
 #ifdef KOKKOS_ENABLE_THREADS
-template LanczosResult lanczos_ground_state<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, int, double);
+template LanczosResult lanczos_ground_state<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, int, Real);
 #endif
 #ifdef KOKKOS_ENABLE_CUDA
-template LanczosResult lanczos_ground_state<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, int, double);
+template LanczosResult lanczos_ground_state<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, int, Real);
 #endif
 #ifdef KOKKOS_ENABLE_HIP
-template LanczosResult lanczos_ground_state<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, int, double);
+template LanczosResult lanczos_ground_state<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, int, Real);
 #endif
+#ifdef KOKKOS_ENABLE_SYCL
+template LanczosResult lanczos_ground_state<Kokkos::Experimental::SYCL>(const MatrixFreeHamiltonian<Kokkos::Experimental::SYCL>&, int, Real);
+#endif
+}
+
 }

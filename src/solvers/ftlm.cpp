@@ -1,3 +1,4 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/solvers/ftlm.hpp"
 #include "qkrylov/linalg/vector_ops.hpp"
 
@@ -7,16 +8,17 @@
 #include <iostream>
 #include <Kokkos_Core.hpp>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 namespace
 {
 // Helper for tridiagonalization (simple version without Ritz vector storage)
 struct Tridiag
 {
-    std::vector<double> alphas;
-    std::vector<double> betas;
+    std::vector<Real> alphas;
+    std::vector<Real> betas;
 };
 
 template <typename ExecSpace>
@@ -33,13 +35,13 @@ Tridiag compute_tridiag(const MatrixFreeHamiltonian<ExecSpace>& H, const VectorV
 
     for (int i = 0; i < n_steps; ++i) {
         H.apply(v_curr, w);
-        double alpha = dot(v_curr, w).real();
+        Real alpha = dot(v_curr, w).real();
         res.alphas.push_back(alpha);
 
         axpy(-alpha, v_curr, w);
         if (i > 0) axpy(-res.betas.back(), v_prev, w);
 
-        double beta = norm(w);
+        Real beta = norm(w);
         if (beta < 1e-15) break;
         res.betas.push_back(beta);
 
@@ -52,19 +54,19 @@ Tridiag compute_tridiag(const MatrixFreeHamiltonian<ExecSpace>& H, const VectorV
 
 // Simple tridiagonal diagonalization to get all eigenvalues and first components of eigenvectors
 struct FullTridiagResult {
-    std::vector<double> eigenvalues;
-    std::vector<double> first_components;
+    std::vector<Real> eigenvalues;
+    std::vector<Real> first_components;
 };
 
-FullTridiagResult diagonalize_tridiag_components(const std::vector<double>& alpha, const std::vector<double>& beta)
+FullTridiagResult diagonalize_tridiag_components(const std::vector<Real>& alpha, const std::vector<Real>& beta)
 {
     int n = alpha.size();
     if (n == 0) return {};
     if (n == 1) return { {alpha[0]}, {1.0} };
 
-    std::vector<double> d = alpha;
-    std::vector<double> e = beta;
-    std::vector<std::vector<double>> z(n, std::vector<double>(n, 0.0));
+    std::vector<Real> d = alpha;
+    std::vector<Real> e = beta;
+    std::vector<std::vector<Real>> z(n, std::vector<Real>(n, 0.0));
     for (int i = 0; i < n; ++i) z[i][i] = 1.0;
 
     for (int iter = 0; iter < 1000; ++iter) {
@@ -76,27 +78,27 @@ FullTridiagResult diagonalize_tridiag_components(const std::vector<double>& alph
         if (m == 0) break;
         int l = m - 1;
         while (l > 0 && e[l-1] != 0.0) l--;
-        double b = (d[m-1] - d[m]) / 2.0;
-        double c = e[m-1] * e[m-1];
-        double s = std::sqrt(b*b + c);
-        double shift = (b > 0) ? d[m] - c / (b + s) : d[m] - c / (b - s);
-        double p = d[l] - shift;
-        double g = e[l];
+        Real b = (d[m-1] - d[m]) / 2.0;
+        Real c = e[m-1] * e[m-1];
+        Real s = std::sqrt(b*b + c);
+        Real shift = (b > 0) ? d[m] - c / (b + s) : d[m] - c / (b - s);
+        Real p = d[l] - shift;
+        Real g = e[l];
         for (int i = l; i < m; ++i) {
-            double r = std::hypot(p, g);
-            double cos_theta = p / r;
-            double sin_theta = g / r;
+            Real r = std::hypot(p, g);
+            Real cos_theta = p / r;
+            Real sin_theta = g / r;
             if (i > l) e[i-1] = r;
-            double f = cos_theta * d[i] + sin_theta * e[i];
-            double g_next = cos_theta * e[i] + sin_theta * d[i+1];
-            double h = sin_theta * d[i] - cos_theta * e[i];
-            double k = sin_theta * e[i] - cos_theta * d[i+1];
+            Real f = cos_theta * d[i] + sin_theta * e[i];
+            Real g_next = cos_theta * e[i] + sin_theta * d[i+1];
+            Real h = sin_theta * d[i] - cos_theta * e[i];
+            Real k = sin_theta * e[i] - cos_theta * d[i+1];
             d[i] = cos_theta * f + sin_theta * g_next;
             e[i] = cos_theta * h + sin_theta * k;
             d[i+1] = sin_theta * h - cos_theta * k;
             for (int j = 0; j < n; ++j) {
-                double z1 = z[j][i];
-                double z2 = z[j][i+1];
+                Real z1 = z[j][i];
+                Real z2 = z[j][i+1];
                 z[j][i] = cos_theta * z1 + sin_theta * z2;
                 z[j][i+1] = sin_theta * z1 - cos_theta * z2;
             }
@@ -120,7 +122,7 @@ FullTridiagResult diagonalize_tridiag_components(const std::vector<double>& alph
 template <typename ExecSpace>
 FTLMResult ftlm(
     const MatrixFreeHamiltonian<ExecSpace>& H,
-    double beta,
+    Real beta,
     int n_random,
     int n_steps
 )
@@ -129,11 +131,11 @@ FTLMResult ftlm(
     if (dim == 0) return {beta};
 
     std::mt19937 rng(42);
-    std::normal_distribution<double> dist(0.0, 1.0);
+    std::normal_distribution<Real> dist(0.0, 1.0);
 
-    double Z = 0.0;
-    double E = 0.0;
-    double E2 = 0.0;
+    Real Z = 0.0;
+    Real E = 0.0;
+    Real E2 = 0.0;
 
     for (int r = 0; r < n_random; ++r) {
         VectorView<ExecSpace> r_vec("r_vec", dim);
@@ -141,13 +143,13 @@ FTLMResult ftlm(
         for (Index i = 0; i < dim; ++i) r_vec_host(i) = KComplex(dist(rng), dist(rng));
         Kokkos::deep_copy(r_vec, r_vec_host);
 
-        double nrm = norm(r_vec);
+        Real nrm = norm(r_vec);
 
         auto tridiag = compute_tridiag(H, r_vec, n_steps);
         auto eig = diagonalize_tridiag_components(tridiag.alphas, tridiag.betas);
 
         for (size_t i = 0; i < eig.eigenvalues.size(); ++i) {
-            double weight = nrm * nrm * eig.first_components[i] * eig.first_components[i] * std::exp(-beta * eig.eigenvalues[i]);
+            Real weight = nrm * nrm * eig.first_components[i] * eig.first_components[i] * std::exp(-beta * eig.eigenvalues[i]);
             Z += weight;
             E += eig.eigenvalues[i] * weight;
             E2 += eig.eigenvalues[i] * eig.eigenvalues[i] * weight;
@@ -170,18 +172,23 @@ FTLMResult ftlm(
 
 // Explicit instantiations
 #ifdef KOKKOS_ENABLE_SERIAL
-template FTLMResult ftlm<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, double, int, int);
+template FTLMResult ftlm<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, Real, int, int);
 #endif
 #ifdef KOKKOS_ENABLE_OPENMP
-template FTLMResult ftlm<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, double, int, int);
+template FTLMResult ftlm<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, Real, int, int);
 #endif
 #ifdef KOKKOS_ENABLE_THREADS
-template FTLMResult ftlm<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, double, int, int);
+template FTLMResult ftlm<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, Real, int, int);
 #endif
 #ifdef KOKKOS_ENABLE_CUDA
-template FTLMResult ftlm<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, double, int, int);
+template FTLMResult ftlm<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, Real, int, int);
 #endif
 #ifdef KOKKOS_ENABLE_HIP
-template FTLMResult ftlm<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, double, int, int);
+template FTLMResult ftlm<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, Real, int, int);
 #endif
+#ifdef KOKKOS_ENABLE_SYCL
+template FTLMResult ftlm<Kokkos::Experimental::SYCL>(const MatrixFreeHamiltonian<Kokkos::Experimental::SYCL>&, Real, int, int);
+#endif
+}
+
 }

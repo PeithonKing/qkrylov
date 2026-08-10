@@ -6,14 +6,15 @@
 
 #include <vector>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 struct DynamicsResult
 {
-    std::vector<double> alphas;
-    std::vector<double> betas;
-    double norm_phi0;
+    std::vector<Real> alphas;
+    std::vector<Real> betas;
+    Real norm_phi0;
 };
 
 // Compute the Continued Fraction coefficients starting from a vector phi0
@@ -26,14 +27,16 @@ DynamicsResult continued_fraction_coeffs(
 
 // Helper function to evaluate S(omega) from coefficients
 // S(omega) = -1/pi * Im <phi0 | (omega - H + E0 + i*eta)^-1 | phi0>
-double evaluate_spectral_function(
-    const double* alphas,
-    const double* betas,
+Real evaluate_spectral_function(
+    const Real* alphas,
+    const Real* betas,
     size_t n,
-    double norm_phi0,
-    double omega,
-    double E0,
-    double eta = 0.1
+    Real norm_phi0,
+    Real omega,
+    Real E0,
+    Real eta = 0.1
 );
+
+}
 
 }

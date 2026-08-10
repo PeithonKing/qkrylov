@@ -12,6 +12,7 @@
 #include "qkrylov/hamiltonian/matrix_free_hamiltonian.hpp"
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main()
 {

@@ -1,9 +1,11 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/sites/spinhalf_site.hpp"
 
 #include <stdexcept>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 bool SpinHalfSite::spin_up(
     StateID state,
@@ -118,4 +120,5 @@ LocalAction SpinHalfSite::apply(
     );
 }
 
+}
 }

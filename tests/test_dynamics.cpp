@@ -7,6 +7,7 @@
 #include <cassert>
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main() {
     int N = 2;
@@ -47,7 +48,7 @@ int main() {
     auto dyn_res = continued_fraction_coeffs<Kokkos::DefaultExecutionSpace>(H, phi0, 10);
     assert(dyn_res.alphas.size() > 0);
 
-    double val = evaluate_spectral_function(dyn_res.alphas.data(), dyn_res.betas.data(), dyn_res.alphas.size(), dyn_res.norm_phi0, 0.5, l_res.energy, 0.1);
+    Real val = evaluate_spectral_function(dyn_res.alphas.data(), dyn_res.betas.data(), dyn_res.alphas.size(), dyn_res.norm_phi0, 0.5, l_res.energy, 0.1);
     std::cout << "S(0.5) = " << val << "\n";
     assert(val >= 0.0);
 

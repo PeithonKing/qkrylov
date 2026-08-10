@@ -1,3 +1,4 @@
+import numpy as np
 from typing import Optional
 from . import _qkrylov_cpp as _cpp
 
@@ -17,7 +18,8 @@ class Basis:
         """The number of sites in this basis."""
         return self._cpp_obj.nsites()
 
-def _build_sector(
+def _build_sector(dtype,
+
     conserve_sz: bool = False, sz: int = 0,
     conserve_nup: bool = False, nup: int = 0,
     conserve_ndn: bool = False, ndn: int = 0,
@@ -25,7 +27,8 @@ def _build_sector(
     conserve_nb: bool = False, nb: int = 0
 ) -> _cpp.Sector:
     """Helper to build a C++ Sector object from Python kwargs."""
-    sec = _cpp.Sector()
+    suffix = "_FP64" if dtype == np.float64 else "_FP32"
+    sec = getattr(_cpp, f"Sector{suffix}")()
     if conserve_sz or sz != 0:
         sec.use_sz = True
         sec.sz2 = sz * 2  # C++ uses 2*Sz
@@ -58,7 +61,7 @@ class SpinHalfBasis(Basis):
         so integer or half-integer values are allowed.
     """
     
-    def __init__(self, N: int, conserve_sz: bool = False, sz: Optional[float] = None):
+    def __init__(self, N: int, conserve_sz: bool = False, sz: Optional[float] = None, dtype=np.float32):
         # If sz is explicitly provided, it implies conservation
         if sz is not None:
             conserve_sz = True
@@ -68,12 +71,13 @@ class SpinHalfBasis(Basis):
             sz = 0  # no conservation, sz value doesn't matter
 
         # C++ Sector takes sz2 (which is 2 * sz)
-        sec = _cpp.Sector()
+        suffix = "_FP64" if dtype == np.float64 else "_FP32"
+        sec = getattr(_cpp, f"Sector{suffix}")()
         if conserve_sz:
             sec.use_sz = True
             sec.sz2 = int(2 * sz)
 
-        self._cpp_obj = _cpp.SpinHalfBasis(N, sec)
+        self._cpp_obj = getattr(_cpp, f"SpinHalfBasis{suffix}")(N, sec)
         self._conserve_sz = conserve_sz
         self._sz = sz
 
@@ -94,16 +98,17 @@ class FermionBasis(Basis):
     n : int, optional
         The target total particle number sector (default 0).
     """
-    def __init__(self, N: int, conserve_n: bool = False, n: int = 0):
+    def __init__(self, N: int, conserve_n: bool = False, n: int = 0, dtype=np.float32):
         if n != 0:
             conserve_n = True
         
-        sec = _cpp.Sector()
+        suffix = "_FP64" if dtype == np.float64 else "_FP32"
+        sec = getattr(_cpp, f"Sector{suffix}")()
         if conserve_n:
             sec.use_n = True
             sec.n = n
 
-        self._cpp_obj = _cpp.FermionBasis(N, sec)
+        self._cpp_obj = getattr(_cpp, f"FermionBasis{suffix}")(N, sec)
         self._conserve_n = conserve_n
         self._n = n
 
@@ -129,11 +134,12 @@ class HubbardBasis(Basis):
         Target number of down-spin electrons.
     """
     def __init__(self, N: int, conserve_nup: bool = False, nup: int = 0, 
-                 conserve_ndn: bool = False, ndn: int = 0):
+                 conserve_ndn: bool = False, ndn: int = 0, dtype=np.float32):
         if nup != 0: conserve_nup = True
         if ndn != 0: conserve_ndn = True
 
-        sec = _cpp.Sector()
+        suffix = "_FP64" if dtype == np.float64 else "_FP32"
+        sec = getattr(_cpp, f"Sector{suffix}")()
         if conserve_nup:
             sec.use_nup = True
             sec.nup = nup
@@ -141,7 +147,7 @@ class HubbardBasis(Basis):
             sec.use_ndn = True
             sec.ndn = ndn
 
-        self._cpp_obj = _cpp.HubbardBasis(N, sec)
+        self._cpp_obj = getattr(_cpp, f"HubbardBasis{suffix}")(N, sec)
         self._conserve_nup = conserve_nup
         self._conserve_ndn = conserve_ndn
         self._nup = nup
@@ -158,11 +164,12 @@ class HubbardBasis(Basis):
 class TJBasis(Basis):
     """Basis for t-J model (doped antiferromagnet)."""
     def __init__(self, N: int, conserve_nup: bool = False, nup: int = 0, 
-                 conserve_ndn: bool = False, ndn: int = 0):
+                 conserve_ndn: bool = False, ndn: int = 0, dtype=np.float32):
         if nup != 0: conserve_nup = True
         if ndn != 0: conserve_ndn = True
 
-        sec = _cpp.Sector()
+        suffix = "_FP64" if dtype == np.float64 else "_FP32"
+        sec = getattr(_cpp, f"Sector{suffix}")()
         if conserve_nup:
             sec.use_nup = True
             sec.nup = nup
@@ -170,7 +177,7 @@ class TJBasis(Basis):
             sec.use_ndn = True
             sec.ndn = ndn
 
-        self._cpp_obj = _cpp.TJBasis(N, sec)
+        self._cpp_obj = getattr(_cpp, f"TJBasis{suffix}")(N, sec)
         self._conserve_nup = conserve_nup
         self._conserve_ndn = conserve_ndn
         self._nup = nup

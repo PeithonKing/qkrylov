@@ -42,7 +42,8 @@ def lanczos_ground_state(
     LanczosResult
         The ground state energy and eigenvector.
     """
-    energy, eigenvector = getattr(_cpp, f"lanczos_ground_state_{H._backend_suffix}")(H._cpp_obj, maxiter, tol)
+    s_dtype = "_FP64" if H.dtype == np.float64 else "_FP32"
+    energy, eigenvector = getattr(_cpp, f"lanczos_ground_state_{H._backend_suffix}{s_dtype}")(H._cpp_obj, maxiter, tol)
     return LanczosResult(
         energy=energy,
         eigenvector=eigenvector  # zero-copy NumPy array backed by C++ memory
@@ -91,7 +92,8 @@ def davidson_lowest(
     DavidsonResult
         The lowest eigenvalues and eigenvectors.
     """
-    res = getattr(_cpp, f"davidson_lowest_{H._backend_suffix}")(H._cpp_obj, n_eig, max_subspace, tol)
+    s_dtype = "_FP64" if H.dtype == np.float64 else "_FP32"
+    res = getattr(_cpp, f"davidson_lowest_{H._backend_suffix}{s_dtype}")(H._cpp_obj, n_eig, max_subspace, tol)
     
     return DavidsonResult(
         eigenvalues=np.array(res.eigenvalues, dtype=float),  # small, copy is fine
@@ -112,7 +114,7 @@ def continued_fraction_coeffs(
     phi0: np.ndarray,
     n_iter: int = 100
 ) -> DynamicsResult:
-    phi0 = np.ascontiguousarray(phi0, dtype=np.complex128)
+    phi0 = np.ascontiguousarray(phi0, dtype=np.complex128 if getattr(H, "dtype", np.float32) == np.float64 else np.complex64)
     alphas, betas, norm_phi0 = getattr(_cpp, f"continued_fraction_coeffs_{H._backend_suffix}")(H._cpp_obj, phi0, n_iter)
     return DynamicsResult(alphas, betas, norm_phi0)
 
@@ -139,5 +141,6 @@ def ftlm(
     n_random: int = 50,
     n_steps: int = 100
 ) -> FTLMResult:
-    res = getattr(_cpp, f"ftlm_{H._backend_suffix}")(H._cpp_obj, beta, n_random, n_steps)
+    s_dtype = "_FP64" if H.dtype == np.float64 else "_FP32"
+    res = getattr(_cpp, f"ftlm_{H._backend_suffix}{s_dtype}")(H._cpp_obj, beta, n_random, n_steps)
     return FTLMResult(res)

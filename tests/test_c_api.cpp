@@ -46,18 +46,18 @@ int main() {
     assert(qkrylov_hamiltonian_dimension(H) == dim);
 
     // 6. Test Matrix-Vector Apply
-    std::vector<double> x_real(dim, 1.0);
-    std::vector<double> x_imag(dim, 0.0);
-    std::vector<double> y_real(dim, 0.0);
-    std::vector<double> y_imag(dim, 0.0);
+    std::vector<float> x_real(dim, 1.0);
+    std::vector<float> x_imag(dim, 0.0);
+    std::vector<float> y_real(dim, 0.0);
+    std::vector<float> y_imag(dim, 0.0);
 
     int apply_res = qkrylov_hamiltonian_apply(H, x_real.data(), x_imag.data(), y_real.data(), y_imag.data());
     assert(apply_res == QKRYLOV_SUCCESS);
 
     // Test Zero-Copy Direct Complex Apply
-    std::vector<std::complex<double>> x_cx(dim, std::complex<double>(1.0, 0.0));
-    std::vector<std::complex<double>> y_cx(dim, std::complex<double>(0.0, 0.0));
-    int apply_cx_res = qkrylov_hamiltonian_apply_complex(H, reinterpret_cast<const double*>(x_cx.data()), reinterpret_cast<double*>(y_cx.data()));
+    std::vector<std::complex<float>> x_cx(dim, std::complex<float>(1.0, 0.0));
+    std::vector<std::complex<float>> y_cx(dim, std::complex<float>(0.0, 0.0));
+    int apply_cx_res = qkrylov_hamiltonian_apply_complex(H, reinterpret_cast<const float*>(x_cx.data()), reinterpret_cast<float*>(y_cx.data()));
     assert(apply_cx_res == QKRYLOV_SUCCESS);
     for (size_t i = 0; i < dim; ++i) {
         assert(std::abs(y_cx[i].real() - y_real[i]) < 1e-12);

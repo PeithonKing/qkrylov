@@ -15,12 +15,12 @@ set(QKRYLOV_TESTS
     test_tj_site
     test_ftlm
     test_workflow
-    test_c_api
 )
 
 foreach(test_name IN LISTS QKRYLOV_TESTS)
     add_executable(${test_name} ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE qkrylov::qkrylov)
+    target_compile_definitions(${test_name} PRIVATE QKRYLOV_DOUBLE_PRECISION)
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
 

@@ -1,11 +1,14 @@
 #pragma once
 
+#include "qkrylov/core/types.hpp"
+
 #include "operator_term.hpp"
 
 #include <vector>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 class OpSum
 {
@@ -44,4 +47,5 @@ private:
     std::vector<OperatorTerm> terms_;
 };
 
+}
 }

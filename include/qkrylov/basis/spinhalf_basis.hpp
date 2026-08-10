@@ -1,5 +1,7 @@
 #pragma once
 
+#include "qkrylov/core/types.hpp"
+
 #include "basis.hpp"
 #include "../symmetry/sector.hpp"
 
@@ -7,8 +9,9 @@
 #include <unordered_map>
 #include <memory>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 class SpinHalfBasis : public Basis
 {
@@ -61,4 +64,7 @@ private:
     std::unordered_map<StateID, Index> lookup_;
 };
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

@@ -12,8 +12,21 @@
 
 namespace qkrylov {
 
+#ifdef QKRYLOV_DOUBLE_PRECISION
+#define QKRYLOV_PRECISION_NAMESPACE fp64
+#else
+#define QKRYLOV_PRECISION_NAMESPACE fp32
+#endif
+
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
+#ifdef QKRYLOV_DOUBLE_PRECISION
 using Real    = double;
 using Complex = std::complex<double>;
+#else
+using Real    = float;
+using Complex = std::complex<float>;
+#endif
 
 using StateID = uint64_t;
 using Index   = std::size_t;
@@ -28,6 +41,6 @@ inline int popcount(uint64_t x) noexcept {
 #else
     return __builtin_popcountll(x);
 #endif
-}
-
+} // namespace QKRYLOV_PRECISION_NAMESPACE
+} // namespace qkrylov
 }

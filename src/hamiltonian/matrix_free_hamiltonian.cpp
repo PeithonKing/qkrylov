@@ -1,11 +1,13 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/hamiltonian/matrix_free_hamiltonian.hpp"
 #include "qkrylov/linalg/vector_ops.hpp"
 
 #include <stdexcept>
 #include <vector>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 template <typename ExecSpace>
 MatrixFreeHamiltonian<ExecSpace>::MatrixFreeHamiltonian(
@@ -225,5 +227,11 @@ template class MatrixFreeHamiltonian<Kokkos::Cuda>;
 #ifdef KOKKOS_ENABLE_HIP
 template class MatrixFreeHamiltonian<Kokkos::HIP>;
 #endif
+#ifdef KOKKOS_ENABLE_SYCL
+template class MatrixFreeHamiltonian<Kokkos::Experimental::SYCL>;
+#endif
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

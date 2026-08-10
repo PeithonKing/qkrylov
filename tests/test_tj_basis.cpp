@@ -3,6 +3,7 @@
 #include <cassert>
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main() {
     // 2 sites, no symmetry.

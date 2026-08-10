@@ -2,8 +2,9 @@
 
 #include "qkrylov/core/types.hpp"
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 struct LocalAction
 {
@@ -14,4 +15,5 @@ struct LocalAction
     Complex matrix_element = 0.0;
 };
 
+}
 }

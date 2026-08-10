@@ -1,13 +1,15 @@
 #pragma once
 
+#include "qkrylov/core/types.hpp"
 #include <Kokkos_Core.hpp>
 
 namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
 
 /// Complex type for device-side computation.
-/// Layout-compatible with std::complex<double> (guaranteed by both
+/// Layout-compatible with std::complex<float> (guaranteed by both
 /// the C++ standard and the Kokkos project).
-using KComplex = Kokkos::complex<double>;
+using KComplex = Kokkos::complex<Real>;
 
 /// Device-resident 1-D vector of complex doubles.
 using Vector = Kokkos::View<KComplex*>;
@@ -24,4 +26,5 @@ using MemorySpace = ExecutionSpace::memory_space;
 /// Host-space execution/memory space.
 using HostExecSpace = Kokkos::DefaultHostExecutionSpace;
 
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

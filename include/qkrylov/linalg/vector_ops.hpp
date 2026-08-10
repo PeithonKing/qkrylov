@@ -5,8 +5,10 @@
 
 #include <cmath>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
+
 
 /// Compute the inner product <x|y> = sum_i conj(x_i) * y_i
 template <typename ViewType>
@@ -31,7 +33,7 @@ inline KComplex dot(
 
 /// Compute the 2-norm ||x||
 template <typename ViewType>
-inline double norm(
+inline Real norm(
     const ViewType& x
 )
 {
@@ -59,7 +61,7 @@ inline void scal(
 /// Scale: x = a * x  (real scalar convenience overload)
 template <typename ViewType>
 inline void scal(
-    double a,
+    Real a,
     ViewType& x
 )
 {
@@ -89,7 +91,7 @@ inline void normalize(
     ViewType& x
 )
 {
-    const double n = norm(x);
+    const Real n = norm(x);
     if (n == 0.0) return;
     scal(KComplex(1.0 / n, 0.0), x);
 }
@@ -134,4 +136,7 @@ inline void copy_device_to_host(const ViewType& device, HostVector& host) {
     Kokkos::deep_copy(h_view, device);
 }
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

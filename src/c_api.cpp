@@ -226,12 +226,12 @@ int qkrylov_opsum_clear(qkrylov_opsum_h opsum) {
     }
 }
 
-int qkrylov_opsum_add_term_1body(qkrylov_opsum_h opsum, double coeff_real, double coeff_imag,
+int qkrylov_opsum_add_term_1body(qkrylov_opsum_h opsum, float coeff_real, float coeff_imag,
                                  const char* op1, int site1) {
     if (!opsum || !op1) return QKRYLOV_ERROR_INVALID_ARG;
     try {
         OperatorTerm term;
-        term.coeff = std::complex<double>(coeff_real, coeff_imag);
+        term.coeff = std::complex<float>(coeff_real, coeff_imag);
         term.factors.push_back({std::string(op1), site1});
         opsum->opsum.add_term(term);
         return QKRYLOV_SUCCESS;
@@ -240,13 +240,13 @@ int qkrylov_opsum_add_term_1body(qkrylov_opsum_h opsum, double coeff_real, doubl
     }
 }
 
-int qkrylov_opsum_add_term_2body(qkrylov_opsum_h opsum, double coeff_real, double coeff_imag,
+int qkrylov_opsum_add_term_2body(qkrylov_opsum_h opsum, float coeff_real, float coeff_imag,
                                  const char* op1, int site1,
                                  const char* op2, int site2) {
     if (!opsum || !op1 || !op2) return QKRYLOV_ERROR_INVALID_ARG;
     try {
         OperatorTerm term;
-        term.coeff = std::complex<double>(coeff_real, coeff_imag);
+        term.coeff = std::complex<float>(coeff_real, coeff_imag);
         term.factors.push_back({std::string(op1), site1});
         term.factors.push_back({std::string(op2), site2});
         opsum->opsum.add_term(term);
@@ -284,17 +284,17 @@ uint64_t qkrylov_hamiltonian_dimension(qkrylov_hamiltonian_h h) {
 }
 
 int qkrylov_hamiltonian_apply(qkrylov_hamiltonian_h h,
-                              const double* x_real, const double* x_imag,
-                              double* y_real, double* y_imag) {
+                              const float* x_real, const float* x_imag,
+                              float* y_real, float* y_imag) {
     if (!h || !h->ptr || !x_real || !y_real) return QKRYLOV_ERROR_INVALID_ARG;
     try {
         const uint64_t dim = h->ptr->dimension();
-        std::vector<std::complex<double>> x(dim);
-        std::vector<std::complex<double>> y(dim);
+        std::vector<std::complex<float>> x(dim);
+        std::vector<std::complex<float>> y(dim);
 
         for (uint64_t i = 0; i < dim; ++i) {
-            double imag = x_imag ? x_imag[i] : 0.0;
-            x[i] = std::complex<double>(x_real[i], imag);
+            float imag = x_imag ? x_imag[i] : 0.0;
+            x[i] = std::complex<float>(x_real[i], imag);
         }
 
         h->ptr->apply(x.data(), y.data());
@@ -311,12 +311,12 @@ int qkrylov_hamiltonian_apply(qkrylov_hamiltonian_h h,
 }
 
 int qkrylov_hamiltonian_apply_complex(qkrylov_hamiltonian_h h,
-                                        const double* x_complex,
-                                        double* y_complex) {
+                                        const float* x_complex,
+                                        float* y_complex) {
     if (!h || !h->ptr || !x_complex || !y_complex) return QKRYLOV_ERROR_INVALID_ARG;
     try {
-        const auto* x_c = reinterpret_cast<const std::complex<double>*>(x_complex);
-        auto* y_c = reinterpret_cast<std::complex<double>*>(y_complex);
+        const auto* x_c = reinterpret_cast<const std::complex<float>*>(x_complex);
+        auto* y_c = reinterpret_cast<std::complex<float>*>(y_complex);
         h->ptr->apply(x_c, y_c);
         return QKRYLOV_SUCCESS;
     } catch (...) {
@@ -327,7 +327,7 @@ int qkrylov_hamiltonian_apply_complex(qkrylov_hamiltonian_h h,
 /* Solvers API */
 int qkrylov_lanczos_ground_state(qkrylov_hamiltonian_h h,
                                  int maxiter,
-                                 double tol,
+                                 float tol,
                                  qkrylov_lanczos_result_c_t* result) {
     if (!h || !h->ptr || !result) return QKRYLOV_ERROR_INVALID_ARG;
     try {

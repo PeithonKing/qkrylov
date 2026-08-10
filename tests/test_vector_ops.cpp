@@ -4,6 +4,7 @@
 #include <Kokkos_Core.hpp>
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main(int argc, char* argv[])
 {

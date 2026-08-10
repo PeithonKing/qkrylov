@@ -1,10 +1,13 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/basis/tj_basis.hpp"
 
 #include <stdexcept>
 #include <bit>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
+
 
 TJBasis::TJBasis(
     int N,
@@ -58,7 +61,7 @@ void TJBasis::build_basis()
 
     for(StateID s = 0; s < dim; ++s)
     {
-        // Check for double occupancy
+        // Check for Real occupancy
         bool double_occupied = false;
         for(int i = 0; i < N_; ++i)
         {
@@ -92,4 +95,7 @@ void TJBasis::build_basis()
     }
 }
 
+
+
+} // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

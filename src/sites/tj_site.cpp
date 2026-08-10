@@ -1,10 +1,12 @@
+#include "qkrylov/core/types.hpp"
 #include "qkrylov/sites/tj_site.hpp"
 
 #include <stdexcept>
 #include <bit>
 
-namespace qkrylov
-{
+namespace qkrylov {
+namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 bool TJSite::occupied_up(
     StateID state,
@@ -22,7 +24,7 @@ bool TJSite::occupied_dn(
     return (state >> (2 * site + 1)) & 1ULL;
 }
 
-double TJSite::phase_up(
+Real TJSite::phase_up(
     StateID state,
     int site
 )
@@ -32,7 +34,7 @@ double TJSite::phase_up(
     return (count % 2 == 0) ? 1.0 : -1.0;
 }
 
-double TJSite::phase_dn(
+Real TJSite::phase_dn(
     StateID state,
     int site
 )
@@ -80,7 +82,7 @@ LocalAction TJSite::apply(
 
     if(op == "CdagUp")
     {
-        if(up || dn) return a; // Forbidden if already occupied (no double occupancy in t-J)
+        if(up || dn) return a; // Forbidden if already occupied (no Real occupancy in t-J)
         a.valid = true;
         a.new_state = state | (1ULL << (2 * site));
         a.matrix_element = phase_up(state, site);
@@ -108,6 +110,8 @@ LocalAction TJSite::apply(
     throw std::runtime_error(
         "Unknown TJ operator: " + op
     );
+}
+
 }
 
 }

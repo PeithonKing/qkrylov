@@ -14,6 +14,7 @@
 #include "qkrylov/solvers/lanczos.hpp"
 
 using namespace qkrylov;
+using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main()
 {
