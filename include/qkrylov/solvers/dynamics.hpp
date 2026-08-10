@@ -17,9 +17,10 @@ struct DynamicsResult
 };
 
 // Compute the Continued Fraction coefficients starting from a vector phi0
+template <typename ExecSpace>
 DynamicsResult continued_fraction_coeffs(
-    const MatrixFreeHamiltonian& H,
-    const Vector& phi0,
+    const MatrixFreeHamiltonian<ExecSpace>& H,
+    const HostVector& phi0,
     int n_iter = 100
 );
 

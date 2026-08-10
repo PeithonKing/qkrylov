@@ -22,15 +22,55 @@ class MatrixFreeHamiltonian:
         The interaction terms.
     """
     
-    def __init__(self, basis: Basis, site: Site, ops: OpSum):
+    def __init__(self, basis: Basis, site: Site, ops: OpSum, device: str = "cpu"):
         self.basis = basis
         self.site = site
         self.ops = ops
+        self.device = device
         
-        # Instantiate the underlying C++ Hamiltonian
-        self._cpp_obj = _cpp.MatrixFreeHamiltonian(
-            basis._cpp_obj, site._cpp_obj, ops._cpp_obj
-        )
+        dev_obj = _cpp.Device(device)
+        d_lower = device.lower()
+        if "cuda" in d_lower:
+            if hasattr(_cpp, "MatrixFreeHamiltonianCUDA"):
+                self._cpp_obj = _cpp.MatrixFreeHamiltonianCUDA(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+                self._backend_suffix = "CUDA"
+            else:
+                raise ValueError("QKrylov was not built with CUDA support. Install the CUDA wheel: pip install qkrylov --extra-index-url .../cuda")
+        elif "hip" in d_lower:
+            if hasattr(_cpp, "MatrixFreeHamiltonianHIP"):
+                self._cpp_obj = _cpp.MatrixFreeHamiltonianHIP(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+                self._backend_suffix = "HIP"
+            else:
+                raise ValueError("QKrylov was not built with HIP support. Install the ROCm wheel: pip install qkrylov --extra-index-url .../rocm")
+        elif "sycl" in d_lower:
+            if hasattr(_cpp, "MatrixFreeHamiltonianSYCL"):
+                self._cpp_obj = _cpp.MatrixFreeHamiltonianSYCL(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+                self._backend_suffix = "SYCL"
+            else:
+                raise ValueError("QKrylov was not built with SYCL support. Install the SYCL wheel: pip install qkrylov --extra-index-url .../sycl")
+        elif d_lower.startswith("gpu"):
+            # Generic "gpu" alias: try CUDA -> HIP -> SYCL in priority order
+            for suffix in ("CUDA", "HIP", "SYCL"):
+                cls_name = f"MatrixFreeHamiltonian{suffix}"
+                if hasattr(_cpp, cls_name):
+                    self._cpp_obj = getattr(_cpp, cls_name)(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+                    self._backend_suffix = suffix
+                    break
+            else:
+                raise ValueError("No GPU backend available. This wheel was built for CPU only. Install a GPU wheel via --extra-index-url.")
+        else:
+            # Default: CPU backends (OpenMP -> Threads -> Serial)
+            if hasattr(_cpp, "MatrixFreeHamiltonianCPU"):
+                self._cpp_obj = _cpp.MatrixFreeHamiltonianCPU(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+                self._backend_suffix = "CPU"
+            elif hasattr(_cpp, "MatrixFreeHamiltonianThreads"):
+                self._cpp_obj = _cpp.MatrixFreeHamiltonianThreads(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+                self._backend_suffix = "Threads"
+            elif hasattr(_cpp, "MatrixFreeHamiltonianSerial"):
+                self._cpp_obj = _cpp.MatrixFreeHamiltonianSerial(basis._cpp_obj, site._cpp_obj, ops._cpp_obj, dev_obj)
+                self._backend_suffix = "Serial"
+            else:
+                raise ValueError("No CPU backend available. This wheel may be a GPU-only build. Try: pip install qkrylov (from PyPI) for the CPU version.")
 
     @property
     def dimension(self) -> int:

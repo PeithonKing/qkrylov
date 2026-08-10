@@ -19,9 +19,7 @@
 #include "qkrylov/sites/hubbard_site.hpp"
 #include "qkrylov/sites/tj_site.hpp"
 #include "qkrylov/hamiltonian/matrix_free_hamiltonian.hpp"
-#ifdef QKRYLOV_ENABLE_CUDA
-#include "qkrylov/hamiltonian/cuda_hamiltonian.hpp"
-#endif
+#include "qkrylov/core/device.hpp"
 #include "qkrylov/solvers/lanczos.hpp"
 #include "qkrylov/solvers/davidson.hpp"
 #include "qkrylov/solvers/dynamics.hpp"
@@ -31,6 +29,9 @@ namespace nb = nanobind;
 using namespace nb::literals;
 
 using namespace qkrylov;
+
+// For compatibility with any headers that might define HostVector
+using HostVector = std::vector<Complex>;
 
 // Convenience alias for a 1-D complex128 C-contiguous ndarray (read-only view)
 using CxArray = nb::ndarray<const Complex, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
@@ -66,6 +67,62 @@ dvec_to_numpy(std::vector<double>&& v)
     );
 }
 
+
+template <typename ExecSpace>
+void bind_backend(nb::module_& m, const std::string& suffix) {
+    using HType = MatrixFreeHamiltonian<ExecSpace>;
+    
+    std::string h_name = "MatrixFreeHamiltonian" + suffix;
+    nb::class_<HType>(m, h_name.c_str())
+        .def(nb::init<std::shared_ptr<Basis>, std::shared_ptr<Site>, const OpSum&, Device>(),
+             "basis"_a, "site"_a, "ops"_a, "device"_a = Device())
+        .def("apply", [](const HType& H, CxArray x) {
+            const Index n = H.dimension();
+            if (x.shape(0) != static_cast<size_t>(n)) {
+                throw std::invalid_argument("Input array size does not match Hamiltonian dimension");
+            }
+            HostVector y_vec(n);
+            H.apply(x.data(), y_vec.data());
+            return vec_to_numpy(std::move(y_vec));
+        })
+        .def("dimension", &HType::dimension)
+        .def("diagonal", [](const HType& H) {
+            return vec_to_numpy(H.diagonal_host());
+        });
+
+    std::string lgs_name = "lanczos_ground_state_" + suffix;
+    m.def(lgs_name.c_str(),
+        [](const HType& H, int maxiter, double tol) {
+            auto res = lanczos_ground_state<ExecSpace>(H, maxiter, tol);
+            return nb::make_tuple(res.energy, vec_to_numpy(std::move(res.eigenvector)));
+        },
+        "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12);
+
+    std::string dav_name = "davidson_lowest_" + suffix;
+    m.def(dav_name.c_str(), &davidson_lowest<ExecSpace>,
+          "H"_a, "n_eig"_a = 1, "max_subspace"_a = 20, "tol"_a = 1e-8);
+
+    std::string dyn_name = "continued_fraction_coeffs_" + suffix;
+    m.def(dyn_name.c_str(),
+        [](const HType& H, CxArray phi0, int n_iter) {
+            if (phi0.shape(0) != static_cast<size_t>(H.dimension())) {
+                throw std::invalid_argument("phi0 vector size does not match Hamiltonian dimension");
+            }
+            const HostVector phi0_vec(phi0.data(), phi0.data() + phi0.shape(0));
+            auto res = continued_fraction_coeffs<ExecSpace>(H, phi0_vec, n_iter);
+            return nb::make_tuple(
+                dvec_to_numpy(std::move(res.alphas)),
+                dvec_to_numpy(std::move(res.betas)),
+                res.norm_phi0
+            );
+        },
+        "H"_a, "phi0"_a, "n_iter"_a = 100);
+
+    std::string ftlm_name = "ftlm_" + suffix;
+    m.def(ftlm_name.c_str(), &ftlm<ExecSpace>,
+          "H"_a, "beta"_a, "n_random"_a = 50, "n_steps"_a = 100);
+}
+
 NB_MODULE(_qkrylov_cpp, m) {
     nb::class_<Sector>(m, "Sector")
         .def(nb::init<>())
@@ -79,6 +136,15 @@ NB_MODULE(_qkrylov_cpp, m) {
         .def_rw("n", &Sector::n)
         .def_rw("use_nb", &Sector::use_nb)
         .def_rw("nb", &Sector::nb);
+
+    nb::class_<Device>(m, "Device")
+        .def(nb::init<>())
+        .def(nb::init<const std::string&>(), "device_string"_a)
+        .def(nb::init<int>(), "device_id"_a)
+        .def_ro("id", &Device::id)
+        .def_static("is_gpu_build", &Device::is_gpu_build)
+        .def_static("backend_name", &Device::backend_name)
+        .def_static("gpu_count", &Device::gpu_count);
 
     nb::class_<OperatorFactor>(m, "OperatorFactor")
         .def(nb::init<std::string, int>(), "op"_a, "site"_a)
@@ -157,89 +223,17 @@ NB_MODULE(_qkrylov_cpp, m) {
     nb::class_<TJSite, Site>(m, "TJSite")
         .def(nb::init<>());
 
-    nb::class_<MatrixFreeHamiltonian>(m, "MatrixFreeHamiltonian")
-        .def(nb::init<std::shared_ptr<Basis>, std::shared_ptr<Site>, const OpSum&>())
-        // Zero-copy apply: accept a read-only NumPy buffer, write into a
-        // freshly-allocated NumPy array via capsule (no Python list round-trip).
-        .def("apply", [](const MatrixFreeHamiltonian& H, CxArray x) {
-            const Index n = H.dimension();
-            if (x.shape(0) != static_cast<size_t>(n)) {
-                throw std::invalid_argument("Input array size (" + std::to_string(x.shape(0)) +
-                                           ") does not match Hamiltonian dimension (" + std::to_string(n) + ")");
-            }
-            MatrixFreeHamiltonian::Vector y_vec(n);
-            H.apply(x.data(), y_vec.data()); // C++ kernel fills y_vec directly from NumPy buffer
-            return vec_to_numpy(std::move(y_vec));   // zero-copy hand-off to NumPy
-        })
-        .def("dimension", &MatrixFreeHamiltonian::dimension)
-        // diagonal(): zero-copy hand-off of the result vector to NumPy
-        .def("diagonal", [](const MatrixFreeHamiltonian& H) {
-            return vec_to_numpy(H.diagonal());
-        });
-
-#ifdef QKRYLOV_ENABLE_CUDA
-    nb::class_<CUDAHamiltonian>(m, "CUDAHamiltonian")
-        .def(nb::init<std::shared_ptr<Basis>, std::shared_ptr<Site>, const OpSum&>())
-        .def("apply", [](const CUDAHamiltonian& H, CxArray x) {
-            const Index n = H.dimension();
-            const MatrixFreeHamiltonian::Vector x_vec(x.data(), x.data() + n);
-            MatrixFreeHamiltonian::Vector y_vec;
-            H.apply(x_vec, y_vec);
-            return vec_to_numpy(std::move(y_vec));
-        })
-        .def("dimension", &CUDAHamiltonian::dimension);
-#endif
-
-    // LanczosResult: keep as simple struct; wrap eigenvector at call site
-    nb::class_<LanczosResult>(m, "LanczosResult")
-        .def_rw("energy", &LanczosResult::energy)
-        .def_rw("eigenvector", &LanczosResult::eigenvector);
-
-    // Wrap lanczos_ground_state to return eigenvector as zero-copy ndarray
-    m.def("lanczos_ground_state",
-        [](const MatrixFreeHamiltonian& H, int maxiter, double tol) {
-            auto res = lanczos_ground_state(H, maxiter, tol);
-            // Wrap struct into a Python dict-like object via a small holder
-            struct Result {
-                double energy;
-                nb::ndarray<nb::numpy, Complex, nb::shape<-1>> eigenvector;
-            };
-            return nb::make_tuple(res.energy, vec_to_numpy(std::move(res.eigenvector)));
-        },
-        "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12);
-
+    
     nb::class_<DavidsonResult>(m, "DavidsonResult")
         .def_rw("eigenvalues", &DavidsonResult::eigenvalues)
         .def_rw("eigenvectors", &DavidsonResult::eigenvectors);
 
-    m.def("davidson_lowest", &davidson_lowest,
-          "H"_a, "n_eig"_a = 1, "max_subspace"_a = 20, "tol"_a = 1e-8);
+    nb::class_<FTLMResult>(m, "FTLMResult")
+        .def_rw("beta", &FTLMResult::beta)
+        .def_rw("partition_function", &FTLMResult::partition_function)
+        .def_rw("internal_energy", &FTLMResult::internal_energy)
+        .def_rw("specific_heat", &FTLMResult::specific_heat);
 
-    // DynamicsResult: expose alphas/betas as zero-copy NumPy arrays via lambda
-    nb::class_<DynamicsResult>(m, "DynamicsResult")
-        .def_rw("norm_phi0", &DynamicsResult::norm_phi0)
-        .def_rw("alphas", &DynamicsResult::alphas)
-        .def_rw("betas", &DynamicsResult::betas);
-
-    // continued_fraction_coeffs: accepts zero-copy NumPy input for phi0
-    m.def("continued_fraction_coeffs",
-        [](const MatrixFreeHamiltonian& H, CxArray phi0, int n_iter) {
-            if (phi0.shape(0) != static_cast<size_t>(H.dimension())) {
-                throw std::invalid_argument("phi0 vector size (" + std::to_string(phi0.shape(0)) +
-                                           ") does not match Hamiltonian dimension (" + std::to_string(H.dimension()) + ")");
-            }
-            const Vector phi0_vec(phi0.data(), phi0.data() + phi0.shape(0));
-            auto res = continued_fraction_coeffs(H, phi0_vec, n_iter);
-            return nb::make_tuple(
-                dvec_to_numpy(std::move(res.alphas)),
-                dvec_to_numpy(std::move(res.betas)),
-                res.norm_phi0
-            );
-        },
-        "H"_a, "phi0"_a, "n_iter"_a = 100);
-
-    // evaluate_spectral_function: accept alphas/betas as NumPy arrays directly
-    // (avoids needing the C++ DynamicsResult struct on the Python side)
     using DblArray = nb::ndarray<const double, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
     m.def("evaluate_spectral_function",
         [](DblArray alphas, DblArray betas, double norm_phi0,
@@ -254,12 +248,26 @@ NB_MODULE(_qkrylov_cpp, m) {
         },
         "alphas"_a, "betas"_a, "norm_phi0"_a, "omega"_a, "E0"_a, "eta"_a = 0.1);
 
-    nb::class_<FTLMResult>(m, "FTLMResult")
-        .def_rw("beta", &FTLMResult::beta)
-        .def_rw("partition_function", &FTLMResult::partition_function)
-        .def_rw("internal_energy", &FTLMResult::internal_energy)
-        .def_rw("specific_heat", &FTLMResult::specific_heat);
+#ifdef KOKKOS_ENABLE_SERIAL
+    bind_backend<Kokkos::Serial>(m, "Serial");
+#endif
+#ifdef KOKKOS_ENABLE_OPENMP
+    bind_backend<Kokkos::OpenMP>(m, "CPU");
+#endif
+#ifdef KOKKOS_ENABLE_THREADS
+    bind_backend<Kokkos::Threads>(m, "Threads");
+#endif
+#ifdef KOKKOS_ENABLE_CUDA
+    bind_backend<Kokkos::Cuda>(m, "CUDA");
+#endif
+#ifdef KOKKOS_ENABLE_HIP
+    bind_backend<Kokkos::HIP>(m, "HIP");
+#endif
 
-    m.def("ftlm", &ftlm,
-          "H"_a, "beta"_a, "n_random"_a = 50, "n_steps"_a = 100);
+    m.def("initialize", [](const std::string& device) {
+        detail::initialize_kokkos(Device(device));
+    }, "device"_a = "cpu");
+
+    m.def("backend", &Device::backend_name);
+    m.def("is_gpu_build", &Device::is_gpu_build);
 }

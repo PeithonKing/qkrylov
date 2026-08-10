@@ -19,8 +19,8 @@ int main() {
     }
     // H = sum Sz_i. Ground state should be all spins down, energy -N/2 = -2.0
 
-    MatrixFreeHamiltonian H(basis, site, os);
-    auto res = davidson_lowest(H, 1);
+    MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> H(basis, site, os);
+    auto res = davidson_lowest<Kokkos::DefaultExecutionSpace>(H, 1);
 
     std::cout << "Davidson Energy: " << res.eigenvalues[0] << " (Expected -2.0)\n";
 

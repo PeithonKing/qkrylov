@@ -26,6 +26,19 @@ from .solvers import (
     ftlm,
 )
 
+from ._qkrylov_cpp import Device
+
+def find_gpu():
+    """Return the name of the GPU backend ('cuda', 'hip', 'sycl') if available, else None."""
+    if Device.is_gpu_build():
+        return Device.backend_name()
+    return None
+
+def gpu_count():
+    """Return the number of available GPUs."""
+    return Device.gpu_count()
+
+
 try:
     from importlib.metadata import version as _metadata_version
     __version__ = _metadata_version("qkrylov")
@@ -70,4 +83,8 @@ __all__ = [
     "evaluate_spectral_function",
     "FTLMResult",
     "ftlm",
+    
+    # Utilities
+    "find_gpu",
+    "gpu_count",
 ]

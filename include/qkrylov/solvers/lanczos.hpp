@@ -11,11 +11,12 @@ struct LanczosResult
 {
     double energy = 0.0;
 
-    Vector eigenvector;
+    HostVector eigenvector;
 };
 
+template <typename ExecSpace>
 LanczosResult lanczos_ground_state(
-    const MatrixFreeHamiltonian& H,
+    const MatrixFreeHamiltonian<ExecSpace>& H,
     int maxiter = 200,
     double tol = 1.0e-12
 );

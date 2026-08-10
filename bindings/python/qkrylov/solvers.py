@@ -42,7 +42,7 @@ def lanczos_ground_state(
     LanczosResult
         The ground state energy and eigenvector.
     """
-    energy, eigenvector = _cpp.lanczos_ground_state(H._cpp_obj, maxiter, tol)
+    energy, eigenvector = getattr(_cpp, f"lanczos_ground_state_{H._backend_suffix}")(H._cpp_obj, maxiter, tol)
     return LanczosResult(
         energy=energy,
         eigenvector=eigenvector  # zero-copy NumPy array backed by C++ memory
@@ -91,7 +91,7 @@ def davidson_lowest(
     DavidsonResult
         The lowest eigenvalues and eigenvectors.
     """
-    res = _cpp.davidson_lowest(H._cpp_obj, n_eig, max_subspace, tol)
+    res = getattr(_cpp, f"davidson_lowest_{H._backend_suffix}")(H._cpp_obj, n_eig, max_subspace, tol)
     
     return DavidsonResult(
         eigenvalues=np.array(res.eigenvalues, dtype=float),  # small, copy is fine
@@ -113,7 +113,7 @@ def continued_fraction_coeffs(
     n_iter: int = 100
 ) -> DynamicsResult:
     phi0 = np.ascontiguousarray(phi0, dtype=np.complex128)
-    alphas, betas, norm_phi0 = _cpp.continued_fraction_coeffs(H._cpp_obj, phi0, n_iter)
+    alphas, betas, norm_phi0 = getattr(_cpp, f"continued_fraction_coeffs_{H._backend_suffix}")(H._cpp_obj, phi0, n_iter)
     return DynamicsResult(alphas, betas, norm_phi0)
 
 def evaluate_spectral_function(
@@ -139,5 +139,5 @@ def ftlm(
     n_random: int = 50,
     n_steps: int = 100
 ) -> FTLMResult:
-    res = _cpp.ftlm(H._cpp_obj, beta, n_random, n_steps)
+    res = getattr(_cpp, f"ftlm_{H._backend_suffix}")(H._cpp_obj, beta, n_random, n_steps)
     return FTLMResult(res)

@@ -6,6 +6,7 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
+#include <Kokkos_Core.hpp>
 
 namespace qkrylov
 {
@@ -95,8 +96,9 @@ TridiagResult tridiag_ground_state_full(const std::vector<double>& alpha, const 
 }
 }
 
+template <typename ExecSpace>
 LanczosResult lanczos_ground_state(
-    const MatrixFreeHamiltonian& H,
+    const MatrixFreeHamiltonian<ExecSpace>& H,
     int maxiter,
     double tol
 )
@@ -104,17 +106,22 @@ LanczosResult lanczos_ground_state(
     const Index dim = H.dimension();
     if (dim == 0) return {};
 
-    Vector v_prev(dim, 0.0);
-    Vector v_curr(dim, 0.0);
-    Vector w(dim, 0.0);
+    VectorView<ExecSpace> v_prev("v_prev", dim);
+    VectorView<ExecSpace> v_curr("v_curr", dim);
+    VectorView<ExecSpace> w("w", dim);
 
     std::mt19937 rng(1234);
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
-    for(Index i=0; i<dim; ++i) v_curr[i] = Complex(dist(rng), dist(rng));
+    
+    auto v_curr_host = Kokkos::create_mirror_view(v_curr);
+    for(Index i=0; i<dim; ++i) v_curr_host(i) = KComplex(dist(rng), dist(rng));
+    Kokkos::deep_copy(v_curr, v_curr_host);
     normalize(v_curr);
 
-    std::vector<Vector> basis_vectors;
-    basis_vectors.push_back(v_curr);
+    std::vector<VectorView<ExecSpace>> basis_vectors;
+    VectorView<ExecSpace> v_curr_copy("basis_curr", dim);
+    Kokkos::deep_copy(v_curr_copy, v_curr);
+    basis_vectors.push_back(v_curr_copy);
 
     std::vector<double> alphas;
     std::vector<double> betas;
@@ -125,9 +132,9 @@ LanczosResult lanczos_ground_state(
     for(int iter=0; iter < std::min<int>(maxiter, dim); ++iter)
     {
         actual_iters = iter + 1;
-        H.apply(v_curr.data(), w.data());
+        H.apply(v_curr, w);
 
-        double alpha = std::real(dot(v_curr, w));
+        double alpha = dot(v_curr, w).real();
         alphas.push_back(alpha);
 
         axpy(-alpha, v_curr, w);
@@ -148,10 +155,13 @@ LanczosResult lanczos_ground_state(
 
         betas.push_back(beta);
 
-        v_prev = v_curr;
-        v_curr = w;
+        Kokkos::deep_copy(v_prev, v_curr);
+        Kokkos::deep_copy(v_curr, w);
         scal(1.0/beta, v_curr);
-        basis_vectors.push_back(v_curr);
+        
+        VectorView<ExecSpace> v_new("basis", dim);
+        Kokkos::deep_copy(v_new, v_curr);
+        basis_vectors.push_back(v_new);
 
         if (iter > 0) {
             // Check convergence only every few iterations or after some initial steps
@@ -170,13 +180,32 @@ LanczosResult lanczos_ground_state(
     res.energy = final_tridiag.energy;
 
     // Compute Ritz vector
-    res.eigenvector.assign(dim, 0.0);
+    VectorView<ExecSpace> ritz("ritz", dim);
     for (int i = 0; i < (int)alphas.size(); ++i) {
-        axpy(final_tridiag.eigenvector[i], basis_vectors[i], res.eigenvector);
+        axpy(KComplex(final_tridiag.eigenvector[i], 0.0), basis_vectors[i], ritz);
     }
-    normalize(res.eigenvector);
+    normalize(ritz);
+    
+    copy_device_to_host(ritz, res.eigenvector);
 
     return res;
 }
 
+
+// Explicit instantiations
+#ifdef KOKKOS_ENABLE_SERIAL
+template LanczosResult lanczos_ground_state<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, int, double);
+#endif
+#ifdef KOKKOS_ENABLE_OPENMP
+template LanczosResult lanczos_ground_state<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, int, double);
+#endif
+#ifdef KOKKOS_ENABLE_THREADS
+template LanczosResult lanczos_ground_state<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, int, double);
+#endif
+#ifdef KOKKOS_ENABLE_CUDA
+template LanczosResult lanczos_ground_state<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, int, double);
+#endif
+#ifdef KOKKOS_ENABLE_HIP
+template LanczosResult lanczos_ground_state<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, int, double);
+#endif
 }

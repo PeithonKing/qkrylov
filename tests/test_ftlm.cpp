@@ -18,10 +18,10 @@ int main() {
         t.factors.push_back({"Sz", 0}); t.factors.push_back({"Sz", 1});
         os.add_term(t);
     }
-    MatrixFreeHamiltonian H(basis, site, os);
+    MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> H(basis, site, os);
 
     double beta = 1.0;
-    auto res = ftlm(H, beta, 100, 10);
+    auto res = ftlm<Kokkos::DefaultExecutionSpace>(H, beta, 100, 10);
 
     std::cout << "FTLM Partition Function Z: " << res.partition_function << "\n";
     std::cout << "FTLM Internal Energy E: " << res.internal_energy << "\n";

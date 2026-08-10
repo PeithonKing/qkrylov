@@ -5,6 +5,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <Kokkos_Core.hpp>
 
 namespace qkrylov
 {
@@ -18,19 +19,21 @@ struct Tridiag
     std::vector<double> betas;
 };
 
-Tridiag compute_tridiag(const MatrixFreeHamiltonian& H, const Vector& v_start, int n_steps)
+template <typename ExecSpace>
+Tridiag compute_tridiag(const MatrixFreeHamiltonian<ExecSpace>& H, const VectorView<ExecSpace>& v_start, int n_steps)
 {
     const Index dim = H.dimension();
-    Vector v_curr = v_start;
+    VectorView<ExecSpace> v_curr("v_curr", dim);
+    Kokkos::deep_copy(v_curr, v_start);
     normalize(v_curr);
 
-    Vector v_prev(dim, 0.0);
-    Vector w(dim, 0.0);
+    VectorView<ExecSpace> v_prev("v_prev", dim);
+    VectorView<ExecSpace> w("w", dim);
     Tridiag res;
 
     for (int i = 0; i < n_steps; ++i) {
-        H.apply(v_curr.data(), w.data());
-        double alpha = std::real(dot(v_curr, w));
+        H.apply(v_curr, w);
+        double alpha = dot(v_curr, w).real();
         res.alphas.push_back(alpha);
 
         axpy(-alpha, v_curr, w);
@@ -40,8 +43,8 @@ Tridiag compute_tridiag(const MatrixFreeHamiltonian& H, const Vector& v_start, i
         if (beta < 1e-15) break;
         res.betas.push_back(beta);
 
-        v_prev = v_curr;
-        v_curr = w;
+        Kokkos::deep_copy(v_prev, v_curr);
+        Kokkos::deep_copy(v_curr, w);
         scal(1.0/beta, v_curr);
     }
     return res;
@@ -114,8 +117,9 @@ FullTridiagResult diagonalize_tridiag_components(const std::vector<double>& alph
 }
 }
 
+template <typename ExecSpace>
 FTLMResult ftlm(
-    const MatrixFreeHamiltonian& H,
+    const MatrixFreeHamiltonian<ExecSpace>& H,
     double beta,
     int n_random,
     int n_steps
@@ -132,8 +136,11 @@ FTLMResult ftlm(
     double E2 = 0.0;
 
     for (int r = 0; r < n_random; ++r) {
-        Vector r_vec(dim);
-        for (Index i = 0; i < dim; ++i) r_vec[i] = Complex(dist(rng), dist(rng));
+        VectorView<ExecSpace> r_vec("r_vec", dim);
+        auto r_vec_host = Kokkos::create_mirror_view(r_vec);
+        for (Index i = 0; i < dim; ++i) r_vec_host(i) = KComplex(dist(rng), dist(rng));
+        Kokkos::deep_copy(r_vec, r_vec_host);
+
         double nrm = norm(r_vec);
 
         auto tridiag = compute_tridiag(H, r_vec, n_steps);
@@ -160,4 +167,21 @@ FTLMResult ftlm(
     return res;
 }
 
+
+// Explicit instantiations
+#ifdef KOKKOS_ENABLE_SERIAL
+template FTLMResult ftlm<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, double, int, int);
+#endif
+#ifdef KOKKOS_ENABLE_OPENMP
+template FTLMResult ftlm<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, double, int, int);
+#endif
+#ifdef KOKKOS_ENABLE_THREADS
+template FTLMResult ftlm<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, double, int, int);
+#endif
+#ifdef KOKKOS_ENABLE_CUDA
+template FTLMResult ftlm<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, double, int, int);
+#endif
+#ifdef KOKKOS_ENABLE_HIP
+template FTLMResult ftlm<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, double, int, int);
+#endif
 }

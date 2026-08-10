@@ -14,6 +14,7 @@
 #include "qkrylov/sites/hubbard_site.hpp"
 #include "qkrylov/sites/tj_site.hpp"
 #include "qkrylov/hamiltonian/matrix_free_hamiltonian.hpp"
+#include "qkrylov/core/device.hpp"
 #include "qkrylov/solvers/lanczos.hpp"
 
 #include <memory>
@@ -42,7 +43,7 @@ struct qkrylov_opsum_t {
 };
 
 struct qkrylov_hamiltonian_t {
-    std::unique_ptr<MatrixFreeHamiltonian> ptr;
+    std::unique_ptr<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>> ptr;
 };
 
 extern "C" {
@@ -255,14 +256,14 @@ int qkrylov_opsum_add_term_2body(qkrylov_opsum_h opsum, double coeff_real, doubl
     }
 }
 
-/* MatrixFreeHamiltonian API */
+/* MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> API */
 qkrylov_hamiltonian_h qkrylov_hamiltonian_create(qkrylov_basis_h basis,
                                                 qkrylov_site_h site,
                                                 qkrylov_opsum_h opsum) {
     if (!basis || !basis->ptr || !site || !site->ptr || !opsum) return nullptr;
     try {
         auto handle = std::make_unique<qkrylov_hamiltonian_t>();
-        handle->ptr = std::make_unique<MatrixFreeHamiltonian>(basis->ptr, site->ptr, opsum->opsum);
+        handle->ptr = std::make_unique<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>>(basis->ptr, site->ptr, opsum->opsum, Device());
         return handle.release();
     } catch (...) {
         return nullptr;

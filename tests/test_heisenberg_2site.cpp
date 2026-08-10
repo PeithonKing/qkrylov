@@ -61,7 +61,7 @@ int main()
         os.add_term(t);
     }
 
-    MatrixFreeHamiltonian H(
+    MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> H(
         basis,
         site,
         os
@@ -81,14 +81,14 @@ for(Index col=0;
     col<dim;
     ++col)
 {
-    MatrixFreeHamiltonian::Vector x(
+    HostVector x(
         dim,
         Complex(0.0,0.0)
     );
 
     x[col] = 1.0;
 
-    MatrixFreeHamiltonian::Vector y(dim);
+    HostVector y(dim);
 
     H.apply(x.data(), y.data());
 

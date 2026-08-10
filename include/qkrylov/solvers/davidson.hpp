@@ -12,11 +12,12 @@ namespace qkrylov
 struct DavidsonResult
 {
     std::vector<double> eigenvalues;
-    std::vector<Vector> eigenvectors;
+    std::vector<HostVector> eigenvectors;
 };
 
+template <typename ExecSpace>
 DavidsonResult davidson_lowest(
-    const MatrixFreeHamiltonian& H,
+    const MatrixFreeHamiltonian<ExecSpace>& H,
     int n_eig = 1,
     int max_subspace = 20,
     double tol = 1.0e-8

@@ -2,35 +2,41 @@
 
 #include <cmath>
 #include <complex>
+#include <Kokkos_Core.hpp>
 
 namespace qkrylov
 {
 
+template <typename ExecSpace>
 DynamicsResult continued_fraction_coeffs(
-    const MatrixFreeHamiltonian& H,
-    const Vector& phi0,
+    const MatrixFreeHamiltonian<ExecSpace>& H,
+    const HostVector& phi0,
     int n_iter
 )
 {
     const Index dim = H.dimension();
     if (dim == 0) return {};
 
-    double norm_phi = norm(phi0);
+    VectorView<ExecSpace> dev_phi0("dev_phi0", dim);
+    copy_host_to_device(phi0, dev_phi0);
+
+    double norm_phi = norm(dev_phi0);
     if (norm_phi < 1e-15) return { {}, {}, 0.0 };
 
-    Vector v_curr = phi0;
+    VectorView<ExecSpace> v_curr("v_curr", dim);
+    Kokkos::deep_copy(v_curr, dev_phi0);
     scal(1.0/norm_phi, v_curr);
 
-    Vector v_prev(dim, 0.0);
-    Vector w(dim, 0.0);
+    VectorView<ExecSpace> v_prev("v_prev", dim);
+    VectorView<ExecSpace> w("w", dim);
 
     DynamicsResult res;
     res.norm_phi0 = norm_phi;
 
     for (int iter = 0; iter < n_iter; ++iter) {
-        H.apply(v_curr.data(), w.data());
+        H.apply(v_curr, w);
 
-        double alpha = std::real(dot(v_curr, w));
+        double alpha = dot(v_curr, w).real();
         res.alphas.push_back(alpha);
 
         axpy(-alpha, v_curr, w);
@@ -42,8 +48,8 @@ DynamicsResult continued_fraction_coeffs(
         if (beta < 1e-15) break;
 
         res.betas.push_back(beta);
-        v_prev = v_curr;
-        v_curr = w;
+        Kokkos::deep_copy(v_prev, v_curr);
+        Kokkos::deep_copy(v_curr, w);
         scal(1.0/beta, v_curr);
     }
 
@@ -80,4 +86,21 @@ double evaluate_spectral_function(
     return -1.0 / M_PI * std::imag(norm_phi0 * norm_phi0 * f);
 }
 
+
+// Explicit instantiations
+#ifdef KOKKOS_ENABLE_SERIAL
+template DynamicsResult continued_fraction_coeffs<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, const HostVector&, int);
+#endif
+#ifdef KOKKOS_ENABLE_OPENMP
+template DynamicsResult continued_fraction_coeffs<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, const HostVector&, int);
+#endif
+#ifdef KOKKOS_ENABLE_THREADS
+template DynamicsResult continued_fraction_coeffs<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, const HostVector&, int);
+#endif
+#ifdef KOKKOS_ENABLE_CUDA
+template DynamicsResult continued_fraction_coeffs<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, const HostVector&, int);
+#endif
+#ifdef KOKKOS_ENABLE_HIP
+template DynamicsResult continued_fraction_coeffs<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, const HostVector&, int);
+#endif
 }

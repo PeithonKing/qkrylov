@@ -17,8 +17,9 @@ struct FTLMResult
     // We can add more observables later
 };
 
+template <typename ExecSpace>
 FTLMResult ftlm(
-    const MatrixFreeHamiltonian& H,
+    const MatrixFreeHamiltonian<ExecSpace>& H,
     double beta,
     int n_random = 50,
     int n_steps = 100

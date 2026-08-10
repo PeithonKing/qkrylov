@@ -52,4 +52,4 @@ whl_out/
 # private work
 private/
 bindings/julia/manual/
-
+external/

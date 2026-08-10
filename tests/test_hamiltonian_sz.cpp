@@ -42,18 +42,18 @@ int main()
 
     os.add_term(term);
 
-    MatrixFreeHamiltonian H(
+    MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> H(
         basis_ptr,
         site_ptr,
         os
     );
 
-    MatrixFreeHamiltonian::Vector x(2);
+    HostVector x(2);
 
     x[0] = 1.0;
     x[1] = 1.0;
 
-    MatrixFreeHamiltonian::Vector y(2);
+    HostVector y(2);
 
     H.apply(
         x.data(),

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include <cmath>
+#include <Kokkos_Core.hpp>
 
 namespace qkrylov
 {
@@ -79,8 +80,9 @@ SmallEigensystem solve_small_hermitian(const std::vector<std::vector<Complex>>& 
 }
 }
 
+template <typename ExecSpace>
 DavidsonResult davidson_lowest(
-    const MatrixFreeHamiltonian& H,
+    const MatrixFreeHamiltonian<ExecSpace>& H,
     int n_eig,
     int max_subspace,
     double tol
@@ -92,10 +94,12 @@ DavidsonResult davidson_lowest(
     n_eig = std::min<int>(n_eig, dim);
     max_subspace = std::max(max_subspace, 2 * n_eig);
 
-    Vector diag = H.diagonal();
+    auto diag_dev = H.diagonal();
+    auto diag_host = Kokkos::create_mirror_view(diag_dev);
+    Kokkos::deep_copy(diag_host, diag_dev);
 
-    std::vector<Vector> V;
-    std::vector<Vector> HV;
+    std::vector<VectorView<ExecSpace>> V;
+    std::vector<VectorView<ExecSpace>> HV;
 
     std::mt19937 rng(1234);
     std::uniform_real_distribution<double> dist(-1.0, 1.0);
@@ -105,25 +109,30 @@ DavidsonResult davidson_lowest(
     std::vector<Index> diag_idx(dim);
     for(Index i=0; i<dim; ++i) diag_idx[i] = i;
     std::sort(diag_idx.begin(), diag_idx.end(), [&](Index i, Index j){
-        return diag[i].real() < diag[j].real();
+        return diag_host(i).real() < diag_host(j).real();
     });
 
     for (int i = 0; i < n_eig; ++i) {
-        Vector v(dim, 0.0);
-        v[diag_idx[i]] = 1.0;
+        VectorView<ExecSpace> v("v", dim);
+        auto v_host = Kokkos::create_mirror_view(v);
+        v_host(diag_idx[i]) = 1.0;
+        Kokkos::deep_copy(v, v_host);
+        
         // Orthogonalize against previous V
         for (const auto& v_prev : V) axpy(-dot(v_prev, v), v_prev, v);
         double nrm = norm(v);
         if (nrm < 1e-10) {
             // Fallback to random if unit vector is not linearly independent
-            for (Index j = 0; j < dim; ++j) v[j] = Complex(dist(rng), dist(rng));
+            for (Index j = 0; j < dim; ++j) v_host(j) = KComplex(dist(rng), dist(rng));
+            Kokkos::deep_copy(v, v_host);
             for (const auto& v_prev : V) axpy(-dot(v_prev, v), v_prev, v);
             nrm = norm(v);
         }
         scal(1.0/nrm, v);
         V.push_back(v);
-        Vector hv(dim);
-        H.apply(v.data(), hv.data());
+        
+        VectorView<ExecSpace> hv("hv", dim);
+        H.apply(v, hv);
         HV.push_back(hv);
     }
 
@@ -132,7 +141,8 @@ DavidsonResult davidson_lowest(
         std::vector<std::vector<Complex>> H_sub(m, std::vector<Complex>(m));
         for (int i = 0; i < m; ++i) {
             for (int j = 0; j <= i; ++j) {
-                H_sub[i][j] = dot(V[i], HV[j]);
+                KComplex val = dot(V[i], HV[j]);
+                H_sub[i][j] = Complex(val.real(), val.imag());
                 if (i != j) H_sub[j][i] = std::conj(H_sub[i][j]);
             }
         }
@@ -140,27 +150,27 @@ DavidsonResult davidson_lowest(
         auto eig = solve_small_hermitian(H_sub);
 
         bool all_converged = true;
-        std::vector<Vector> next_corrections;
+        std::vector<VectorView<ExecSpace>> next_corrections;
 
         for (int k = 0; k < n_eig; ++k) {
             double lambda = eig.eigenvalues[k];
             const auto& s = eig.eigenvectors[k];
 
-            Vector r(dim, 0.0);
+            VectorView<ExecSpace> r("r", dim);
             for (int i = 0; i < m; ++i) {
-                axpy(s[i], HV[i], r);
-                axpy(-lambda * s[i], V[i], r);
+                axpy(KComplex(s[i].real(), s[i].imag()), HV[i], r);
+                axpy(KComplex(-lambda * s[i].real(), -lambda * s[i].imag()), V[i], r);
             }
 
             double res_norm = norm(r);
             if (res_norm > tol) {
                 all_converged = false;
-                Vector t(dim);
-                for (Index i = 0; i < dim; ++i) {
-                    Complex diff = diag[i] - lambda;
-                    if (std::abs(diff) < 1e-10) diff = (diff.real() >= 0) ? 1e-10 : -1e-10;
-                    t[i] = r[i] / diff;
-                }
+                VectorView<ExecSpace> t("t", dim);
+                Kokkos::parallel_for("davidson_precond", dim, KOKKOS_LAMBDA(const Index i) {
+                    KComplex diff = diag_dev(i) - lambda;
+                    if (Kokkos::abs(diff) < 1e-10) diff = (diff.real() >= 0) ? 1e-10 : -1e-10;
+                    t(i) = r(i) / diff;
+                });
                 next_corrections.push_back(t);
             }
         }
@@ -169,23 +179,25 @@ DavidsonResult davidson_lowest(
             DavidsonResult res;
             for (int k = 0; k < n_eig; ++k) {
                 res.eigenvalues.push_back(eig.eigenvalues[k]);
-                Vector ev(dim, 0.0);
-                for (int i = 0; i < m; ++i) axpy(eig.eigenvectors[k][i], V[i], ev);
-                res.eigenvectors.push_back(ev);
+                VectorView<ExecSpace> ev("ev", dim);
+                for (int i = 0; i < m; ++i) axpy(KComplex(eig.eigenvectors[k][i].real(), eig.eigenvectors[k][i].imag()), V[i], ev);
+                HostVector host_ev;
+                copy_device_to_host(ev, host_ev);
+                res.eigenvectors.push_back(host_ev);
             }
             return res;
         }
 
         // Expansion and restart
         if (V.size() + next_corrections.size() > (size_t)max_subspace) {
-            std::vector<Vector> next_V;
-            std::vector<Vector> next_HV;
+            std::vector<VectorView<ExecSpace>> next_V;
+            std::vector<VectorView<ExecSpace>> next_HV;
             for (int k = 0; k < n_eig; ++k) {
-                Vector ritz_v(dim, 0.0);
-                Vector ritz_hv(dim, 0.0);
+                VectorView<ExecSpace> ritz_v("ritz_v", dim);
+                VectorView<ExecSpace> ritz_hv("ritz_hv", dim);
                 for (int i = 0; i < m; ++i) {
-                    axpy(eig.eigenvectors[k][i], V[i], ritz_v);
-                    axpy(eig.eigenvectors[k][i], HV[i], ritz_hv);
+                    axpy(KComplex(eig.eigenvectors[k][i].real(), eig.eigenvectors[k][i].imag()), V[i], ritz_v);
+                    axpy(KComplex(eig.eigenvectors[k][i].real(), eig.eigenvectors[k][i].imag()), HV[i], ritz_hv);
                 }
                 next_V.push_back(ritz_v);
                 next_HV.push_back(ritz_hv);
@@ -200,8 +212,8 @@ DavidsonResult davidson_lowest(
             if (nrm > 1e-10) {
                 scal(1.0/nrm, t);
                 V.push_back(t);
-                Vector ht(dim);
-                H.apply(t.data(), ht.data());
+                VectorView<ExecSpace> ht("ht", dim);
+                H.apply(t, ht);
                 HV.push_back(ht);
             }
         }
@@ -210,4 +222,21 @@ DavidsonResult davidson_lowest(
     return {};
 }
 
+
+// Explicit instantiations
+#ifdef KOKKOS_ENABLE_SERIAL
+template DavidsonResult davidson_lowest<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, int, int, double);
+#endif
+#ifdef KOKKOS_ENABLE_OPENMP
+template DavidsonResult davidson_lowest<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, int, int, double);
+#endif
+#ifdef KOKKOS_ENABLE_THREADS
+template DavidsonResult davidson_lowest<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, int, int, double);
+#endif
+#ifdef KOKKOS_ENABLE_CUDA
+template DavidsonResult davidson_lowest<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, int, int, double);
+#endif
+#ifdef KOKKOS_ENABLE_HIP
+template DavidsonResult davidson_lowest<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, int, int, double);
+#endif
 }

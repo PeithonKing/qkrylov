@@ -20,8 +20,8 @@ int main() {
         os += {0.5, {{"Sm", i}, {"Sp", i+1}}};
     }
 
-    MatrixFreeHamiltonian H(basis, site, os);
-    auto result = lanczos_ground_state(H);
+    MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> H(basis, site, os);
+    auto result = lanczos_ground_state<Kokkos::DefaultExecutionSpace>(H);
 
     std::cout << "Ground state energy: " << result.energy << std::endl;
     return 0;

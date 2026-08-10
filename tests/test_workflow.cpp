@@ -35,10 +35,10 @@ void test_heisenberg_workflow() {
     }
     assert(os.size() == 9 && "Should have 9 terms for 3 bonds");
 
-    MatrixFreeHamiltonian H(basis, site, os);
+    MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> H(basis, site, os);
     assert(H.dimension() == 6 && "Hamiltonian dimension should match Sz=0 sector size");
 
-    auto res = lanczos_ground_state(H, 200, 1e-12);
+    auto res = lanczos_ground_state<Kokkos::DefaultExecutionSpace>(H, 200, 1e-12);
 
     // Exact ground state energy for 4-site Heisenberg chain (OBC) = 1 - sqrt(2) ≈ -0.6160254038
     // but restricted to Sz=0 sector the ground state is still -1.6160254038

@@ -78,14 +78,14 @@ int main()
         os.add_term(t);
     }
 
-    MatrixFreeHamiltonian H(
+    MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> H(
         basis,
         site,
         os
     );
 
     auto res =
-        lanczos_ground_state(
+        lanczos_ground_state<Kokkos::DefaultExecutionSpace>(
             H,
             200,
             1e-12

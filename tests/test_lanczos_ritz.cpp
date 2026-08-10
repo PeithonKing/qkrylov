@@ -38,14 +38,14 @@ int main() {
         os.add_term(t);
     }
 
-    MatrixFreeHamiltonian H(basis, site, os);
-    auto res = lanczos_ground_state(H);
+    MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> H(basis, site, os);
+    auto res = lanczos_ground_state<Kokkos::DefaultExecutionSpace>(H);
 
     std::cout << "Lanczos Energy: " << res.energy << " (Expected -0.75)\n";
     assert(std::abs(res.energy + 0.75) < 1e-10);
 
     // Verify Ritz vector: H * v should be energy * v
-    Vector Hv(H.dimension());
+    HostVector Hv(H.dimension());
     H.apply(res.eigenvector.data(), Hv.data());
 
     for (Index i = 0; i < H.dimension(); ++i) {
