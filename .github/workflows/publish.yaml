@@ -160,11 +160,11 @@ jobs:
           CIBW_BUILD: ${{ matrix.python.build }}
           CIBW_ARCHS: "x86_64"
           CIBW_MANYLINUX_X86_64_IMAGE: "quay.io/pypa/manylinux_2_28_x86_64"
-          # Install minimal NVIDIA CUDA Toolkit via yum repo (much faster than the 4GB .run installer)
+          # Install NVIDIA CUDA Toolkit via yum repo (only compiler + headers, no driver)
           CIBW_BEFORE_ALL_LINUX: >-
             dnf install -y 'dnf-command(config-manager)' &&
             dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo &&
-            dnf install -y cuda-compiler-12-1 cuda-cudart-devel-12-1 cuda-nvcc-12-1
+            dnf install -y cuda-toolkit-12-1
           CIBW_ENVIRONMENT: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
             CMAKE_ARGS="-DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_OPENMP=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.1/bin/nvcc"
