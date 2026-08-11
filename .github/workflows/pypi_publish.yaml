@@ -195,22 +195,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all wheels
+      - name: Download CPU and sdist wheels for PyPI
+        uses: actions/download-artifact@v4
+        with:
+          path: ./pypi_wheels
+          pattern: cibw-wheels-{cpu,sdist}*
+          merge-multiple: true
+
+      - name: Download ALL wheels for Custom Index and Release
         uses: actions/download-artifact@v4
         with:
           path: ./wheels
           pattern: cibw-wheels-*
           merge-multiple: true
 
-      - name: List wheels being published
-        run: ls -lh ./wheels/
+      - name: List wheels being published to PyPI
+        run: ls -lh ./pypi_wheels/
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: ./wheels
+          packages-dir: ./pypi_wheels
 
-      - name: Upload wheels to GitHub Release
+      - name: Upload all wheels to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
