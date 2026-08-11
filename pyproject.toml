@@ -37,6 +37,10 @@ test = [
     "pytest",
     "scipy",
 ]
+cuda = [
+    "nvidia-cuda-runtime-cu12",
+    "nvidia-cublas-cu12",
+]
 
 [project.urls]
 Homepage = "https://github.com/sjp95/qkrylov"

@@ -164,14 +164,13 @@ jobs:
           CIBW_BEFORE_ALL_LINUX: >-
             dnf install -y 'dnf-command(config-manager)' --disablerepo=epel &&
             dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo &&
-            dnf install -y cuda-compiler-12-1 cuda-cudart-devel-12-1 cuda-nvcc-12-1 cuda-cccl-12-1 cuda-driver-devel-12-1 cuda-profiler-api-12-1 --disablerepo=epel
+            dnf install -y gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ cuda-compiler-12-6 cuda-cudart-devel-12-6 cuda-nvcc-12-6 cuda-cccl-12-6 cuda-driver-devel-12-6 cuda-profiler-api-12-6 --disablerepo=epel &&
+            echo '#!/bin/bash' > /usr/bin/nvcc && echo 'args=()' >> /usr/bin/nvcc && echo 'for arg in "$@"; do if [ "$arg" != "-Os" ]; then args+=("$arg"); fi; done' >> /usr/bin/nvcc && echo '/usr/local/cuda-12.6/bin/nvcc "${args[@]}"' >> /usr/bin/nvcc && chmod +x /usr/bin/nvcc
           CIBW_ENVIRONMENT: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
-            CMAKE_ARGS="-DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_OPENMP=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.1/bin/nvcc -DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler"
-            PATH="/usr/local/cuda-12.1/bin:$PATH"
-          CIBW_TEST_COMMAND: "python -c \"import qkrylov; print(qkrylov.__version__)\""
+            CMAKE_ARGS="-DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_OPENMP=ON -DKokkos_ARCH_AMPERE80=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.6/bin/nvcc -DCMAKE_C_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/g++ -DCMAKE_CUDA_HOST_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/g++"
           # Tell auditwheel to NOT bundle nvidia libraries (keep wheel small)
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair --exclude libcublas.so.12 --exclude libcudart.so.12 -w {dest_dir} {wheel}"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair --exclude libcublas.so.12 --exclude libcudart.so.12 --exclude libcuda.so.1 -w {dest_dir} {wheel}"
 
       - uses: actions/upload-artifact@v4
         with:

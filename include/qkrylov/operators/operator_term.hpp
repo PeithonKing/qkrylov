@@ -14,6 +14,9 @@ struct OperatorFactor
 {
     std::string op;
     int site;
+
+    OperatorFactor() = default;
+    OperatorFactor(std::string op_, int site_) : op(std::move(op_)), site(site_) {}
 };
 
 struct OperatorTerm
@@ -34,6 +37,9 @@ struct OperatorTerm
 struct LocalOp {
     std::string name;
     int site;
+
+    LocalOp() = default;
+    LocalOp(std::string name_, int site_) : name(std::move(name_)), site(site_) {}
 };
 
 // 1.0 * Sz(i)
