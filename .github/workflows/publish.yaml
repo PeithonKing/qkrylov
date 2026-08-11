@@ -167,7 +167,7 @@ jobs:
             dnf install -y cuda-toolkit-12-1
           CIBW_ENVIRONMENT: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
-            CMAKE_ARGS="-DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_OPENMP=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.1/bin/nvcc"
+            CMAKE_ARGS="-DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_OPENMP=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.1/bin/nvcc -DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler"
             PATH="/usr/local/cuda-12.1/bin:$PATH"
           CIBW_TEST_COMMAND: "python -c \"import qkrylov; print(qkrylov.__version__)\""
           # Tell auditwheel to NOT bundle nvidia libraries (keep wheel small)
