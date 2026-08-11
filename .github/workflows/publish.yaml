@@ -133,7 +133,9 @@ jobs:
       matrix:
         python:
           - build: cp311-*
+            tag: cp311
           - build: cp312-*
+            tag: cp312
 
     steps:
       - uses: actions/checkout@v4
@@ -175,7 +177,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-cuda-${{ matrix.python.build }}
+          name: cibw-wheels-cuda-${{ matrix.python.tag }}
           path: ./wheelhouse/*.whl
 
   publish_and_index:
