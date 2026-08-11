@@ -158,6 +158,7 @@ jobs:
         uses: pypa/cibuildwheel@v4.1.0
         env:
           CIBW_BUILD: ${{ matrix.python.build }}
+          CIBW_SKIP: "*-musllinux_*"
           CIBW_ARCHS: "x86_64"
           CIBW_MANYLINUX_X86_64_IMAGE: "quay.io/pypa/manylinux_2_28_x86_64"
           # Install NVIDIA CUDA Toolkit via yum repo (only compiler + headers, no driver)
