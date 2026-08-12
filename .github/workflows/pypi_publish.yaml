@@ -154,7 +154,7 @@ jobs:
             VER=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           fi
           VER="${VER#v}"
-          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "version=$VER+cu12" >> "$GITHUB_OUTPUT"
 
       - name: Build CUDA wheels via cibuildwheel
         uses: pypa/cibuildwheel@v4.1.0
