@@ -21,17 +21,19 @@ The Julia interface is constructed directly on top of the binary-stable C ABI ex
 
 ---
 
-## Installation & Build
+## Installation
 
-### 1. Build the Shared C++ Library
-First, compile `libqkrylov.so` from the main repository root:
-```bash
-cmake -B build -DBUILD_SHARED_LIBS=ON
-cmake --build build
+Install the package directly via Julia's Package Manager:
+
+```julia
+using Pkg
+Pkg.add("QKrylov")
 ```
 
-### 2. Load `QKrylov.jl` in Julia
-Start Julia pointing to the `bindings/julia` package environment:
+No C++ compiler or CMake build is required—`QKrylov.jl` automatically downloads precompiled `qkrylov_jll` binary artifacts for your OS and CPU architecture.
+
+### Development Setup (Local Repository)
+If you are developing locally from the source repository:
 ```bash
 julia --project=bindings/julia
 ```
