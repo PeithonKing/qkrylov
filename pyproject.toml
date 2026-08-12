@@ -70,7 +70,6 @@ QKRYLOV_BUILD_PYTHON = "ON"
 tag_regex = "^(?:v)?(?P<version>[0-9]+(?:\\.[0-9]+)*)$"
 # On a clean tagged commit, produce "0.1.0" with no dev suffix
 version_scheme = "no-guess-dev"
-local_scheme = "no-local-version"
 # Fallback used only during local dev builds with no tags
 fallback_version = "0.0.0.dev0"
 

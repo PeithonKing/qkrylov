@@ -171,7 +171,7 @@ jobs:
             echo '#!/bin/bash' > /usr/bin/nvcc && echo 'args=()' >> /usr/bin/nvcc && echo 'for arg in "$@"; do if [ "$arg" != "-Os" ]; then args+=("$arg"); fi; done' >> /usr/bin/nvcc && echo '/usr/local/cuda-12.6/bin/nvcc "${args[@]}"' >> /usr/bin/nvcc && chmod +x /usr/bin/nvcc
           CIBW_ENVIRONMENT: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
-            CMAKE_ARGS="-DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_OPENMP=ON -DKokkos_ARCH_AMPERE80=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.6/bin/nvcc -DCMAKE_C_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/g++ -DCMAKE_CUDA_HOST_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/g++"
+            SKBUILD_CMAKE_ARGS="-DKokkos_ENABLE_CUDA=ON -DKokkos_ENABLE_OPENMP=ON -DKokkos_ARCH_AMPERE80=ON -DCMAKE_CUDA_COMPILER=/usr/local/cuda-12.6/bin/nvcc -DCMAKE_C_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/gcc -DCMAKE_CXX_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/g++ -DCMAKE_CUDA_HOST_COMPILER=/opt/rh/gcc-toolset-12/root/usr/bin/g++"
           # Tell auditwheel to NOT bundle nvidia libraries (keep wheel small)
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair --exclude libcublas.so.12 --exclude libcudart.so.12 --exclude libcuda.so.1 -w {dest_dir} {wheel}"
 
