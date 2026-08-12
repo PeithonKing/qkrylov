@@ -1,5 +1,7 @@
 module QKrylov
 
+using qkrylov_jll
+
 const VERSION = v"0.1.0"
 
 include("libqkrylov.jl")
