@@ -20,7 +20,7 @@ A modern C++20 framework for matrix-free Krylov methods in quantum many-body phy
     - **Lanczos**: Accurate ground-state energy and Ritz vector calculation.
     - **Davidson**: Iterative solver for the lowest few eigenpairs.
     - **Dynamics**: Continued Fraction Lanczos for dynamical structure factor $S(\omega)$ calculations.
-- **Multi-Language Scaffolding**: Robust Python interface via `nanobind`.
+- **Multi-Language Support**: Robust Python interface via `nanobind` and native Julia package [`QKrylov.jl`](bindings/julia/README.md) backed by prebuilt `qkrylov_jll` binary artifacts.
 
 ## Build Requirements
 
@@ -30,22 +30,25 @@ A modern C++20 framework for matrix-free Krylov methods in quantum many-body phy
 
 ## Quick Start
 
-### Build the library and tests
+### For Julia Users (No C++ Compiler Required)
+```julia
+using Pkg
+Pkg.add("QKrylov")
+```
+
+### For Python Users
+```bash
+pip install qkrylov
+```
+
+### For C++ Developers & Local Building
+If you are developing or modifying the C++ core engine:
 
 ```bash
 make build
-```
-
-### Install Python package
-```bash
-pip install ./bindings/python
-```
-
-### Run tests
-
-```bash
 make test
 pytest bindings/python/tests/test_basic.py
+julia --project=bindings/julia -e 'using Pkg; Pkg.test()'
 ```
 
 ### C++ Example
@@ -81,7 +84,7 @@ int main() {
 }
 ```
 
-## Python Example
+### Python Example
 
 ```python
 import qkrylov
@@ -104,13 +107,37 @@ result = qkrylov.lanczos_ground_state(H)
 print(f"Ground state energy: {result.energy}")
 ```
 
+### Julia Example
+
+```julia
+using QKrylov
+
+# 4-site Heisenberg chain
+N = 4
+basis = SpinHalfBasis(N)
+site = SpinHalfSite()
+
+op = OpSum()
+for i in 0:(N - 2)
+    # Heisenberg interaction: Sz_i Sz_{i+1} + 0.5(Sp_i Sm_{i+1} + Sm_i Sp_{i+1})
+    add_term!(op, 1.0, "Sz", i, "Sz", i + 1)
+    add_term!(op, 0.5, "Sp", i, "Sm", i + 1)
+    add_term!(op, 0.5, "Sm", i, "Sp", i + 1)
+end
+
+H = MatrixFreeHamiltonian(basis, site, op)
+result = lanczos_ground_state(H)
+
+println("Ground state energy: ", result.energy)
+```
+
 ## Things To Be Done (Roadmap)
 
 - **GPU Acceleration**: CUDA/HIP support for Hamiltonian application.
 - **HDF5 Integration**: Efficient storage of large eigenvectors and results.
-- **Julia Bindings**: Interop via `CxxWrap.jl`.
 - **Finite Temperature**: Finite Temperature Lanczos Method (FTLM).
 
 ## Documentation
 
-Full documentation is available in the `docs/` directory. See `docs/source/tutorial.md` for a comprehensive guide modeled after iTensor.
+Full documentation is available in the `docs/` directory. See `docs/source/tutorial.md` for a comprehensive guide modeled after iTensor and `docs/api/julia_api.md` for the Julia API reference.
+
