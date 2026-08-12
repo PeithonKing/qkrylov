@@ -5,12 +5,20 @@ const QKRYLOV_ERROR_INVALID_ARG = -1
 const QKRYLOV_ERROR_EXCEPTION   = -2
 
 function find_libqkrylov()
-    # 1. Custom environment variable override
+    # 1. Custom environment variable override (for local development)
     if haskey(ENV, "QKRYLOV_LIB_PATH") && isfile(ENV["QKRYLOV_LIB_PATH"])
         return ENV["QKRYLOV_LIB_PATH"]
     end
 
-    # 2. Local repository build path (for development)
+    # 2. Production prebuilt binary from qkrylov_jll (Primary)
+    try
+        if isdefined(QKrylov, :qkrylov_jll) && isdefined(qkrylov_jll, :libqkrylov)
+            return qkrylov_jll.libqkrylov
+        end
+    catch
+    end
+
+    # 3. Local repository build path (for development)
     root_dir = normpath(joinpath(@__DIR__, "..", "..", ".."))
     candidates = [
         joinpath(root_dir, "build", "libqkrylov.so"),
@@ -24,16 +32,6 @@ function find_libqkrylov()
         if isfile(path)
             return path
         end
-    end
-
-    # 3. Production JLL package resolution (if installed)
-    try
-        # Dynamically check if qkrylov_jll module is available
-        jll_mod = Base.get_extension(QKrylov, :qkrylov_jll)
-        if jll_mod !== nothing && isdefined(jll_mod, :libqkrylov)
-            return jll_mod.libqkrylov
-        end
-    catch
     end
 
     # 4. Fallback to system library resolution

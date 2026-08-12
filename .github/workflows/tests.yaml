@@ -70,13 +70,9 @@ jobs:
       with:
         version: ${{ matrix.julia-version }}
 
-    - name: Build C++ shared library
-      run: |
-        cmake -B build -S . -DBUILD_SHARED_LIBS=ON -DQKRYLOV_BUILD_TESTS=OFF
-        cmake --build build --config Release
-
     - name: Run Julia tests
       run: |
         julia --project=bindings/julia -e 'using Pkg; Pkg.test()'
+
 
 
