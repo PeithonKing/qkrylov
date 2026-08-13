@@ -20,7 +20,7 @@ A modern C++20 framework for matrix-free Krylov methods in quantum many-body phy
     - **Lanczos**: Accurate ground-state energy and Ritz vector calculation.
     - **Davidson**: Iterative solver for the lowest few eigenpairs.
     - **Dynamics**: Continued Fraction Lanczos for dynamical structure factor $S(\omega)$ calculations.
-- **Multi-Language Support**: Robust Python interface via `nanobind` and native Julia package [`QKrylov.jl`](bindings/julia/README.md) backed by prebuilt `qkrylov_jll` binary artifacts.
+- **Multi-Language Support**: Robust Python interface via `nanobind` and native Julia package [`QuantumKrylov.jl`](bindings/julia/README.md) backed by prebuilt `qkrylov_jll` binary artifacts.
 
 ## Build Requirements
 
@@ -33,7 +33,7 @@ A modern C++20 framework for matrix-free Krylov methods in quantum many-body phy
 ### For Julia Users (No C++ Compiler Required)
 ```julia
 using Pkg
-Pkg.add("QKrylov")
+Pkg.add("QuantumKrylov")
 ```
 
 ### For Python Users
@@ -110,7 +110,7 @@ print(f"Ground state energy: {result.energy}")
 ### Julia Example
 
 ```julia
-using QKrylov
+using QuantumKrylov
 
 # 4-site Heisenberg chain
 N = 4

@@ -1,7 +1,7 @@
 using Test
-using QKrylov
+using QuantumKrylov
 
-@testset "QKrylov.jl" begin
+@testset "QuantumKrylov.jl" begin
     @testset "Sector" begin
         sec = Sector()
         @test sec.ptr != C_NULL

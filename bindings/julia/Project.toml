@@ -1,5 +1,5 @@
-name = "QKrylov"
-uuid = "b11b8d1f-0e7a-4a1f-9f7a-3a8cf0c4b001"
+name = "QuantumKrylov"
+uuid = "ded8de50-d5ab-4d43-aa04-497c0da83418"
 version = "0.1.0"
 authors = ["qkrylov contributors"]
 

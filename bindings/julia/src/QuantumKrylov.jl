@@ -1,4 +1,4 @@
-module QKrylov
+module QuantumKrylov
 
 using qkrylov_jll
 
