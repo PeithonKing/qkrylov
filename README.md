@@ -17,10 +17,11 @@ A modern C++20 framework for matrix-free Krylov methods in quantum many-body phy
     - **t-J Models**: Doped antiferromagnets with no-double-occupancy constraint.
 - **Matrix-Free Hamiltonian**: Efficient application of operator sums (`OpSum`) to state vectors.
 - **Advanced Solvers**:
-    - **Lanczos**: Accurate ground-state energy and Ritz vector calculation.
-    - **Davidson**: Iterative solver for the lowest few eigenpairs.
+    - **Lanczos**: Accurate ground-state energy, iterations/convergence tracking, and Ritz vector calculation.
+    - **Davidson**: Iterative solver for the lowest $k$ eigenpairs with convergence diagnostics.
     - **Dynamics**: Continued Fraction Lanczos for dynamical structure factor $S(\omega)$ calculations.
-- **Multi-Language Support**: Robust Python interface via `nanobind` and native Julia package [`QuantumKrylov.jl`](bindings/julia/README.md) backed by prebuilt `qkrylov_jll` binary artifacts.
+    - **Finite Temperature**: Finite Temperature Lanczos Method (FTLM) for thermodynamic quantities ($Z, E, C_v$).
+- **Multi-Language Support**: Robust Python interface via `nanobind` and native Julia package [`QuantumKrylov.jl`](bindings/julia/README.md) backed by C ABI (`c_api.h`) and prebuilt `qkrylov_jll` binary artifacts.
 
 ## Build Requirements
 
@@ -112,32 +113,35 @@ print(f"Ground state energy: {result.energy}")
 ```julia
 using QuantumKrylov
 
-# 4-site Heisenberg chain
+# 4-site 1D Heisenberg chain
 N = 4
 basis = SpinHalfBasis(N)
-site = SpinHalfSite()
 
 op = OpSum()
 for i in 0:(N - 2)
     # Heisenberg interaction: Sz_i Sz_{i+1} + 0.5(Sp_i Sm_{i+1} + Sm_i Sp_{i+1})
-    add_term!(op, 1.0, "Sz", i, "Sz", i + 1)
-    add_term!(op, 0.5, "Sp", i, "Sm", i + 1)
-    add_term!(op, 0.5, "Sm", i, "Sp", i + 1)
+    op += 1.0 * Sz(i) * Sz(i + 1) + 0.5 * (Sp(i) * Sm(i + 1) + Sm(i) * Sp(i + 1))
 end
 
-H = MatrixFreeHamiltonian(basis, site, op)
-result = lanczos_ground_state(H)
+# Construct MatrixFreeHamiltonian (site model automatically inferred from basis)
+H = MatrixFreeHamiltonian(basis, op)
 
-println("Ground state energy: ", result.energy)
+# Compute ground state energy and wavefunction
+res = lanczos_ground_state(H, return_state=true)
+
+println("Ground state energy: ", res.energy)
+println("Iterations executed: ", res.iterations)
+println("Convergence status:  ", res.converged)
 ```
 
 ## Things To Be Done (Roadmap)
 
-- **GPU Acceleration**: CUDA/HIP support for Hamiltonian application.
-- **HDF5 Integration**: Efficient storage of large eigenvectors and results.
-- **Finite Temperature**: Finite Temperature Lanczos Method (FTLM).
+- **GPU Acceleration**: CUDA/HIP Kokkos execution space optimization for large-scale SpMV.
+- **HDF5 Integration**: Efficient storage of large eigenvectors and Krylov subspace results.
 
 ## Documentation
 
-Full documentation is available in the `docs/` directory. See `docs/source/tutorial.md` for a comprehensive guide modeled after iTensor and `docs/api/julia_api.md` for the Julia API reference.
+Comprehensive Julia package documentation is available at:
+- **Core Concepts Guide**: [`bindings/julia/documentation.md`](bindings/julia/documentation.md)
+- **Julia Binding README**: [`bindings/julia/README.md`](bindings/julia/README.md)
 
