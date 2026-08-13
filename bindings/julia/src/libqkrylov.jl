@@ -12,7 +12,7 @@ function find_libqkrylov()
 
     # 2. Production prebuilt binary from qkrylov_jll (Primary)
     try
-        if isdefined(QKrylov, :qkrylov_jll) && isdefined(qkrylov_jll, :libqkrylov)
+        if isdefined(QuantumKrylov, :qkrylov_jll) && isdefined(qkrylov_jll, :libqkrylov)
             return qkrylov_jll.libqkrylov
         end
     catch

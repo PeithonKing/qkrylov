@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "2c139b3d10177ca0e204b6d5e8357c3595283eb8"
+project_hash = "2a28e8fb8802effe40c23cafcfa3f392bc34f570"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -45,9 +45,10 @@ deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
-[[deps.QKrylov]]
+[[deps.QuantumKrylov]]
+deps = ["qkrylov_jll"]
 path = "."
-uuid = "b11b8d1f-0e7a-4a1f-9f7a-3a8cf0c4b001"
+uuid = "ded8de50-d5ab-4d43-aa04-497c0da83418"
 version = "0.1.0"
 
 [[deps.TOML]]

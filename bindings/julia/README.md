@@ -1,6 +1,6 @@
-# QKrylov.jl: Julia Interface for `qkrylov`
+# QuantumKrylov.jl: Julia Interface for `qkrylov`
 
-`QKrylov.jl` provides idiomatic Julia bindings for [`qkrylov`](../../README.md), a high-performance C++ library for matrix-free Krylov subspace methods in quantum many-body physics.
+`QuantumKrylov.jl` provides idiomatic Julia bindings for [`qkrylov`](../../README.md), a high-performance C++ library for matrix-free Krylov subspace methods in quantum many-body physics.
 
 The Julia interface is constructed directly on top of the binary-stable C ABI exposed by `libqkrylov.so` via Julia's native `ccall` mechanism. It delivers **zero memory overhead**, **automatic garbage collection**, and **idiomatic mathematical syntax** (e.g., `y = H * x`).
 
@@ -27,10 +27,10 @@ Install the package directly via Julia's Package Manager:
 
 ```julia
 using Pkg
-Pkg.add("QKrylov")
+Pkg.add("QuantumKrylov")
 ```
 
-No C++ compiler or CMake build is required—`QKrylov.jl` automatically downloads precompiled `qkrylov_jll` binary artifacts for your OS and CPU architecture.
+No C++ compiler or CMake build is required—`QuantumKrylov.jl` automatically downloads precompiled `qkrylov_jll` binary artifacts for your OS and CPU architecture.
 
 ### Development Setup (Local Repository)
 If you are developing locally from the source repository:
@@ -40,7 +40,7 @@ julia --project=bindings/julia
 
 Inside Julia:
 ```julia
-using QKrylov
+using QuantumKrylov
 ```
 
 ---
@@ -50,7 +50,7 @@ using QKrylov
 Here is a complete example constructing a 4-site spin-1/2 Heisenberg chain and solving for its ground state energy:
 
 ```julia
-using QKrylov
+using QuantumKrylov
 
 # 1. Define Hilbert space basis with Sz = 0 symmetry
 sec = Sector()
