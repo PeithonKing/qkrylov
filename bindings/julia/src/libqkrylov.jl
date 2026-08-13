@@ -38,4 +38,9 @@ function find_libqkrylov()
     return "libqkrylov"
 end
 
-const libqkrylov = find_libqkrylov()
+global libqkrylov::String = find_libqkrylov()
+
+function __init__()
+    global libqkrylov = find_libqkrylov()
+end
+
