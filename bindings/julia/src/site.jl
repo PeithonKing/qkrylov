@@ -69,3 +69,8 @@ mutable struct TJSite <: AbstractSite
         return obj
     end
 end
+
+Base.show(io::IO, ::SpinHalfSite) = print(io, "SpinHalfSite(dim = 2, states = [↑, ↓])")
+Base.show(io::IO, ::FermionSite)  = print(io, "FermionSite(dim = 2, states = [0, 1])")
+Base.show(io::IO, ::HubbardSite)  = print(io, "HubbardSite(dim = 4, states = [0, ↑, ↓, ↑↓])")
+Base.show(io::IO, ::TJSite)       = print(io, "TJSite(dim = 3, states = [0, ↑, ↓])")

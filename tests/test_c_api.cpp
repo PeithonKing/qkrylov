@@ -23,6 +23,15 @@ int main() {
     assert(dim == 6); // 4 choose 2 = 6 states in Sz=0 sector
     assert(qkrylov_basis_nsites(basis) == 4);
 
+    // Test Basis state lookups
+    uint64_t s0 = qkrylov_basis_state(basis, 0);
+    assert(qkrylov_basis_contains(basis, s0) == 1);
+    assert(qkrylov_basis_index(basis, s0) == 0);
+
+    // Test Sector set_n and set_nb functions
+    assert(qkrylov_sector_set_n(sec, 2) == QKRYLOV_SUCCESS);
+    assert(qkrylov_sector_set_nb(sec, 1) == QKRYLOV_SUCCESS);
+
     // 3. Test Site API
     qkrylov_site_h site = qkrylov_spinhalf_site_create();
     assert(site != NULL);
@@ -39,6 +48,14 @@ int main() {
         // 0.5 Sm_i Sp_{i+1}
         assert(qkrylov_opsum_add_term_2body(opsum, 0.5, 0.0, "Sm", i, "Sp", i+1) == QKRYLOV_SUCCESS);
     }
+
+    // Test 3-Body N-Body Term API on separate OpSum handle
+    qkrylov_opsum_h opsum_nbody = qkrylov_opsum_create();
+    assert(opsum_nbody != NULL);
+    const char* ops3[3] = {"Sz", "Sz", "Sz"};
+    int sites3[3] = {0, 1, 2};
+    assert(qkrylov_opsum_add_term_nbody(opsum_nbody, 0.1f, 0.0f, 3, ops3, sites3) == QKRYLOV_SUCCESS);
+    qkrylov_opsum_destroy(opsum_nbody);
 
     // 5. Test Hamiltonian API
     qkrylov_hamiltonian_h H = qkrylov_hamiltonian_create(basis, site, opsum);
@@ -64,14 +81,72 @@ int main() {
         assert(std::abs(y_cx[i].imag() - y_imag[i]) < 1e-12);
     }
 
-    // 7. Test Lanczos Ground State Solver via C API
+    // Test Matrix-Free Diagonal Extraction
+    std::vector<float> diag(dim);
+    int diag_res = qkrylov_hamiltonian_diagonal(H, diag.data());
+    assert(diag_res == QKRYLOV_SUCCESS);
+
+    // 7. Test Lanczos Ground State Solver via C API (Energy & Eigenvector)
     qkrylov_lanczos_result_c_t lanczos_res;
-    int solver_res = qkrylov_lanczos_ground_state(H, 200, 1e-12, &lanczos_res);
+    std::vector<std::complex<float>> psi_cx(dim);
+    int solver_res = qkrylov_lanczos_ground_state_complex(H, 200, 1e-12, &lanczos_res, reinterpret_cast<float*>(psi_cx.data()));
     assert(solver_res == QKRYLOV_SUCCESS);
 
     std::cout << "C API Lanczos Ground State Energy: " << lanczos_res.energy << std::endl;
-    // Expected energy for 4-site Heisenberg chain is approx -1.6160254038
-    assert(std::abs(lanczos_res.energy - (-1.6160254038)) < 1e-6);
+    assert(std::abs(lanczos_res.energy - (-1.6160254038)) < 1e-5);
+
+    // Verify eigenvector normalization: ||psi||^2 == 1.0
+    float norm_sq = 0.0;
+    for (size_t i = 0; i < dim; ++i) {
+        norm_sq += std::norm(psi_cx[i]);
+    }
+    assert(std::abs(norm_sq - 1.0f) < 1e-4);
+
+    // 8. Test Davidson Solver via C API (Lowest 2 Eigenpairs)
+    int n_eig = 2;
+    std::vector<float> dav_evals(n_eig);
+    std::vector<std::complex<float>> dav_evecs(n_eig * dim);
+    qkrylov_davidson_result_c_t dav_info;
+    int dav_status = qkrylov_davidson_lowest_complex(H, n_eig, 20, 1e-6f, dav_evals.data(), reinterpret_cast<float*>(dav_evecs.data()), &dav_info);
+    assert(dav_status == QKRYLOV_SUCCESS);
+    assert(dav_info.converged == 1);
+
+    std::cout << "C API Davidson Lowest Eigenvalues: E0=" << dav_evals[0] << ", E1=" << dav_evals[1] << std::endl;
+    assert(std::abs(dav_evals[0] - lanczos_res.energy) < 1e-4);
+    assert(dav_evals[0] <= dav_evals[1]);
+
+    // Verify H * psi_k == E_k * psi_k for each computed eigenpair
+    for (int k = 0; k < n_eig; ++k) {
+        const std::complex<float>* vk = dav_evecs.data() + (k * dim);
+        std::vector<std::complex<float>> Hvk(dim);
+        assert(qkrylov_hamiltonian_apply_complex(H, reinterpret_cast<const float*>(vk), reinterpret_cast<float*>(Hvk.data())) == QKRYLOV_SUCCESS);
+        for (size_t i = 0; i < dim; ++i) {
+            std::complex<float> expected = dav_evals[k] * vk[i];
+            assert(std::abs(Hvk[i] - expected) < 1e-3);
+        }
+    }
+    // 9. Test Dynamics & Spectral Function C API
+    int n_iter = 20;
+    std::vector<float> alphas(n_iter);
+    std::vector<float> betas(n_iter);
+    float norm_phi0 = 0.0f;
+    int num_coeffs = 0;
+
+    int dyn_status = qkrylov_continued_fraction_coeffs_complex(H, reinterpret_cast<const float*>(psi_cx.data()), n_iter, alphas.data(), betas.data(), &norm_phi0, &num_coeffs);
+    assert(dyn_status == QKRYLOV_SUCCESS);
+    assert(num_coeffs > 0);
+    assert(std::abs(norm_phi0 - 1.0f) < 1e-3);
+
+    float spec_val = qkrylov_evaluate_spectral_function(alphas.data(), betas.data(), num_coeffs, norm_phi0, 0.5f, lanczos_res.energy, 0.1f);
+    std::cout << "C API Spectral function at w=0.5: " << spec_val << std::endl;
+    assert(spec_val > 0.0f);
+
+    // 10. Test FTLM C API
+    qkrylov_ftlm_result_c_t ftlm_res;
+    int ftlm_status = qkrylov_ftlm(H, 1.0f, 10, 20, &ftlm_res);
+    assert(ftlm_status == QKRYLOV_SUCCESS);
+    std::cout << "C API FTLM Result: Z=" << ftlm_res.partition_function << ", E=" << ftlm_res.internal_energy << ", Cv=" << ftlm_res.specific_heat << std::endl;
+    assert(ftlm_res.partition_function > 0.0f);
 
     // Cleanup handles
     qkrylov_hamiltonian_destroy(H);

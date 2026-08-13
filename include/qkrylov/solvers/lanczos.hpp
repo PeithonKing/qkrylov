@@ -11,6 +11,8 @@ namespace QKRYLOV_PRECISION_NAMESPACE {
 struct LanczosResult
 {
     Real energy = 0.0;
+    int iterations = 0;
+    bool converged = false;
 
     HostVector eigenvector;
 };
