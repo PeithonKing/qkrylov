@@ -163,21 +163,29 @@ using QuantumKrylov
         # 1. Energy-only calculation (default)
         res = lanczos_ground_state(H, maxiter=50, tol=1e-12)
         @test isapprox(res.energy, -2.0, atol=1e-6)
+        @test res.converged == true
+        @test res.iterations > 0
         @test_throws ErrorException res.state
         @test_throws ErrorException res.eigenvector
 
-        # 2. State vector calculation
+        # 2. Maxiter hit test
+        res_limited = lanczos_ground_state(H, maxiter=2, tol=1e-15)
+        @test res_limited.converged == false
+        @test res_limited.iterations == 2
+        @test contains(string(res_limited), "WARNING: maxiter hit")
+
+        # 3. State vector calculation
         res_state = lanczos_ground_state(H, maxiter=50, tol=1e-12, return_state=true)
         @test isapprox(res_state.energy, -2.0, atol=1e-6)
         psi = res_state.state
         @test length(psi) == 16
         @test res_state.eigenvector === psi
 
-        # 3. Verify H * psi ≈ E0 * psi
+        # 4. Verify H * psi ≈ E0 * psi
         H_psi = H * psi
         @test isapprox(H_psi, res_state.energy .* psi, atol=1e-5)
 
-        # 4. Destructuring test
+        # 5. Destructuring test
         E0, psi_destruct = lanczos_ground_state(H, return_state=true)
         @test isapprox(E0, -2.0, atol=1e-6)
         @test length(psi_destruct) == 16

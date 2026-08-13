@@ -128,6 +128,7 @@ LanczosResult lanczos_ground_state(
     std::vector<Real> alphas;
     std::vector<Real> betas;
 
+    bool is_converged = false;
     Real energy_old = 1e100;
     int actual_iters = 0;
 
@@ -151,7 +152,11 @@ LanczosResult lanczos_ground_state(
 
         Real beta = norm(w);
 
-        if (beta < 1e-15 || iter + 1 == std::min<int>(maxiter, dim)) {
+        if (beta < 1e-15) {
+             is_converged = true;
+             break;
+        }
+        if (iter + 1 == std::min<int>(maxiter, dim)) {
              break;
         }
 
@@ -170,6 +175,7 @@ LanczosResult lanczos_ground_state(
             auto tridiag = tridiag_ground_state_full(alphas, betas, alphas.size());
             if (std::abs(tridiag.energy - energy_old) < tol) {
                 energy_old = tridiag.energy;
+                is_converged = true;
                 break;
             }
             energy_old = tridiag.energy;
@@ -180,6 +186,8 @@ LanczosResult lanczos_ground_state(
 
     LanczosResult res;
     res.energy = final_tridiag.energy;
+    res.iterations = actual_iters;
+    res.converged = is_converged;
 
     // Compute Ritz vector
     VectorView<ExecSpace> ritz("ritz", dim);

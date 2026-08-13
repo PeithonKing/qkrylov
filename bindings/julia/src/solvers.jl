@@ -2,15 +2,24 @@
 
 struct LanczosResultC
     energy::Cfloat
+    iterations::Cint
+    converged::Cint
+end
+
+struct DavidsonResultC
+    iterations::Cint
+    converged::Cint
 end
 
 struct LanczosResult
     energy::Float64
+    iterations::Int
+    converged::Bool
     _state::Union{Vector{ComplexF64}, Nothing}
     has_state::Bool
 
-    function LanczosResult(energy::Float64, state::Union{Vector{ComplexF64}, Nothing}=nothing)
-        return new(energy, state, state !== nothing)
+    function LanczosResult(energy::Float64, iterations::Integer, converged::Bool, state::Union{Vector{ComplexF64}, Nothing}=nothing)
+        return new(energy, Int(iterations), converged, state, state !== nothing)
     end
 end
 
@@ -25,7 +34,7 @@ function Base.getproperty(res::LanczosResult, sym::Symbol)
 end
 
 function Base.propertynames(res::LanczosResult, private::Bool=false)
-    return private ? fieldnames(LanczosResult) : (:energy, :state, :eigenvector)
+    return private ? fieldnames(LanczosResult) : (:energy, :iterations, :converged, :state, :eigenvector)
 end
 
 function Base.iterate(res::LanczosResult, state=1)
@@ -49,7 +58,7 @@ function lanczos_ground_state(
     compute_eigenvector::Bool=return_state
 )::LanczosResult
     should_compute = return_state || compute_eigenvector
-    res_c = Ref{LanczosResultC}(LanczosResultC(0.0f0))
+    res_c = Ref{LanczosResultC}(LanczosResultC(0.0f0, 0, 0))
 
     if should_compute
         dim = Int(dimension(H))
@@ -71,7 +80,7 @@ function lanczos_ground_state(
             im = Float64(vec_buf[2i])
             psi[i] = ComplexF64(re, im)
         end
-        return LanczosResult(Float64(res_c[].energy), psi)
+        return LanczosResult(Float64(res_c[].energy), Int(res_c[].iterations), res_c[].converged != 0, psi)
     else
         status = ccall(
             (:qkrylov_lanczos_ground_state, libqkrylov),
@@ -80,7 +89,7 @@ function lanczos_ground_state(
             H.ptr, Cint(maxiter), Cfloat(tol), res_c
         )
         status != QKRYLOV_SUCCESS && error("Lanczos ground state solver failed with status code $status")
-        return LanczosResult(Float64(res_c[].energy), nothing)
+        return LanczosResult(Float64(res_c[].energy), Int(res_c[].iterations), res_c[].converged != 0, nothing)
     end
 end
 
@@ -88,6 +97,8 @@ end
 struct DavidsonResult
     eigenvalues::Vector{Float64}
     eigenvectors::Union{Vector{Vector{ComplexF64}}, Nothing}
+    iterations::Int
+    converged::Bool
 end
 
 function davidson_lowest(
@@ -100,21 +111,25 @@ function davidson_lowest(
     dim = Int(dimension(H))
     evals_buf = Vector{Float32}(undef, n_eig)
     evecs_buf = compute_eigenvectors ? Vector{Float32}(undef, n_eig * 2 * dim) : Float32[]
+    dav_c = Ref{DavidsonResultC}(DavidsonResultC(0, 0))
 
     GC.@preserve evals_buf evecs_buf begin
         evecs_ptr = compute_eigenvectors ? pointer(evecs_buf) : Ptr{Cfloat}(C_NULL)
         status = ccall(
             (:qkrylov_davidson_lowest_complex, libqkrylov),
             Cint,
-            (Ptr{Cvoid}, Cint, Cint, Cfloat, Ptr{Cfloat}, Ptr{Cfloat}),
-            H.ptr, Cint(n_eig), Cint(max_subspace), Cfloat(tol), pointer(evals_buf), evecs_ptr
+            (Ptr{Cvoid}, Cint, Cint, Cfloat, Ptr{Cfloat}, Ptr{Cfloat}, Ref{DavidsonResultC}),
+            H.ptr, Cint(n_eig), Cint(max_subspace), Cfloat(tol), pointer(evals_buf), evecs_ptr, dav_c
         )
         status != QKRYLOV_SUCCESS && error("Davidson solver failed with status code $status")
     end
 
     evals = Vector{Float64}(evals_buf)
+    iters = Int(dav_c[].iterations)
+    conv  = dav_c[].converged != 0
+
     if !compute_eigenvectors
-        return DavidsonResult(evals, nothing)
+        return DavidsonResult(evals, nothing, iters, conv)
     end
 
     evecs = Vector{Vector{ComplexF64}}(undef, n_eig)
@@ -128,7 +143,7 @@ function davidson_lowest(
         end
         evecs[idx] = v
     end
-    return DavidsonResult(evals, evecs)
+    return DavidsonResult(evals, evecs, iters, conv)
 end
 
 # Dynamics & Spectral Function
@@ -255,4 +270,30 @@ function ftlm(
         Float64(res_c[].internal_energy),
         Float64(res_c[].specific_heat)
     )
+end
+
+# -----------------------------------------------------------------------------
+# Base.show Formatting for Solver Results
+# -----------------------------------------------------------------------------
+
+function Base.show(io::IO, res::LanczosResult)
+    status_str = res.converged ? "converged = true" : "WARNING: maxiter hit without converging!"
+    state_str = res.has_state ? ", state = Vector{ComplexF64}(dim=$(length(res._state)))" : ""
+    print(io, "LanczosResult(energy = $(res.energy), iterations = $(res.iterations), $status_str$state_str)")
+end
+
+function Base.show(io::IO, res::DavidsonResult)
+    n = length(res.eigenvalues)
+    has_v = res.eigenvectors !== nothing
+    status_str = res.converged ? "converged = true" : "WARNING: maxiter hit without converging!"
+    print(io, "DavidsonResult(n_eig = $n, energies = $(res.eigenvalues), iterations = $(res.iterations), $status_str, has_eigenvectors = $has_v)")
+end
+
+function Base.show(io::IO, res::ContinuedFractionResult)
+    n = length(res.alphas)
+    print(io, "ContinuedFractionResult(n_coeffs = $n, norm_phi0 = $(res.norm_phi0))")
+end
+
+function Base.show(io::IO, res::FTLMResult)
+    print(io, "FTLMResult(beta = $(res.beta), Z = $(res.partition_function), E = $(res.internal_energy), Cv = $(res.specific_heat))")
 end

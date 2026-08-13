@@ -179,6 +179,8 @@ DavidsonResult davidson_lowest(
 
         if (all_converged || iter == 99) {
             DavidsonResult res;
+            res.iterations = iter + 1;
+            res.converged = all_converged;
             for (int k = 0; k < n_eig; ++k) {
                 res.eigenvalues.push_back(eig.eigenvalues[k]);
                 VectorView<ExecSpace> ev("ev", dim);

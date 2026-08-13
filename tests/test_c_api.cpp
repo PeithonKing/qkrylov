@@ -106,9 +106,10 @@ int main() {
     int n_eig = 2;
     std::vector<float> dav_evals(n_eig);
     std::vector<std::complex<float>> dav_evecs(n_eig * dim);
-
-    int dav_status = qkrylov_davidson_lowest_complex(H, n_eig, 20, 1e-6f, dav_evals.data(), reinterpret_cast<float*>(dav_evecs.data()));
+    qkrylov_davidson_result_c_t dav_info;
+    int dav_status = qkrylov_davidson_lowest_complex(H, n_eig, 20, 1e-6f, dav_evals.data(), reinterpret_cast<float*>(dav_evecs.data()), &dav_info);
     assert(dav_status == QKRYLOV_SUCCESS);
+    assert(dav_info.converged == 1);
 
     std::cout << "C API Davidson Lowest Eigenvalues: E0=" << dav_evals[0] << ", E1=" << dav_evals[1] << std::endl;
     assert(std::abs(dav_evals[0] - lanczos_res.energy) < 1e-4);

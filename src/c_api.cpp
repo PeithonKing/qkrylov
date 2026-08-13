@@ -486,7 +486,9 @@ int qkrylov_lanczos_ground_state_complex(qkrylov_hamiltonian_h h,
     if (!h || !h->ptr || !result) return QKRYLOV_ERROR_INVALID_ARG;
     try {
         auto res = lanczos_ground_state(*(h->ptr), maxiter, static_cast<Real>(tol));
-        result->energy = static_cast<float>(res.energy);
+        result->energy     = static_cast<float>(res.energy);
+        result->iterations = res.iterations;
+        result->converged  = res.converged ? 1 : 0;
         if (eigenvector_complex && !res.eigenvector.empty()) {
             for (size_t i = 0; i < res.eigenvector.size(); ++i) {
                 eigenvector_complex[2 * i]     = static_cast<float>(res.eigenvector[i].real());
@@ -504,13 +506,19 @@ int qkrylov_davidson_lowest_complex(qkrylov_hamiltonian_h h,
                                     int max_subspace,
                                     float tol,
                                     float* eigenvalues_out,
-                                    float* eigenvectors_complex_out) {
+                                    float* eigenvectors_complex_out,
+                                    qkrylov_davidson_result_c_t* result_info) {
     if (!h || !h->ptr || !eigenvalues_out || n_eig <= 0) return QKRYLOV_ERROR_INVALID_ARG;
     try {
         auto res = davidson_lowest(*(h->ptr), n_eig, max_subspace, static_cast<Real>(tol));
         const size_t k = std::min(static_cast<size_t>(n_eig), res.eigenvalues.size());
         for (size_t i = 0; i < k; ++i) {
             eigenvalues_out[i] = static_cast<float>(res.eigenvalues[i]);
+        }
+
+        if (result_info) {
+            result_info->iterations = res.iterations;
+            result_info->converged  = res.converged ? 1 : 0;
         }
 
         if (eigenvectors_complex_out) {

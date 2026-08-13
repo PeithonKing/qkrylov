@@ -14,6 +14,8 @@ struct DavidsonResult
 {
     std::vector<Real> eigenvalues;
     std::vector<HostVector> eigenvectors;
+    int iterations = 0;
+    bool converged = false;
 };
 
 template <typename ExecSpace>

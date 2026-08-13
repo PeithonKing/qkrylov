@@ -263,3 +263,131 @@ sz  = size(H)      # (16, 16)
 | `diagonal(H)` | `H::MatrixFreeHamiltonian` | `Vector{Float64}` | Computes and returns matrix-free diagonal elements $H_{ii}$. |
 | `dimension(H)` | `H::MatrixFreeHamiltonian` | `UInt64` | Returns total matrix dimension of `H`. |
 | `size(H)` | `H::MatrixFreeHamiltonian` | `(Int, Int)` | Returns `(dim, dim)` matrix shape tuple. |
+
+---
+
+## 5. Krylov & Lanczos Solvers
+
+### 5.1 Ground State Solver (`lanczos_ground_state`)
+
+#### How to use `lanczos_ground_state`
+
+```julia
+# 1. Energy-only calculation (fast memory-efficient path)
+res = lanczos_ground_state(H, maxiter=200, tol=1e-12)
+println(res)            # Outputs: LanczosResult(energy = -2.0, iterations = 14, converged = true)
+E0 = res.energy          # Ground state energy Float64
+n_iters = res.iterations # Number of Lanczos iterations executed (14)
+is_conv = res.converged  # true (false if maxiter was hit without meeting tol)
+
+# If maxiter is reached before achieving tolerance `tol`:
+# println(res) -> LanczosResult(energy = -1.987, iterations = 5, WARNING: maxiter hit without converging!)
+
+# 2. Compute Ground State Wavefunction (|psi_0>)
+res = lanczos_ground_state(H, return_state=true)
+println(res)            # Outputs: LanczosResult(energy = -2.0, iterations = 14, converged = true, state = Vector{ComplexF64}(dim=6))
+psi0 = res.state         # Vector{ComplexF64} of length dimension(H)
+psi0_vec = res.eigenvector # Alternative alias for wavefunction
+
+# 3. Tuple Destructuring Support
+E0, psi0 = lanczos_ground_state(H, return_state=true)
+```
+
+#### `lanczos_ground_state` Parameters & Result API
+
+| Parameter / Property | Type | Default Value | Description |
+| :--- | :--- | :--- | :--- |
+| `maxiter` | `Integer` | `100` | Maximum Lanczos iterations. |
+| `tol` | `Real` | `1e-12` | Energy convergence tolerance. |
+| `return_state` | `Bool` | `false` | When `true`, computes and stores ground state wavefunction. |
+| `res.energy` | `Float64` | - | Ground state energy eigenvalue. |
+| `res.iterations` | `Int` | - | Total number of Lanczos iterations executed. |
+| `res.converged` | `Bool` | - | `true` if tolerance `tol` was achieved, `false` if `maxiter` was hit. |
+| `res.state` / `res.eigenvector` | `Vector{ComplexF64}` | - | Ground state eigenvector (raises Error if `return_state=false`). |
+
+---
+
+### 5.2 Low-Lying Excited States (`davidson_lowest`)
+
+#### How to use `davidson_lowest`
+
+```julia
+# Compute lowest 3 eigenvalues and eigenvectors using Davidson solver
+res_dav = davidson_lowest(H, n_eig=3, max_subspace=30, tol=1e-8)
+println(res_dav)
+# Outputs: DavidsonResult(n_eig = 3, energies = [-2.0, -1.0, -1.0], iterations = 8, converged = true, has_eigenvectors = true)
+
+energies = res_dav.eigenvalues   # Vector{Float64} of length 3
+states   = res_dav.eigenvectors  # Vector{Vector{ComplexF64}} of length 3
+n_iters  = res_dav.iterations    # Iteration count
+is_conv  = res_dav.converged     # Convergence boolean flag
+```
+
+#### `davidson_lowest` Parameters & Result API
+
+| Parameter / Property | Type | Default Value | Description |
+| :--- | :--- | :--- | :--- |
+| `n_eig` | `Integer` | `1` | Number of lowest eigenvalues to compute. |
+| `max_subspace` | `Integer` | `20` | Maximum Davidson search subspace dimension. |
+| `tol` | `Real` | `1e-6` | Convergence tolerance. |
+| `compute_eigenvectors` | `Bool` | `true` | When `true`, computes eigenvector array. |
+| `res.eigenvalues` | `Vector{Float64}` | - | Vector of $k$ lowest energy eigenvalues. |
+| `res.iterations` | `Int` | - | Number of Davidson subspace iterations executed. |
+| `res.converged` | `Bool` | - | `true` if all $k$ eigenpairs converged within tolerance (`false` if `maxiter` reached). |
+| `res.eigenvectors` | `Vector{Vector{ComplexF64}}` | - | Array of $k$ eigenvector state vectors. |
+
+---
+
+### 5.3 Dynamical Response & Spectral Functions (`continued_fraction_coeffs`)
+
+#### How to use Continued Fraction Dynamics
+
+```julia
+# 1. Prepare excited state v0 = A * |psi0>
+v0 = H * psi0
+
+# 2. Compute continued-fraction Lanczos coefficients alpha_k, beta_k
+cfr = continued_fraction_coeffs(H, v0, n_iter=100)
+println(cfr) # Outputs: ContinuedFractionResult(n_coeffs = 100, norm_phi0 = 1.0)
+
+# 3. Evaluate dynamical spectral function I(omega) at energy omega
+E0 = res.energy
+eta = 0.05 # Lorentzian broadening
+omega = 0.5
+I_omega = evaluate_spectral_function(cfr, omega, E0, eta)
+```
+
+#### Dynamics Functions & Parameters
+
+| Function | Parameters | Default Values | Description |
+| :--- | :--- | :--- | :--- |
+| `continued_fraction_coeffs(H, phi0)` | `H::MatrixFreeHamiltonian`<br>`phi0::AbstractVector`<br>`n_iter::Integer` | `n_iter=100` | Computes tridiagonal Lanczos coefficients $\alpha_k, \beta_k$. Returns `ContinuedFractionResult`. |
+| `evaluate_spectral_function(cfr, omega, E0, eta)` | `cfr::ContinuedFractionResult`<br>`omega::Real`<br>`E0::Real`<br>`eta::Real` | None (required) | Evaluates spectral response function $I(\omega) = -\frac{1}{\pi} \text{Im} G(\omega + E_0 + i\eta)$. |
+
+---
+
+### 5.4 Finite Temperature Lanczos (`ftlm`)
+
+#### How to use `ftlm`
+
+```julia
+# Compute thermodynamic properties at inverse temperature beta = 1/T
+ftlm_res = ftlm(H, beta=2.0, n_random=20, n_steps=50)
+println(ftlm_res)
+# Outputs: FTLMResult(beta = 2.0, Z = ..., E = ..., Cv = ...)
+
+Z  = ftlm_res.partition_function # Partition function Z(beta)
+E  = ftlm_res.internal_energy     # Internal energy E(beta)
+Cv = ftlm_res.specific_heat      # Specific heat Cv(beta)
+```
+
+#### `ftlm` Parameters & Result API
+
+| Parameter / Property | Type | Default Value | Description |
+| :--- | :--- | :--- | :--- |
+| `beta` | `Real` | `1.0` | Target inverse temperature $\beta = 1 / (k_B T)$. |
+| `n_random` | `Integer` | `10` | Number of random sampling vectors. |
+| `n_steps` | `Integer` | `50` | Number of Lanczos expansion steps per sample. |
+| `res.partition_function` | `Float64` | - | Partition function $Z(\beta)$. |
+| `res.internal_energy` | `Float64` | - | Internal energy $E(\beta)$. |
+| `res.specific_heat` | `Float64` | - | Specific heat $C_v(\beta)$. |

@@ -104,7 +104,14 @@ int                   qkrylov_hamiltonian_diagonal(qkrylov_hamiltonian_h h,
  * ----------------------------------------------------------------------------- */
 typedef struct {
     float energy;
+    int iterations;
+    int converged;
 } qkrylov_lanczos_result_c_t;
+
+typedef struct {
+    int iterations;
+    int converged;
+} qkrylov_davidson_result_c_t;
 
 int qkrylov_lanczos_ground_state(qkrylov_hamiltonian_h h,
                                  int maxiter,
@@ -124,7 +131,8 @@ int qkrylov_davidson_lowest_complex(qkrylov_hamiltonian_h h,
                                     int max_subspace,
                                     float tol,
                                     float* eigenvalues_out,
-                                    float* eigenvectors_complex_out);
+                                    float* eigenvectors_complex_out,
+                                    qkrylov_davidson_result_c_t* result_info);
 
 /* Compute continued fraction tridiagonal coefficients (alphas, betas) starting from vector phi0_complex */
 int qkrylov_continued_fraction_coeffs_complex(qkrylov_hamiltonian_h h,
