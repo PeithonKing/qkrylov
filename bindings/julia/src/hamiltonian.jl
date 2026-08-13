@@ -7,6 +7,8 @@ mutable struct MatrixFreeHamiltonian
     opsum::OpSum
 
     function MatrixFreeHamiltonian(basis::AbstractBasis, site::AbstractSite, opsum::OpSum)
+        validate!(opsum, nsites(basis))
+
         ptr = ccall(
             (:qkrylov_hamiltonian_create, libqkrylov),
             Ptr{Cvoid},

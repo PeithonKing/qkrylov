@@ -173,11 +173,21 @@ end
 # 3. Add a 3-body (N-body) term using operator generators
 op += 0.25 * Sz(0) * Sz(1) * Sz(2)
 
-# 4. Alternatively, use string-based add_term! functions:
-add_term!(op, 1.0, "Sz", 0, "Sz", 1)
-add_term!(op, 0.5, ["Sz", "Sz", "Sz"], [0, 1, 2])
+# 4. Inspect OpSum
+println(op)
+# Outputs: OpSum(Sz(0) * Sz(1) + 0.5 * Sp(0) * Sm(1) + 0.5 * Sm(0) * Sp(1) + ...)
 
-# 5. Clear all terms
+num_terms = length(op) # Returns 5
+is_empty  = isempty(op) # Returns false
+
+# 5. Validate site index bounds for a 4-site system
+valid, errors = validate(op, 4) # Returns (true, String[])
+validate!(op, 4)                # Throws ArgumentError if any site >= 4 or < 0
+
+# 6. Alternatively, use string-based add_term! functions:
+add_term!(op, 1.0, "Sz", 0, "Sz", 1)
+
+# 7. Clear all terms
 clear!(op)
 ```
 
@@ -198,6 +208,10 @@ clear!(op)
 | Function | Parameters | Default Values | Description |
 | :--- | :--- | :--- | :--- |
 | `OpSum()` | None | Empty `OpSum` handle | Constructs a new empty operator sum container. |
+| `length(op)` | `op::OpSum` | None | Returns the total number of terms stored in `op`. |
+| `isempty(op)` | `op::OpSum` | None | Returns `true` if `op` has zero terms. |
+| `validate(op, num_sites)` | `op::OpSum`<br>`num_sites::Integer` | None (required) | Validates term site indices against `0 <= site < num_sites`. Returns `(valid::Bool, errors::Vector{String})`. |
+| `validate!(op, num_sites)` | `op::OpSum`<br>`num_sites::Integer` | None (required) | Validates term site indices. Throws `ArgumentError` if any site index is out of bounds or coefficient is non-finite. |
 | `add_term!(op, coeff, op1, site1)` | `op::OpSum`<br>`coeff::Number`<br>`op1::AbstractString`<br>`site1::Integer` | None (required) | Adds 1-body term $\text{coeff} \cdot \hat{O}_{1, \text{site1}}$. Returns `op`. |
 | `add_term!(op, coeff, op1, site1, op2, site2)` | `op::OpSum`<br>`coeff::Number`<br>`op1::AbstractString`<br>`site1::Integer`<br>`op2::AbstractString`<br>`site2::Integer` | None (required) | Adds 2-body term $\text{coeff} \cdot \hat{O}_{1, \text{site1}} \hat{O}_{2, \text{site2}}$. Returns `op`. |
 | `add_term!(op, coeff, ops, sites)` | `op::OpSum`<br>`coeff::Number`<br>`ops::Vector{<:AbstractString}`<br>`sites::Vector{<:Integer}` | None (required) | Adds general $N$-body term $\text{coeff} \cdot \prod_{k=1}^N \hat{O}_{k, \text{sites}[k]}$. Returns `op`. |

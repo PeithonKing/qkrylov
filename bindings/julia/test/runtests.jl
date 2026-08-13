@@ -122,6 +122,28 @@ using QuantumKrylov
         @test isapprox(res.energy, -2.0, atol=1e-6)
     end
 
+    @testset "OpSum Printing & Validation" begin
+        op = OpSum()
+        @test isempty(op)
+        @test length(op) == 0
+        @test string(op) == "OpSum(empty)"
+
+        op += 1.0 * Sz(0) * Sz(1) + 0.5 * Sp(0) * Sm(1)
+        @test !isempty(op)
+        @test length(op) == 2
+        @test string(op) == "OpSum(Sz(0) * Sz(1) + 0.5 * Sp(0) * Sm(1))"
+
+        # Validation: valid vs out-of-bounds site
+        @test validate(op, 4)[1] == true
+        @test validate(op, 1)[1] == false # site 1 out of bounds for 1-site system
+
+        # Pre-validation error when creating Hamiltonian with invalid site index
+        bad_op = OpSum()
+        bad_op += 1.0 * Sz(0) * Sz(10) # site 10 out of bounds for 4-site basis
+        basis_4 = SpinHalfBasis(4)
+        @test_throws ArgumentError MatrixFreeHamiltonian(basis_4, bad_op)
+    end
+
     @testset "Lanczos Ground State Solver" begin
         # 4-site 1D Heisenberg chain
         N = 4
