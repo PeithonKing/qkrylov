@@ -10,15 +10,7 @@ function find_libqkrylov()
         return ENV["QKRYLOV_LIB_PATH"]
     end
 
-    # 2. Production prebuilt binary from qkrylov_jll (Primary)
-    try
-        if isdefined(QuantumKrylov, :qkrylov_jll) && isdefined(qkrylov_jll, :libqkrylov)
-            return qkrylov_jll.libqkrylov
-        end
-    catch
-    end
-
-    # 3. Local repository build path (for development)
+    # 2. Local repository build path (for development)
     root_dir = normpath(joinpath(@__DIR__, "..", "..", ".."))
     candidates = [
         joinpath(root_dir, "build", "libqkrylov.so"),
@@ -32,6 +24,14 @@ function find_libqkrylov()
         if isfile(path)
             return path
         end
+    end
+
+    # 3. Production prebuilt binary from qkrylov_jll (Primary fallback)
+    try
+        if isdefined(QuantumKrylov, :qkrylov_jll) && isdefined(qkrylov_jll, :libqkrylov)
+            return qkrylov_jll.libqkrylov
+        end
+    catch
     end
 
     # 4. Fallback to system library resolution

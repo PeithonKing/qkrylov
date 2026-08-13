@@ -36,22 +36,42 @@ Base.size(H::MatrixFreeHamiltonian, d::Integer) = (d == 1 || d == 2) ? Int(dimen
 function Base.:*(H::MatrixFreeHamiltonian, x::AbstractVector{<:Number})::Vector{ComplexF64}
     dim = Int(dimension(H))
     @assert length(x) == dim "Input vector size $(length(x)) does not match Hamiltonian dimension $dim"
-    
+
     x_c = Vector{ComplexF64}(x)
-    x_re = Vector{Float64}(real.(x_c))
-    x_im = Vector{Float64}(imag.(x_c))
-    y_re = Vector{Float64}(undef, dim)
-    y_im = Vector{Float64}(undef, dim)
+    x_re = Vector{Float32}(real.(x_c))
+    x_im = Vector{Float32}(imag.(x_c))
+    y_re = Vector{Float32}(undef, dim)
+    y_im = Vector{Float32}(undef, dim)
 
     GC.@preserve x_re x_im y_re y_im begin
         status = ccall(
             (:qkrylov_hamiltonian_apply, libqkrylov),
             Cint,
-            (Ptr{Cvoid}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}),
+            (Ptr{Cvoid}, Ptr{Cfloat}, Ptr{Cfloat}, Ptr{Cfloat}, Ptr{Cfloat}),
             H.ptr, pointer(x_re), pointer(x_im), pointer(y_re), pointer(y_im)
         )
         status != QKRYLOV_SUCCESS && error("MatrixFreeHamiltonian apply failed with status code $status")
     end
 
-    return complex.(y_re, y_im)
+    y_c = Vector{ComplexF64}(undef, dim)
+    @inbounds for i in 1:dim
+        y_c[i] = ComplexF64(Float64(y_re[i]), Float64(y_im[i]))
+    end
+    return y_c
+end
+
+function diagonal(H::MatrixFreeHamiltonian)::Vector{Float64}
+    dim = Int(dimension(H))
+    diag_buf = Vector{Float32}(undef, dim)
+
+    GC.@preserve diag_buf begin
+        status = ccall(
+            (:qkrylov_hamiltonian_diagonal, libqkrylov),
+            Cint,
+            (Ptr{Cvoid}, Ptr{Cfloat}),
+            H.ptr, pointer(diag_buf)
+        )
+        status != QKRYLOV_SUCCESS && error("Failed to extract Hamiltonian diagonal (status code $status)")
+    end
+    return Vector{Float64}(diag_buf)
 end

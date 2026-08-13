@@ -33,6 +33,10 @@ int              qkrylov_sector_set_sz(qkrylov_sector_h sector, int sz2);
 int              qkrylov_sector_set_hubbard_particles(qkrylov_sector_h sector, int nup, int ndn);
 int              qkrylov_sector_set_n(qkrylov_sector_h sector, int n);
 int              qkrylov_sector_set_nb(qkrylov_sector_h sector, int nb);
+int              qkrylov_sector_get_sz(qkrylov_sector_h sector, int* sz2_out, int* active_out);
+int              qkrylov_sector_get_hubbard_particles(qkrylov_sector_h sector, int* nup_out, int* ndn_out, int* active_out);
+int              qkrylov_sector_get_n(qkrylov_sector_h sector, int* n_out, int* active_out);
+int              qkrylov_sector_get_nb(qkrylov_sector_h sector, int* nb_out, int* active_out);
 
 /* -----------------------------------------------------------------------------
  * Basis API

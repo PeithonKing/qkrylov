@@ -10,8 +10,22 @@ function nsites(b::AbstractBasis)::Int
     return Int(ccall((:qkrylov_basis_nsites, libqkrylov), Cint, (Ptr{Cvoid},), b.ptr))
 end
 
+function state(b::AbstractBasis, index::Integer)::UInt64
+    return ccall((:qkrylov_basis_state, libqkrylov), UInt64, (Ptr{Cvoid}, UInt64), b.ptr, UInt64(index))
+end
+
+function basis_index(b::AbstractBasis, state_bitstring::Unsigned)::Int64
+    return ccall((:qkrylov_basis_index, libqkrylov), Int64, (Ptr{Cvoid}, UInt64), b.ptr, UInt64(state_bitstring))
+end
+
+function Base.in(state_bitstring::Unsigned, b::AbstractBasis)::Bool
+    res = ccall((:qkrylov_basis_contains, libqkrylov), Cint, (Ptr{Cvoid}, UInt64), b.ptr, UInt64(state_bitstring))
+    return res != 0
+end
+
 Base.size(b::AbstractBasis) = (Int(dimension(b)), Int(dimension(b)))
 Base.length(b::AbstractBasis) = Int(dimension(b))
+Base.getindex(b::AbstractBasis, i::Integer) = state(b, i - 1)
 
 mutable struct SpinHalfBasis <: AbstractBasis
     ptr::Ptr{Cvoid}

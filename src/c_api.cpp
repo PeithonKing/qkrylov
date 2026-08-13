@@ -112,6 +112,51 @@ int qkrylov_sector_set_nb(qkrylov_sector_h sector, int nb) {
     }
 }
 
+int qkrylov_sector_get_sz(qkrylov_sector_h sector, int* sz2_out, int* active_out) {
+    if (!sector) return QKRYLOV_ERROR_INVALID_ARG;
+    try {
+        if (active_out) *active_out = sector->sector.use_sz ? 1 : 0;
+        if (sz2_out) *sz2_out = sector->sector.sz2;
+        return QKRYLOV_SUCCESS;
+    } catch (...) {
+        return QKRYLOV_ERROR_EXCEPTION;
+    }
+}
+
+int qkrylov_sector_get_hubbard_particles(qkrylov_sector_h sector, int* nup_out, int* ndn_out, int* active_out) {
+    if (!sector) return QKRYLOV_ERROR_INVALID_ARG;
+    try {
+        if (active_out) *active_out = (sector->sector.use_nup && sector->sector.use_ndn) ? 1 : 0;
+        if (nup_out) *nup_out = sector->sector.nup;
+        if (ndn_out) *ndn_out = sector->sector.ndn;
+        return QKRYLOV_SUCCESS;
+    } catch (...) {
+        return QKRYLOV_ERROR_EXCEPTION;
+    }
+}
+
+int qkrylov_sector_get_n(qkrylov_sector_h sector, int* n_out, int* active_out) {
+    if (!sector) return QKRYLOV_ERROR_INVALID_ARG;
+    try {
+        if (active_out) *active_out = sector->sector.use_n ? 1 : 0;
+        if (n_out) *n_out = sector->sector.n;
+        return QKRYLOV_SUCCESS;
+    } catch (...) {
+        return QKRYLOV_ERROR_EXCEPTION;
+    }
+}
+
+int qkrylov_sector_get_nb(qkrylov_sector_h sector, int* nb_out, int* active_out) {
+    if (!sector) return QKRYLOV_ERROR_INVALID_ARG;
+    try {
+        if (active_out) *active_out = sector->sector.use_nb ? 1 : 0;
+        if (nb_out) *nb_out = sector->sector.nb;
+        return QKRYLOV_SUCCESS;
+    } catch (...) {
+        return QKRYLOV_ERROR_EXCEPTION;
+    }
+}
+
 /* Basis API */
 qkrylov_basis_h qkrylov_spinhalf_basis_create(int num_sites, qkrylov_sector_h sector) {
     try {

@@ -32,7 +32,6 @@ set(QKRYLOV_SOURCES
     src/solvers/davidson.cpp
     src/solvers/dynamics.cpp
     src/solvers/ftlm.cpp
-    src/c_api.cpp
 )
 
 add_library(qkrylov_fp32 OBJECT ${QKRYLOV_SOURCES})
@@ -45,7 +44,7 @@ target_compile_definitions(qkrylov_fp64 PUBLIC QKRYLOV_DOUBLE_PRECISION)
 target_compile_features(qkrylov_fp64 PUBLIC cxx_std_20)
 set_target_properties(qkrylov_fp64 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_library(qkrylov $<TARGET_OBJECTS:qkrylov_fp32> $<TARGET_OBJECTS:qkrylov_fp64>)
+add_library(qkrylov $<TARGET_OBJECTS:qkrylov_fp32> $<TARGET_OBJECTS:qkrylov_fp64> src/c_api.cpp)
 add_library(qkrylov::qkrylov ALIAS qkrylov)
 target_compile_features(qkrylov PUBLIC cxx_std_20)
 set_target_properties(qkrylov PROPERTIES POSITION_INDEPENDENT_CODE ON)
