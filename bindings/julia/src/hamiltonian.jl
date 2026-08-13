@@ -75,3 +75,8 @@ function diagonal(H::MatrixFreeHamiltonian)::Vector{Float64}
     end
     return Vector{Float64}(diag_buf)
 end
+
+function Base.show(io::IO, H::MatrixFreeHamiltonian)
+    d = dimension(H)
+    print(io, "MatrixFreeHamiltonian(dim = $d, basis = $(H.basis))")
+end

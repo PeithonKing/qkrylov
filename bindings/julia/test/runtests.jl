@@ -27,12 +27,19 @@ using QuantumKrylov
     @testset "Site Types" begin
         s1 = SpinHalfSite()
         @test s1.ptr != C_NULL
+        @test string(s1) == "SpinHalfSite(dim = 2, states = [↑, ↓])"
+
         s2 = FermionSite()
         @test s2.ptr != C_NULL
+        @test string(s2) == "FermionSite(dim = 2, states = [0, 1])"
+
         s3 = HubbardSite()
         @test s3.ptr != C_NULL
+        @test string(s3) == "HubbardSite(dim = 4, states = [0, ↑, ↓, ↑↓])"
+
         s4 = TJSite()
         @test s4.ptr != C_NULL
+        @test string(s4) == "TJSite(dim = 3, states = [0, ↑, ↓])"
     end
 
     @testset "Basis & Sectors & Lookups" begin
@@ -41,6 +48,7 @@ using QuantumKrylov
         @test dimension(b_full) == 16
         @test size(b_full) == (16, 16)
         @test length(b_full) == 16
+        @test string(b_full) == "SpinHalfBasis(sites = 4, dim = 16)"
 
         # State lookups
         st0 = state(b_full, 0)

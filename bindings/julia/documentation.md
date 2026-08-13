@@ -67,15 +67,19 @@ A `Site` object defines the physical degree of freedom at each lattice site, spe
 ```julia
 # Spin-1/2 local degree of freedom (dimension 2)
 site_spin = SpinHalfSite()
+println(site_spin) # Outputs: SpinHalfSite(dim = 2, states = [↑, ↓])
 
 # Spinless fermion local degree of freedom (dimension 2)
 site_fermion = FermionSite()
+println(site_fermion) # Outputs: FermionSite(dim = 2, states = [0, 1])
 
 # Spinful Fermi-Hubbard electron site (dimension 4)
 site_hubbard = HubbardSite()
+println(site_hubbard) # Outputs: HubbardSite(dim = 4, states = [0, ↑, ↓, ↑↓])
 
 # t-J model site with constrained double-occupancy (dimension 3)
 site_tj = TJSite()
+println(site_tj) # Outputs: TJSite(dim = 3, states = [0, ↑, ↓])
 ```
 
 ### Available Site Types & Default Values
@@ -99,13 +103,13 @@ A `Basis` represents the complete many-body Hilbert space constructed across $N$
 ```julia
 # 1. Construct a full (unconstrained) 4-site spin-1/2 basis
 basis_full = SpinHalfBasis(4)
-println("Full Dimension: ", dimension(basis_full)) # 2^4 = 16
+println(basis_full) # Outputs: SpinHalfBasis(sites = 4, dim = 16)
 
 # 2. Construct a 4-site spin-1/2 basis restricted to Sz = 0 sector
 sec = Sector()
 set_sz!(sec, 0)
 basis_sec = SpinHalfBasis(4, sec)
-println("Symmetry Sector Dimension: ", dimension(basis_sec)) # 6
+println(basis_sec) # Outputs: SpinHalfBasis(sites = 4, dim = 6, sector = Sector(2*Sz = 0))
 
 # 3. Query properties
 N = nsites(basis_sec) # 4
