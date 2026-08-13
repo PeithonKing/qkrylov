@@ -98,11 +98,17 @@ int qkrylov_sector_set_sz(qkrylov_sector_h sector, int sz2);
 ```
 Enforces total $S^z$ conservation sector where `sz2` is $2 \times S^z$ (e.g., `sz2 = 0` for $S^z = 0$). Returns `QKRYLOV_SUCCESS` on success.
 
-#### `qkrylov_sector_set_hubbard_particles`
+#### `qkrylov_sector_set_n`
 ```c
-int qkrylov_sector_set_hubbard_particles(qkrylov_sector_h sector, int nup, int ndn);
+int qkrylov_sector_set_n(qkrylov_sector_h sector, int n);
 ```
-Enforces particle number conservation for electron systems ($N_\uparrow$ and $N_\downarrow$).
+Enforces total particle number conservation for spinless fermion systems.
+
+#### `qkrylov_sector_set_nb`
+```c
+int qkrylov_sector_set_nb(qkrylov_sector_h sector, int nb);
+```
+Enforces total boson particle number conservation.
 
 ---
 
@@ -150,6 +156,24 @@ Returns the total dimension of the Hilbert space basis.
 int qkrylov_basis_nsites(qkrylov_basis_h basis);
 ```
 Returns the number of lattice sites in the basis.
+
+#### `qkrylov_basis_state`
+```c
+uint64_t qkrylov_basis_state(qkrylov_basis_h basis, uint64_t index);
+```
+Returns the integer bitstring representation of the basis state at zero-based `index`.
+
+#### `qkrylov_basis_index`
+```c
+int64_t qkrylov_basis_index(qkrylov_basis_h basis, uint64_t state_bitstring);
+```
+Returns the zero-based basis index for `state_bitstring`, or `-1` if the state does not belong to the sector basis.
+
+#### `qkrylov_basis_contains`
+```c
+int qkrylov_basis_contains(qkrylov_basis_h basis, uint64_t state_bitstring);
+```
+Returns `1` if `state_bitstring` belongs to the sector basis, or `0` otherwise.
 
 ---
 
@@ -209,6 +233,13 @@ int qkrylov_opsum_add_term_2body(qkrylov_opsum_h opsum, float coeff_real, float 
 ```
 Adds a two-body operator interaction term (e.g. $J \cdot S_i^z S_j^z$ or $\frac{J}{2} S_i^+ S_j^-$).
 
+#### `qkrylov_opsum_add_term_nbody`
+```c
+int qkrylov_opsum_add_term_nbody(qkrylov_opsum_h opsum, float coeff_real, float coeff_imag,
+                                 int n_factors, const char** ops, const int* sites);
+```
+Adds an arbitrary $N$-body operator interaction term (e.g. 3-body chiral term $S_i^x S_j^y S_k^z$ or 4-body ring exchange).
+
 ---
 
 ### 5. Matrix-Free Hamiltonian API
@@ -250,11 +281,17 @@ int qkrylov_hamiltonian_apply_complex(qkrylov_hamiltonian_h h,
 ```
 Performs **direct zero-copy** matrix-vector multiplication where `x_complex` and `y_complex` are contiguous arrays of $2 \times \text{dimension()}$ floats `[re, im, re, im...]`.
 
+#### `qkrylov_hamiltonian_diagonal`
+```c
+int qkrylov_hamiltonian_diagonal(qkrylov_hamiltonian_h h, float* diag_out);
+```
+Extracts the matrix-free diagonal elements $H_{ii}$ into `diag_out` (caller-allocated array of size `dimension()`).
+
 ---
 
 ### 6. Solvers API
 
-#### `qkrylov_lanczos_ground_state`
+#### `qkrylov_lanczos_ground_state` & `qkrylov_lanczos_ground_state_complex`
 ```c
 typedef struct {
     float energy;
@@ -264,8 +301,62 @@ int qkrylov_lanczos_ground_state(qkrylov_hamiltonian_h h,
                                  int maxiter,
                                  float tol,
                                  qkrylov_lanczos_result_c_t* result);
+
+int qkrylov_lanczos_ground_state_complex(qkrylov_hamiltonian_h h,
+                                         int maxiter,
+                                         float tol,
+                                         qkrylov_lanczos_result_c_t* result,
+                                         float* eigenvector_complex);
 ```
-Computes the ground state energy of the Hamiltonian using the Lanczos algorithm. Stores the result in `result`.
+Computes the ground state energy and optional ground state eigenvector (wavefunction) copied zero-copy into caller-allocated `eigenvector_complex` (size $2 \times \text{dimension()}$).
+
+#### `qkrylov_davidson_lowest_complex`
+```c
+int qkrylov_davidson_lowest_complex(qkrylov_hamiltonian_h h,
+                                    int n_eig,
+                                    int max_subspace,
+                                    float tol,
+                                    float* eigenvalues_out,
+                                    float* eigenvectors_complex_out);
+```
+Computes the $N_{\text{eig}}$ lowest eigenvalues and optional $N_{\text{eig}}$ orthogonal eigenvectors via Davidson iteration.
+
+#### `qkrylov_continued_fraction_coeffs_complex` & `qkrylov_evaluate_spectral_function`
+```c
+int qkrylov_continued_fraction_coeffs_complex(qkrylov_hamiltonian_h h,
+                                              const float* phi0_complex,
+                                              int n_iter,
+                                              float* alphas_out,
+                                              float* betas_out,
+                                              float* norm_phi0_out,
+                                              int* num_coeffs_out);
+
+float qkrylov_evaluate_spectral_function(const float* alphas,
+                                         const float* betas,
+                                         size_t n,
+                                         float norm_phi0,
+                                         float omega,
+                                         float E0,
+                                         float eta);
+```
+Computes Lanczos tridiagonal continued-fraction coefficients ($\alpha_i, \beta_i$) starting from $|\phi_0\rangle$ and evaluates dynamical structure factors $I(\omega)$.
+
+#### `qkrylov_ftlm`
+```c
+typedef struct {
+    float beta;                /* Inverse temperature beta = 1 / (kB * T) */
+    float partition_function;  /* Thermal partition function Z(beta) */
+    float internal_energy;     /* Internal energy E(beta) */
+    float specific_heat;       /* Specific heat Cv(beta) */
+} qkrylov_ftlm_result_c_t;
+
+int qkrylov_ftlm(qkrylov_hamiltonian_h h,
+                 float beta,
+                 int n_random,
+                 int n_steps,
+                 qkrylov_ftlm_result_c_t* result);
+```
+Computes thermodynamic quantities ($Z(\beta), E(\beta), C_v(\beta)$) using the Finite Temperature Lanczos Method.
 
 ---
 

@@ -32,6 +32,7 @@ set(QKRYLOV_SOURCES
     src/solvers/davidson.cpp
     src/solvers/dynamics.cpp
     src/solvers/ftlm.cpp
+    src/c_api.cpp
 )
 
 add_library(qkrylov_fp32 OBJECT ${QKRYLOV_SOURCES})
