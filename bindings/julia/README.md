@@ -61,7 +61,6 @@ sec = Sector()
 set_sz!(sec, 0)
 
 basis = SpinHalfBasis(4, sec)
-site  = SpinHalfSite()
 
 println("Hilbert space dimension: ", dimension(basis)) # Outputs 6
 
@@ -74,13 +73,11 @@ op = OpSum()
 N = 4
 for i in 0:(N - 1)
     next_i = mod(i + 1, N)
-    add_term!(op, 1.0, "Sz", i, "Sz", next_i)
-    add_term!(op, 0.5, "Sp", i, "Sm", next_i)
-    add_term!(op, 0.5, "Sm", i, "Sp", next_i)
+    op += 1.0 * Sz(i) * Sz(next_i) + 0.5 * (Sp(i) * Sm(next_i) + Sm(i) * Sp(next_i))
 end
 
-# 3. Create MatrixFreeHamiltonian
-H = MatrixFreeHamiltonian(basis, site, op)
+# 3. Create MatrixFreeHamiltonian (site is automatically inferred from basis)
+H = MatrixFreeHamiltonian(basis, op)
 
 # 4. Perform matrix-vector multiplication (y = H * x)
 x = zeros(ComplexF64, dimension(basis))

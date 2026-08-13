@@ -90,6 +90,11 @@ using QuantumKrylov
         H = MatrixFreeHamiltonian(basis, site, op)
         @test dimension(H) == 8
 
+        # Test 2-argument convenience constructor MatrixFreeHamiltonian(basis, opsum)
+        H_auto = MatrixFreeHamiltonian(basis, op)
+        @test dimension(H_auto) == 8
+        @test diagonal(H_auto) == diagonal(H)
+
         # Extract diagonal
         diag_val = diagonal(H)
         @test length(diag_val) == 8
@@ -99,6 +104,22 @@ using QuantumKrylov
         y = H * x
         # Diagonal term for |111>: 1.0*(0.25) + 0.5*(0.125) = 0.3125
         @test isapprox(y[8], 0.3125 + 0.0im, atol=1e-6)
+    end
+
+    @testset "Operator Generator Functions & Arithmetic Overloading" begin
+        # Test 1.0 * Sz(0) * Sz(1) + 0.5 * (Sp(0)*Sm(1) + Sm(0)*Sp(1))
+        N = 4
+        basis = SpinHalfBasis(N)
+        op = OpSum()
+
+        for i in 0:(N-1)
+            next_i = mod(i + 1, N)
+            op += 1.0 * Sz(i) * Sz(next_i) + 0.5 * (Sp(i) * Sm(next_i) + Sm(i) * Sp(next_i))
+        end
+
+        H = MatrixFreeHamiltonian(basis, op)
+        res = lanczos_ground_state(H, maxiter=50, tol=1e-12)
+        @test isapprox(res.energy, -2.0, atol=1e-6)
     end
 
     @testset "Lanczos Ground State Solver" begin

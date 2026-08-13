@@ -26,6 +26,19 @@ mutable struct MatrixFreeHamiltonian
     end
 end
 
+default_site(b::SpinHalfBasis) = SpinHalfSite()
+default_site(b::FermionBasis)  = FermionSite()
+default_site(b::HubbardBasis)  = HubbardSite()
+default_site(b::TJBasis)       = TJSite()
+function default_site(b::AbstractBasis)
+    error("Cannot automatically infer Site model for basis type $(typeof(b)). Please provide the site argument explicitly: MatrixFreeHamiltonian(basis, site, opsum)")
+end
+
+function MatrixFreeHamiltonian(basis::AbstractBasis, opsum::OpSum)
+    site = default_site(basis)
+    return MatrixFreeHamiltonian(basis, site, opsum)
+end
+
 function dimension(H::MatrixFreeHamiltonian)::UInt64
     return ccall((:qkrylov_hamiltonian_dimension, libqkrylov), UInt64, (Ptr{Cvoid},), H.ptr)
 end

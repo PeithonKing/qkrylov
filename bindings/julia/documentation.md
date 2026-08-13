@@ -147,3 +147,105 @@ is_present = st0 in basis_sec # Returns true
 | `bitstring in b` | `bitstring::Unsigned`, `b::AbstractBasis` | `Bool` | Returns `true` if `bitstring` state belongs to basis `b`. |
 | `size(b)` | `b::AbstractBasis` | `(Int, Int)` | Returns `(dim, dim)` tuple. |
 | `length(b)` | `b::AbstractBasis` | `Int` | Returns total dimension `dim`. |
+
+---
+
+## 4. Operator Terms (`OpSum`) & Matrix-Free Hamiltonians (`MatrixFreeHamiltonian`)
+
+### 4.1 Operator Terms (`OpSum`)
+
+#### What is an `OpSum`?
+`OpSum` stores operator term expressions (such as $\hat{S}_i^z \hat{S}_j^z$, $\hat{S}_i^+ \hat{S}_j^-$, or $c_i^\dagger c_j$) used to construct a Hamiltonian or observable operator. Terms are built using local operator string names (e.g. `"Sz"`, `"Sp"`, `"Sm"`, `"n"`, `"c"`, `"cdag"`) and 0-indexed site numbers.
+
+#### How to use `OpSum`
+
+```julia
+# 1. Create an empty OpSum
+op = OpSum()
+
+# 2. Operator Arithmetic Syntax (Recommended)
+# Build 1D Heisenberg model terms directly using operator generators:
+for i in 0:3
+    next_i = mod(i + 1, 4)
+    op += 1.0 * Sz(i) * Sz(next_i) + 0.5 * (Sp(i) * Sm(next_i) + Sm(i) * Sp(next_i))
+end
+
+# 3. Add a 3-body (N-body) term using operator generators
+op += 0.25 * Sz(0) * Sz(1) * Sz(2)
+
+# 4. Alternatively, use string-based add_term! functions:
+add_term!(op, 1.0, "Sz", 0, "Sz", 1)
+add_term!(op, 0.5, ["Sz", "Sz", "Sz"], [0, 1, 2])
+
+# 5. Clear all terms
+clear!(op)
+```
+
+#### Operator Generators & Arithmetic Overloads
+
+| Generator / Syntax | Arguments | Description |
+| :--- | :--- | :--- |
+| `Sz(site)`, `Sp(site)`, `Sm(site)` | `site::Integer` | Spin-1/2 operators ($S^z, S^+, S^-$) at 0-indexed `site`. |
+| `Sx(site)`, `Sy(site)` | `site::Integer` | Spin-1/2 operators ($S^x, S^y$) at 0-indexed `site`. |
+| `n(site)` | `site::Integer` | Particle number operator ($n_i$) at 0-indexed `site`. |
+| `c(site)`, `cdag(site)` | `site::Integer` | Fermionic annihilation ($c_i$) and creation ($c_i^\dagger$) operators at 0-indexed `site`. |
+| `coeff * term * ...` | `coeff::Number`, `term::OpTerm` | Multiplies operator factors and scales coupling coefficient. |
+| `term1 + term2` | `term1`, `term2` | Combines operator terms into an `OpExpr` term collection. |
+| `op += expr` | `op::OpSum`, `expr::OpExpr` | Appends operator terms into `OpSum`. |
+
+#### `OpSum` Functions & Default Values
+
+| Function | Parameters | Default Values | Description |
+| :--- | :--- | :--- | :--- |
+| `OpSum()` | None | Empty `OpSum` handle | Constructs a new empty operator sum container. |
+| `add_term!(op, coeff, op1, site1)` | `op::OpSum`<br>`coeff::Number`<br>`op1::AbstractString`<br>`site1::Integer` | None (required) | Adds 1-body term $\text{coeff} \cdot \hat{O}_{1, \text{site1}}$. Returns `op`. |
+| `add_term!(op, coeff, op1, site1, op2, site2)` | `op::OpSum`<br>`coeff::Number`<br>`op1::AbstractString`<br>`site1::Integer`<br>`op2::AbstractString`<br>`site2::Integer` | None (required) | Adds 2-body term $\text{coeff} \cdot \hat{O}_{1, \text{site1}} \hat{O}_{2, \text{site2}}$. Returns `op`. |
+| `add_term!(op, coeff, ops, sites)` | `op::OpSum`<br>`coeff::Number`<br>`ops::Vector{<:AbstractString}`<br>`sites::Vector{<:Integer}` | None (required) | Adds general $N$-body term $\text{coeff} \cdot \prod_{k=1}^N \hat{O}_{k, \text{sites}[k]}$. Returns `op`. |
+| `clear!(op)` | `op::OpSum` | None | Clears all added operator terms from `op`. Returns `op`. |
+
+---
+
+### 4.2 Matrix-Free Hamiltonian (`MatrixFreeHamiltonian`)
+
+#### What is a `MatrixFreeHamiltonian`?
+A `MatrixFreeHamiltonian` evaluates matrix-vector products $y = H \cdot x$ on-the-fly without ever storing the full $N \times N$ matrix in memory. It combines a `Basis`, a `Site` model, and an `OpSum`.
+
+#### How to use `MatrixFreeHamiltonian`
+
+```julia
+# 1. Setup basis and opsum
+basis = SpinHalfBasis(4)
+op    = OpSum()
+add_term!(op, 1.0, "Sz", 0, "Sz", 1)
+
+# 2. Construct MatrixFreeHamiltonian (site is automatically inferred from basis)
+H = MatrixFreeHamiltonian(basis, op)
+println(H) # Outputs: MatrixFreeHamiltonian(dim = 16, basis = SpinHalfBasis(sites = 4, dim = 16))
+
+# Alternatively, explicitly specify the site model:
+site = SpinHalfSite()
+H_explicit = MatrixFreeHamiltonian(basis, site, op)
+
+# 3. Perform matrix-vector multiplication (y = H * x)
+x = zeros(ComplexF64, dimension(H))
+x[1] = 1.0 + 0.0im
+y = H * x # Vector{ComplexF64} of length dimension(H)
+
+# 4. Extract diagonal elements H_ii without matrix allocation
+diag_H = diagonal(H) # Vector{Float64} of length dimension(H)
+
+# 5. Query dimensions
+dim = dimension(H) # 16
+sz  = size(H)      # (16, 16)
+```
+
+#### `MatrixFreeHamiltonian` Functions & Operations
+
+| Function / Syntax | Arguments | Return Type | Description |
+| :--- | :--- | :--- | :--- |
+| `MatrixFreeHamiltonian(basis, opsum)` | `basis::AbstractBasis`<br>`opsum::OpSum` | `MatrixFreeHamiltonian` | **Convenience Constructor**. Automatically infers the matching default `Site` model (`SpinHalfSite`, `FermionSite`, `HubbardSite`, or `TJSite`) from the basis type. |
+| `MatrixFreeHamiltonian(basis, site, opsum)` | `basis::AbstractBasis`<br>`site::AbstractSite`<br>`opsum::OpSum` | `MatrixFreeHamiltonian` | **Explicit Constructor**. Constructs a matrix-free Hamiltonian operator with a specified site model. |
+| `H * x` | `H::MatrixFreeHamiltonian`<br>`x::AbstractVector{<:Number}` | `Vector{ComplexF64}` | Performs zero-copy matrix-vector multiplication $y = H \cdot x$. Length of `x` must equal `dimension(H)`. |
+| `diagonal(H)` | `H::MatrixFreeHamiltonian` | `Vector{Float64}` | Computes and returns matrix-free diagonal elements $H_{ii}$. |
+| `dimension(H)` | `H::MatrixFreeHamiltonian` | `UInt64` | Returns total matrix dimension of `H`. |
+| `size(H)` | `H::MatrixFreeHamiltonian` | `(Int, Int)` | Returns `(dim, dim)` matrix shape tuple. |

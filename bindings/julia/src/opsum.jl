@@ -72,3 +72,73 @@ function add_term!(op::OpSum, coeff::Number, ops::AbstractVector{<:AbstractStrin
     status != QKRYLOV_SUCCESS && error("Failed to add $n_factors-body term to OpSum (status code $status)")
     return op
 end
+
+# -----------------------------------------------------------------------------
+# Operator Term Arithmetic & Generator Functions (Sz, Sp, Sm, Sx, Sy, n, c, cdag)
+# -----------------------------------------------------------------------------
+
+struct OpTerm
+    coeff::ComplexF64
+    factors::Vector{Tuple{String, Int}}
+end
+
+struct OpExpr
+    terms::Vector{OpTerm}
+end
+
+# Site Operator Generators
+Sz(site::Integer)   = OpTerm(1.0, [("Sz", Int(site))])
+Sp(site::Integer)   = OpTerm(1.0, [("Sp", Int(site))])
+Sm(site::Integer)   = OpTerm(1.0, [("Sm", Int(site))])
+Sx(site::Integer)   = OpTerm(1.0, [("Sx", Int(site))])
+Sy(site::Integer)   = OpTerm(1.0, [("Sy", Int(site))])
+n(site::Integer)    = OpTerm(1.0, [("n",  Int(site))])
+c(site::Integer)    = OpTerm(1.0, [("c",  Int(site))])
+cdag(site::Integer) = OpTerm(1.0, [("cdag", Int(site))])
+
+# Scaling (*)
+Base.:*(a::Number, t::OpTerm) = OpTerm(ComplexF64(a) * t.coeff, t.factors)
+Base.:*(t::OpTerm, a::Number) = OpTerm(t.coeff * ComplexF64(a), t.factors)
+
+Base.:*(a::Number, expr::OpExpr) = OpExpr([a * t for t in expr.terms])
+Base.:*(expr::OpExpr, a::Number) = OpExpr([t * a for t in expr.terms])
+
+# Unary minus (-)
+Base.:-(t::OpTerm) = OpTerm(-t.coeff, t.factors)
+Base.:-(expr::OpExpr) = OpExpr([-t for t in expr.terms])
+
+# Term multiplication (*)
+Base.:*(t1::OpTerm, t2::OpTerm) = OpTerm(t1.coeff * t2.coeff, vcat(t1.factors, t2.factors))
+
+# Addition (+)
+Base.:+(t1::OpTerm, t2::OpTerm) = OpExpr([t1, t2])
+Base.:+(expr::OpExpr, t::OpTerm) = OpExpr(vcat(expr.terms, [t]))
+Base.:+(t::OpTerm, expr::OpExpr) = OpExpr(vcat([t], expr.terms))
+Base.:+(e1::OpExpr, e2::OpExpr)   = OpExpr(vcat(e1.terms, e2.terms))
+
+# Subtraction (-)
+Base.:-(t1::OpTerm, t2::OpTerm) = t1 + (-t2)
+Base.:-(expr::OpExpr, t::OpTerm) = expr + (-t)
+Base.:-(t::OpTerm, expr::OpExpr) = t + (-expr)
+Base.:-(e1::OpExpr, e2::OpExpr)   = e1 + (-e2)
+
+# Adding terms/expressions into OpSum
+function add_term!(op::OpSum, t::OpTerm)
+    ops = String[f[1] for f in t.factors]
+    sites = Int[f[2] for f in t.factors]
+    add_term!(op, t.coeff, ops, sites)
+    return op
+end
+
+function add_term!(op::OpSum, expr::OpExpr)
+    for t in expr.terms
+        add_term!(op, t)
+    end
+    return op
+end
+
+# OpSum arithmetic (os += expr, os -= expr)
+Base.:+(op::OpSum, t::OpTerm) = add_term!(op, t)
+Base.:+(op::OpSum, expr::OpExpr) = add_term!(op, expr)
+Base.:-(op::OpSum, t::OpTerm) = add_term!(op, -t)
+Base.:-(op::OpSum, expr::OpExpr) = add_term!(op, -expr)
