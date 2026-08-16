@@ -391,3 +391,51 @@ Cv = ftlm_res.specific_heat      # Specific heat Cv(beta)
 | `res.partition_function` | `Float64` | - | Partition function $Z(\beta)$. |
 | `res.internal_energy` | `Float64` | - | Internal energy $E(\beta)$. |
 | `res.specific_heat` | `Float64` | - | Specific heat $C_v(\beta)$. |
+
+---
+
+## 6. Multithreading & Hardware Resource Control
+
+`QuantumKrylov.jl` wraps a high-performance C++ engine accelerated by **Kokkos OpenMP** parallelism.
+
+### 6.1 Julia Runtime Threads vs. OpenMP Backend Threads
+
+Julia thread management and native C++ OpenMP thread management operate as **independent thread pools**:
+
+- **Julia Task Threads (`julia -t N` / `Threads.nthreads()`)**: Governs concurrency inside Julia scripts (e.g. `Threads.@threads`, `Threads.@spawn`).
+- **OpenMP C++ Worker Threads (`OMP_NUM_THREADS=M`)**: Governs parallelism inside C++ kernels (matrix-free CSR apply $y = H \cdot x$, parallel dot products, norms, and Krylov solver iterations).
+
+> **Important**: Starting Julia with `julia -t 1` only constrains Julia's internal thread count. If `OMP_NUM_THREADS` is unset, OpenMP will automatically spawn threads on **all available CPU cores** during matrix-free operations and Krylov iterations.
+
+### 6.2 Setting OpenMP Worker Count
+
+#### Terminal Launch
+```bash
+# Force single-core execution (1 Julia thread, 1 OpenMP thread)
+OMP_NUM_THREADS=1 julia -t 1
+
+# Multi-core C++ execution with single-threaded Julia driver
+OMP_NUM_THREADS=8 julia -t 1
+```
+
+#### Inside Julia Scripts
+```julia
+# Must be set before QuantumKrylov initializes the C++ backend
+ENV["OMP_NUM_THREADS"] = "4"
+using QuantumKrylov
+```
+
+### 6.3 Concurrency Patterns & Best Practices
+
+| Use Case | Recommended Settings | Rationale |
+| :--- | :--- | :--- |
+| **Large Matrix Solver** (Single calculation) | `OMP_NUM_THREADS=all_cores`<br>`julia -t 1` | Maximizes memory bandwidth and vector parallelism in Kokkos OpenMP kernels. |
+| **Parameter Sweeps / Parallel Search** | `OMP_NUM_THREADS=1`<br>`julia -t N` | Prevents CPU thread oversubscription and context-switching overhead from nested parallel loops. |
+
+### 6.4 OpenMP Environment Optimizations
+For optimal cache locality and NUMA performance on modern multi-core processors:
+```bash
+export OMP_PROC_BIND=spread
+export OMP_PLACES=threads
+```
+

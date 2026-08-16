@@ -20,6 +20,7 @@ The Julia interface is constructed directly on top of the binary-stable C ABI ex
     - [Davidson Eigensolver (`davidson_lowest`)](#davidson-eigensolver-davidson_lowest)
     - [Continued-Fraction Dynamics & Spectral Functions](#continued-fraction-dynamics--spectral-functions)
     - [Finite Temperature Lanczos (`ftlm`)](#finite-temperature-lanczos-ftlm)
+- [Multithreading & CPU Core Management](#multithreading--cpu-core-management)
 - [Memory Safety & Architecture](#memory-safety--architecture)
 - [Running Unit Tests](#running-unit-tests)
 
@@ -300,6 +301,51 @@ ftlm(
   - `.partition_function`: Thermal partition function $Z(\beta)$.
   - `.internal_energy`: Internal energy $E(\beta)$.
   - `.specific_heat`: Specific heat capacity $C_v(\beta)$.
+
+---
+
+## Multithreading & CPU Core Management
+
+`QuantumKrylov.jl` uses a high-performance C++ backend powered by **Kokkos with OpenMP** for multi-core CPU parallelism (matrix-free applies $y = H \cdot x$, linear algebra, and solver iterations).
+
+### Understanding Julia Threads vs. OpenMP Threads
+
+Julia task threads and C++ OpenMP threads are **completely independent**:
+
+| Thread Pool | Configured Via | Governs |
+| :--- | :--- | :--- |
+| **Julia Runtime Threads** | `julia -t N` or `JULIA_NUM_THREADS` | Julia-level concurrency (`Threads.@threads`, `Threads.@spawn`) |
+| **OpenMP C++ Threads** | `OMP_NUM_THREADS=M` | `qkrylov` C++ backend parallelism, matrix-vector products, solvers |
+
+*Note: Starting Julia with `julia -t 1` only limits Julia's internal tasks. By default, OpenMP will still detect and utilize all available CPU cores unless `OMP_NUM_THREADS` is set.*
+
+### How to Control C++ Worker Threads
+
+#### 1. From the Terminal (Recommended)
+```bash
+# Force both Julia and qkrylov to use 1 thread:
+OMP_NUM_THREADS=1 julia -t 1
+
+# Limit qkrylov C++ parallel kernels to 4 cores:
+OMP_NUM_THREADS=4 julia -t 1
+```
+
+#### 2. Inside Julia (Before Loading the Package)
+```julia
+# Set OpenMP thread count before initializing QuantumKrylov
+ENV["OMP_NUM_THREADS"] = "4"
+using QuantumKrylov
+```
+
+### Best Practices for High Performance
+
+- **Single Large System**: Use `julia -t 1` and let `OMP_NUM_THREADS` use all available physical CPU cores for maximum parallel solver throughput.
+- **Julia Parallel Parameter Sweeps (`Threads.@threads`)**: Set `OMP_NUM_THREADS=1` and `julia -t N` to prevent CPU oversubscription from nested thread pools.
+- **Recommended OpenMP Affinity**: For best cache locality and NUMA performance:
+  ```bash
+  export OMP_PROC_BIND=spread
+  export OMP_PLACES=threads
+  ```
 
 ---
 
