@@ -67,11 +67,13 @@ jobs:
           #   arch: x86_64
         python:
           - build: cp311-*
-            py_api: ""
             tag: cp311
           - build: cp312-*
-            py_api: cp312
-            tag: cp312-abi3
+            tag: cp312
+          - build: cp313-*
+            tag: cp313
+          - build: cp314-*
+            tag: cp314
 
     steps:
       - uses: actions/checkout@v4
@@ -111,14 +113,12 @@ jobs:
           CIBW_TEST_COMMAND: "python -c \"import qkrylov; print(qkrylov.__version__)\""
           CIBW_ENVIRONMENT: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
-            SKBUILD_WHEEL_PY_API=${{ matrix.python.py_api }}
           CIBW_ENVIRONMENT_MACOS: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
             MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.os == 'macos-14' && '14.0' || '13.0' }}
           CIBW_ENVIRONMENT_WINDOWS: >-
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.version.outputs.version }}
           CMAKE_PREFIX_PATH: "/opt/homebrew/opt/libomp:/usr/local/opt/libomp"
-          SKBUILD_WHEEL_PY_API: ${{ matrix.python.py_api }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -136,6 +136,10 @@ jobs:
             tag: cp311
           - build: cp312-*
             tag: cp312
+          - build: cp313-*
+            tag: cp313
+          - build: cp314-*
+            tag: cp314
 
     steps:
       - uses: actions/checkout@v4
@@ -212,7 +216,7 @@ jobs:
       - name: List wheels being published to PyPI
         run: ls -lh ./pypi_wheels/
 
-      # [TEMP DISABLED] Publish to PyPI — re-enable once GH Release + gh-pages are verified working
+      # [TEMP DISABLED] Publish to PyPI - re-enable once GH Release + gh-pages are verified working
       # - name: Publish to PyPI
       #   uses: pypa/gh-action-pypi-publish@release/v1
       #   with:
@@ -226,6 +230,8 @@ jobs:
 
       - name: Generate Custom Index (PyTorch style)
         if: github.event_name == 'release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python .github/scripts/generate_indexes.py ./wheels ${{ github.repository }} ${{ github.ref_name }}
 
