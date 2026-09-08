@@ -29,6 +29,24 @@ from .solvers import (
     correction_vector_spectral,
 )
 
+import os
+import site
+import glob
+import ctypes
+
+# Preload NVIDIA CUDA libraries from pip packages if they exist
+try:
+    for site_dir in site.getsitepackages():
+        cuda_libs = glob.glob(os.path.join(site_dir, "nvidia", "*", "lib"))
+        for lib_dir in cuda_libs:
+            for so_file in glob.glob(os.path.join(lib_dir, "*.so*")):
+                try:
+                    ctypes.CDLL(so_file, mode=os.RTLD_GLOBAL)
+                except OSError:
+                    pass
+except Exception:
+    pass
+
 from ._qkrylov_cpp import Device_FP32 as Device
 
 def find_gpu():

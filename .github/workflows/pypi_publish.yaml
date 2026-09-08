@@ -239,8 +239,7 @@ jobs:
           destination_dir: whl
           keep_files: true
 
-      # [TEMP DISABLED] Publish to PyPI - re-enable once GH Release + gh-pages are verified working
-      # - name: Publish to PyPI
-      #   uses: pypa/gh-action-pypi-publish@release/v1
-      #   with:
-      #     packages-dir: ./pypi_wheels
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: ./pypi_wheels
