@@ -19,12 +19,14 @@ option(QKRYLOV_BUILD_PYTHON "Build Python bindings" OFF)
 
 set(QKRYLOV_SOURCES
     src/basis/spinhalf_basis.cpp
+    src/basis/spin_s_basis.cpp
     src/basis/fermion_basis.cpp
     src/basis/hubbard_basis.cpp
     src/basis/tj_basis.cpp
     src/hamiltonian/matrix_free_hamiltonian.cpp
     src/operators/opsum.cpp
     src/sites/spinhalf_site.cpp
+    src/sites/spin_s_site.cpp
     src/sites/fermion_site.cpp
     src/sites/hubbard_site.cpp
     src/sites/tj_site.cpp
@@ -32,6 +34,7 @@ set(QKRYLOV_SOURCES
     src/solvers/davidson.cpp
     src/solvers/dynamics.cpp
     src/solvers/ftlm.cpp
+    src/solvers/correction_vector.cpp
 )
 
 add_library(qkrylov_fp32 OBJECT ${QKRYLOV_SOURCES})

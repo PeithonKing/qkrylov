@@ -167,6 +167,158 @@ int main() {
     qkrylov_basis_destroy(basis);
     qkrylov_sector_destroy(sec);
 
+    // 11. Test Spin-S Site C API
+    qkrylov_site_h spin1_site = qkrylov_site_create_spin_s(1.0);
+    assert(spin1_site != NULL);
+    qkrylov_site_h spinhalf_s_site = qkrylov_site_create_spin_s(0.5);
+    assert(spinhalf_s_site != NULL);
+    qkrylov_site_h spin32_site = qkrylov_site_create_spin_s(1.5);
+    assert(spin32_site != NULL);
+
+    // Invalid spin site parameters (S <= 0)
+    assert(qkrylov_site_create_spin_s(0.0) == NULL);
+    assert(qkrylov_site_create_spin_s(-1.0) == NULL);
+
+    qkrylov_site_destroy(spinhalf_s_site);
+    qkrylov_site_destroy(spin32_site);
+
+    // 12. Test Spin-S Basis C API (Unconstrained & Sz-conserved)
+    // Full basis: N = 2, S = 1.0 -> dimension = 3^2 = 9
+    qkrylov_basis_h spin1_basis_full = qkrylov_basis_create_spin_s(2, 1.0, NULL);
+    assert(spin1_basis_full != NULL);
+    assert(qkrylov_basis_dimension(spin1_basis_full) == 9);
+    assert(qkrylov_basis_nsites(spin1_basis_full) == 2);
+    qkrylov_basis_destroy(spin1_basis_full);
+
+    // Invalid basis parameters
+    assert(qkrylov_basis_create_spin_s(0, 1.0, NULL) == NULL);
+    assert(qkrylov_basis_create_spin_s(-2, 1.0, NULL) == NULL);
+    assert(qkrylov_basis_create_spin_s(2, 0.0, NULL) == NULL);
+    assert(qkrylov_basis_create_spin_s(2, -0.5, NULL) == NULL);
+
+    // Sz-conserved basis: N = 4, S = 1.0, Sz = 0
+    qkrylov_sector_h sec_spin1 = qkrylov_sector_create();
+    assert(sec_spin1 != NULL);
+    assert(qkrylov_sector_set_sz(sec_spin1, 0) == QKRYLOV_SUCCESS);
+
+    int N_s1 = 4;
+    qkrylov_basis_h spin1_basis = qkrylov_basis_create_spin_s(N_s1, 1.0, sec_spin1);
+    assert(spin1_basis != NULL);
+    uint64_t dim_s1 = qkrylov_basis_dimension(spin1_basis);
+    std::cout << "Spin-1 Basis dimension for N=4, Sz=0: " << dim_s1 << std::endl;
+    assert(dim_s1 == 19);
+    assert(qkrylov_basis_nsites(spin1_basis) == 4);
+
+    // Test state lookup in Spin-S basis
+    uint64_t s1_state0 = qkrylov_basis_state(spin1_basis, 0);
+    assert(qkrylov_basis_contains(spin1_basis, s1_state0) == 1);
+    assert(qkrylov_basis_index(spin1_basis, s1_state0) == 0);
+
+    // 13. Test Spin-1 Hamiltonian Setup
+    qkrylov_opsum_h ops_s1 = qkrylov_opsum_create();
+    assert(ops_s1 != NULL);
+    for (int i = 0; i < N_s1 - 1; ++i) {
+        assert(qkrylov_opsum_add_term_2body(ops_s1, 1.0f, 0.0f, "Sz", i, "Sz", i+1) == QKRYLOV_SUCCESS);
+        assert(qkrylov_opsum_add_term_2body(ops_s1, 0.5f, 0.0f, "Sp", i, "Sm", i+1) == QKRYLOV_SUCCESS);
+        assert(qkrylov_opsum_add_term_2body(ops_s1, 0.5f, 0.0f, "Sm", i, "Sp", i+1) == QKRYLOV_SUCCESS);
+    }
+
+    qkrylov_hamiltonian_h H_s1 = qkrylov_hamiltonian_create(spin1_basis, spin1_site, ops_s1);
+    assert(H_s1 != NULL);
+    assert(qkrylov_hamiltonian_dimension(H_s1) == dim_s1);
+
+    // Compute ground state for Spin-1 chain
+    qkrylov_lanczos_result_c_t lanczos_s1_res;
+    std::vector<std::complex<float>> psi0_s1(dim_s1);
+    int gs_status = qkrylov_lanczos_ground_state_complex(
+        H_s1, 200, 1e-5f, &lanczos_s1_res, reinterpret_cast<float*>(psi0_s1.data())
+    );
+    assert(gs_status == QKRYLOV_SUCCESS);
+    std::cout << "Spin-1 Lanczos: energy=" << lanczos_s1_res.energy
+              << ", converged=" << lanczos_s1_res.converged
+              << ", iters=" << lanczos_s1_res.iterations << std::endl;
+    assert(lanczos_s1_res.converged == 1);
+    std::cout << "Spin-1 N=4 Ground State Energy: " << lanczos_s1_res.energy << std::endl;
+
+    // Apply local operator O = Sz_0 to create excitation state |Op_psi0>
+    qkrylov_opsum_h ops_sz0 = qkrylov_opsum_create();
+    assert(ops_sz0 != NULL);
+    assert(qkrylov_opsum_add_term_1body(ops_sz0, 1.0f, 0.0f, "Sz", 0) == QKRYLOV_SUCCESS);
+    qkrylov_hamiltonian_h H_sz0 = qkrylov_hamiltonian_create(spin1_basis, spin1_site, ops_sz0);
+    assert(H_sz0 != NULL);
+
+    std::vector<std::complex<float>> op_psi0(dim_s1);
+    int apply_sz0_status = qkrylov_hamiltonian_apply_complex(
+        H_sz0,
+        reinterpret_cast<const float*>(psi0_s1.data()),
+        reinterpret_cast<float*>(op_psi0.data())
+    );
+    assert(apply_sz0_status == QKRYLOV_SUCCESS);
+
+    // 14. Test Correction Vector Spectroscopy Solver C API
+    qkrylov_correction_vector_result_c_t cv_result;
+    std::vector<std::complex<float>> cv_vec_out(dim_s1);
+    float omega = 1.5f;
+    float eta = 0.1f;
+    int cv_status = qkrylov_solver_correction_vector(
+        H_s1,
+        reinterpret_cast<const float*>(op_psi0.data()),
+        lanczos_s1_res.energy,
+        omega,
+        eta,
+        500,
+        1e-6f,
+        &cv_result,
+        reinterpret_cast<float*>(cv_vec_out.data())
+    );
+    assert(cv_status == QKRYLOV_SUCCESS);
+    assert(cv_result.converged == 1);
+    assert(cv_result.iterations > 0);
+    assert(cv_result.spectral_function >= 0.0f);
+    std::cout << "C API Correction Vector Result: converged=" << cv_result.converged
+              << ", iters=" << cv_result.iterations
+              << ", S(omega=" << omega << ")=" << cv_result.spectral_function << std::endl;
+
+    // Check correction vector norm
+    float cv_norm = 0.0f;
+    for (size_t i = 0; i < dim_s1; ++i) {
+        cv_norm += std::norm(cv_vec_out[i]);
+    }
+    assert(cv_norm > 0.0f);
+
+    // Test with NULL output vector (only compute spectral function)
+    qkrylov_correction_vector_result_c_t cv_result_no_vec;
+    int cv_status2 = qkrylov_solver_correction_vector(
+        H_s1,
+        reinterpret_cast<const float*>(op_psi0.data()),
+        lanczos_s1_res.energy,
+        omega,
+        eta,
+        500,
+        1e-6f,
+        &cv_result_no_vec,
+        NULL
+    );
+    assert(cv_status2 == QKRYLOV_SUCCESS);
+    assert(cv_result_no_vec.converged == 1);
+    assert(std::abs(cv_result_no_vec.spectral_function - cv_result.spectral_function) < 1e-4f);
+
+    // Test error handling for correction vector solver
+    assert(qkrylov_solver_correction_vector(NULL, reinterpret_cast<const float*>(op_psi0.data()), 0.0f, omega, eta, 100, 1e-6f, &cv_result, NULL) == QKRYLOV_ERROR_INVALID_ARG);
+    assert(qkrylov_solver_correction_vector(H_s1, NULL, 0.0f, omega, eta, 100, 1e-6f, &cv_result, NULL) == QKRYLOV_ERROR_INVALID_ARG);
+    assert(qkrylov_solver_correction_vector(H_s1, reinterpret_cast<const float*>(op_psi0.data()), 0.0f, omega, eta, 100, 1e-6f, NULL, NULL) == QKRYLOV_ERROR_INVALID_ARG);
+    assert(qkrylov_solver_correction_vector(H_s1, reinterpret_cast<const float*>(op_psi0.data()), 0.0f, omega, eta, 0, 1e-6f, &cv_result, NULL) == QKRYLOV_ERROR_INVALID_ARG);
+    assert(qkrylov_solver_correction_vector(H_s1, reinterpret_cast<const float*>(op_psi0.data()), 0.0f, omega, eta, -10, 1e-6f, &cv_result, NULL) == QKRYLOV_ERROR_INVALID_ARG);
+
+    // Cleanup Spin-1 handles
+    qkrylov_hamiltonian_destroy(H_sz0);
+    qkrylov_opsum_destroy(ops_sz0);
+    qkrylov_hamiltonian_destroy(H_s1);
+    qkrylov_opsum_destroy(ops_s1);
+    qkrylov_site_destroy(spin1_site);
+    qkrylov_basis_destroy(spin1_basis);
+    qkrylov_sector_destroy(sec_spin1);
+
     std::cout << "C API tests passed successfully!" << std::endl;
     return 0;
 }

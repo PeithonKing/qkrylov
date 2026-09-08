@@ -8,6 +8,14 @@
 extern "C" {
 #endif
 
+#ifndef QKRYLOV_API
+#if defined(_WIN32) || defined(__CYGWIN__)
+#define QKRYLOV_API
+#else
+#define QKRYLOV_API __attribute__((visibility("default")))
+#endif
+#endif
+
 /* -----------------------------------------------------------------------------
  * Return Error Codes
  * ----------------------------------------------------------------------------- */
@@ -18,10 +26,15 @@ extern "C" {
 /* -----------------------------------------------------------------------------
  * Opaque Handles
  * ----------------------------------------------------------------------------- */
+typedef struct qkrylov_sector_t       qkrylov_sector_t;
 typedef struct qkrylov_sector_t*      qkrylov_sector_h;
+typedef struct qkrylov_basis_t        qkrylov_basis_t;
 typedef struct qkrylov_basis_t*       qkrylov_basis_h;
+typedef struct qkrylov_site_t         qkrylov_site_t;
 typedef struct qkrylov_site_t*        qkrylov_site_h;
+typedef struct qkrylov_opsum_t        qkrylov_opsum_t;
 typedef struct qkrylov_opsum_t*       qkrylov_opsum_h;
+typedef struct qkrylov_hamiltonian_t  qkrylov_hamiltonian_t;
 typedef struct qkrylov_hamiltonian_t* qkrylov_hamiltonian_h;
 
 /* -----------------------------------------------------------------------------
@@ -42,6 +55,7 @@ int              qkrylov_sector_get_nb(qkrylov_sector_h sector, int* nb_out, int
  * Basis API
  * ----------------------------------------------------------------------------- */
 qkrylov_basis_h  qkrylov_spinhalf_basis_create(int num_sites, qkrylov_sector_h sector);
+QKRYLOV_API qkrylov_basis_h qkrylov_basis_create_spin_s(int N, double S, const qkrylov_sector_t* sector);
 qkrylov_basis_h  qkrylov_fermion_basis_create(int num_sites, qkrylov_sector_h sector);
 qkrylov_basis_h  qkrylov_hubbard_basis_create(int num_sites, qkrylov_sector_h sector);
 qkrylov_basis_h  qkrylov_tj_basis_create(int num_sites, qkrylov_sector_h sector);
@@ -56,6 +70,7 @@ int              qkrylov_basis_contains(qkrylov_basis_h basis, uint64_t state_bi
  * Site API
  * ----------------------------------------------------------------------------- */
 qkrylov_site_h   qkrylov_spinhalf_site_create(void);
+QKRYLOV_API qkrylov_site_h qkrylov_site_create_spin_s(double S);
 qkrylov_site_h   qkrylov_fermion_site_create(void);
 qkrylov_site_h   qkrylov_hubbard_site_create(void);
 qkrylov_site_h   qkrylov_tj_site_create(void);
@@ -178,6 +193,26 @@ int qkrylov_ftlm(qkrylov_hamiltonian_h h,
                  int n_random,
                  int n_steps,
                  qkrylov_ftlm_result_c_t* result);
+
+/* Correction Vector Spectroscopy Result */
+typedef struct {
+    float spectral_function;
+    int iterations;
+    int converged;
+} qkrylov_correction_vector_result_c_t;
+
+/* Correction vector spectroscopy solver */
+QKRYLOV_API int qkrylov_solver_correction_vector(
+    qkrylov_hamiltonian_h h,
+    const float* op_psi0_complex,
+    float e0,
+    float omega,
+    float eta,
+    int max_iter,
+    float tol,
+    qkrylov_correction_vector_result_c_t* result,
+    float* correction_vector_out_complex
+);
 
 #ifdef __cplusplus
 }

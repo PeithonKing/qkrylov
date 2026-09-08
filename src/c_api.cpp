@@ -8,8 +8,10 @@
 #include "qkrylov/basis/fermion_basis.hpp"
 #include "qkrylov/basis/hubbard_basis.hpp"
 #include "qkrylov/basis/tj_basis.hpp"
+#include "qkrylov/basis/spin_s_basis.hpp"
 #include "qkrylov/sites/site.hpp"
 #include "qkrylov/sites/spinhalf_site.hpp"
+#include "qkrylov/sites/spin_s_site.hpp"
 #include "qkrylov/sites/fermion_site.hpp"
 #include "qkrylov/sites/hubbard_site.hpp"
 #include "qkrylov/sites/tj_site.hpp"
@@ -19,6 +21,7 @@
 #include "qkrylov/solvers/davidson.hpp"
 #include "qkrylov/solvers/dynamics.hpp"
 #include "qkrylov/solvers/ftlm.hpp"
+#include "qkrylov/solvers/correction_vector.hpp"
 
 #include <memory>
 #include <vector>
@@ -169,6 +172,18 @@ qkrylov_basis_h qkrylov_spinhalf_basis_create(int num_sites, qkrylov_sector_h se
     }
 }
 
+qkrylov_basis_h qkrylov_basis_create_spin_s(int N, double S, const qkrylov_sector_t* sector) {
+    if (N <= 0 || S <= 0.0) return nullptr;
+    try {
+        auto handle = std::make_unique<qkrylov_basis_t>();
+        Sector sec = sector ? sector->sector : Sector();
+        handle->ptr = std::make_shared<SpinSBasis>(N, S, sec);
+        return handle.release();
+    } catch (...) {
+        return nullptr;
+    }
+}
+
 qkrylov_basis_h qkrylov_fermion_basis_create(int num_sites, qkrylov_sector_h sector) {
     try {
         auto handle = std::make_unique<qkrylov_basis_t>();
@@ -219,6 +234,7 @@ int qkrylov_basis_nsites(qkrylov_basis_h basis) {
     if (!basis || !basis->ptr) return 0;
     try {
         if (auto b = std::dynamic_pointer_cast<SpinHalfBasis>(basis->ptr)) return b->nsites();
+        if (auto b = std::dynamic_pointer_cast<SpinSBasis>(basis->ptr))    return b->nsites();
         if (auto b = std::dynamic_pointer_cast<FermionBasis>(basis->ptr))  return b->nsites();
         if (auto b = std::dynamic_pointer_cast<HubbardBasis>(basis->ptr))  return b->nsites();
         if (auto b = std::dynamic_pointer_cast<TJBasis>(basis->ptr))       return b->nsites();
@@ -261,6 +277,17 @@ qkrylov_site_h qkrylov_spinhalf_site_create(void) {
     try {
         auto handle = std::make_unique<qkrylov_site_t>();
         handle->ptr = std::make_shared<SpinHalfSite>();
+        return handle.release();
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+qkrylov_site_h qkrylov_site_create_spin_s(double S) {
+    if (S <= 0.0) return nullptr;
+    try {
+        auto handle = std::make_unique<qkrylov_site_t>();
+        handle->ptr = std::make_shared<SpinSSite>(S);
         return handle.release();
     } catch (...) {
         return nullptr;
@@ -653,6 +680,54 @@ int qkrylov_ftlm(qkrylov_hamiltonian_h h,
         result->partition_function = static_cast<float>(res.partition_function);
         result->internal_energy    = static_cast<float>(res.internal_energy);
         result->specific_heat      = static_cast<float>(res.specific_heat);
+        return QKRYLOV_SUCCESS;
+    } catch (...) {
+        return QKRYLOV_ERROR_EXCEPTION;
+    }
+}
+
+int qkrylov_solver_correction_vector(
+    qkrylov_hamiltonian_h h,
+    const float* op_psi0_complex,
+    float e0,
+    float omega,
+    float eta,
+    int max_iter,
+    float tol,
+    qkrylov_correction_vector_result_c_t* result,
+    float* correction_vector_out_complex
+) {
+    if (!h || !h->ptr || !op_psi0_complex || !result) return QKRYLOV_ERROR_INVALID_ARG;
+    if (max_iter <= 0) return QKRYLOV_ERROR_INVALID_ARG;
+    try {
+        const uint64_t dim = h->ptr->dimension();
+        HostVector op_psi0(dim);
+        for (uint64_t i = 0; i < dim; ++i) {
+            op_psi0[i] = Complex(static_cast<Real>(op_psi0_complex[2 * i]),
+                                 static_cast<Real>(op_psi0_complex[2 * i + 1]));
+        }
+
+        auto cv_res = correction_vector_spectral(
+            *(h->ptr),
+            op_psi0,
+            static_cast<Real>(e0),
+            static_cast<Real>(omega),
+            static_cast<Real>(eta),
+            max_iter,
+            static_cast<Real>(tol)
+        );
+
+        result->spectral_function = static_cast<float>(cv_res.spectral_function);
+        result->iterations        = cv_res.iterations;
+        result->converged         = cv_res.converged ? 1 : 0;
+
+        if (correction_vector_out_complex) {
+            for (uint64_t i = 0; i < dim && i < cv_res.correction_vector.size(); ++i) {
+                correction_vector_out_complex[2 * i]     = static_cast<float>(cv_res.correction_vector[i].real());
+                correction_vector_out_complex[2 * i + 1] = static_cast<float>(cv_res.correction_vector[i].imag());
+            }
+        }
+
         return QKRYLOV_SUCCESS;
     } catch (...) {
         return QKRYLOV_ERROR_EXCEPTION;
