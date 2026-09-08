@@ -194,6 +194,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      actions: read
     if: (github.event_name == 'release' && github.event.action == 'published') || github.event_name == 'workflow_dispatch'
 
     steps:
@@ -216,12 +217,6 @@ jobs:
       - name: List wheels being published to PyPI
         run: ls -lh ./pypi_wheels/
 
-      # [TEMP DISABLED] Publish to PyPI - re-enable once GH Release + gh-pages are verified working
-      # - name: Publish to PyPI
-      #   uses: pypa/gh-action-pypi-publish@release/v1
-      #   with:
-      #     packages-dir: ./pypi_wheels
-
       - name: Upload all wheels to GitHub Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
@@ -243,3 +238,9 @@ jobs:
           publish_dir: ./whl_out
           destination_dir: whl
           keep_files: true
+
+      # [TEMP DISABLED] Publish to PyPI - re-enable once GH Release + gh-pages are verified working
+      # - name: Publish to PyPI
+      #   uses: pypa/gh-action-pypi-publish@release/v1
+      #   with:
+      #     packages-dir: ./pypi_wheels
