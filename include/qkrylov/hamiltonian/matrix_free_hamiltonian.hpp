@@ -3,17 +3,48 @@
 #include "qkrylov/core/types.hpp"
 
 #include "qkrylov/basis/basis.hpp"
-#include "qkrylov/operators/opsum.hpp"
+#include "qkrylov/basis/spinhalf_basis.hpp"
+#include "qkrylov/basis/spin_s_basis.hpp"
+#include "qkrylov/basis/fermion_basis.hpp"
+#include "qkrylov/basis/hubbard_basis.hpp"
+#include "qkrylov/basis/tj_basis.hpp"
 #include "qkrylov/sites/site.hpp"
+#include "qkrylov/sites/spinhalf_site.hpp"
+#include "qkrylov/sites/spin_s_site.hpp"
+#include "qkrylov/sites/fermion_site.hpp"
+#include "qkrylov/sites/hubbard_site.hpp"
+#include "qkrylov/sites/tj_site.hpp"
+#include "qkrylov/operators/opsum.hpp"
 #include "qkrylov/core/kokkos_types.hpp"
 #include "qkrylov/core/device.hpp"
+#include "qkrylov/core/traits.hpp"
 
 #include <memory>
 #include <vector>
+#include <stdexcept>
+#include <type_traits>
 
 namespace qkrylov {
 namespace QKRYLOV_PRECISION_NAMESPACE {
 
+inline std::shared_ptr<Site> infer_site_from_basis(const Basis& basis) {
+    if (auto* b = dynamic_cast<const SpinHalfBasis*>(&basis)) {
+        return std::make_shared<SpinHalfSite>();
+    }
+    if (auto* b = dynamic_cast<const SpinSBasis*>(&basis)) {
+        return std::make_shared<SpinSSite>(b->spin());
+    }
+    if (auto* b = dynamic_cast<const FermionBasis*>(&basis)) {
+        return std::make_shared<FermionSite>();
+    }
+    if (auto* b = dynamic_cast<const HubbardBasis*>(&basis)) {
+        return std::make_shared<HubbardSite>();
+    }
+    if (auto* b = dynamic_cast<const TJBasis*>(&basis)) {
+        return std::make_shared<TJSite>();
+    }
+    throw std::invalid_argument("Cannot infer site type from basis. Please provide site explicitly.");
+}
 
 /// Matrix-free Hamiltonian with pre-compiled operator action.
 ///
@@ -32,6 +63,12 @@ public:
         const OpSum& ops,
         Device device = Device()
     );
+
+    MatrixFreeHamiltonian(
+        std::shared_ptr<Basis> basis,
+        const OpSum& ops,
+        Device device = Device()
+    ) : MatrixFreeHamiltonian(basis, infer_site_from_basis(*basis), ops, device) {}
 
     /// Apply H to a device-resident vector: y = H * x.
     /// No host↔device copies — both x and y must already live on the device.
@@ -76,7 +113,66 @@ private:
     OpSum ops_;
 };
 
+/// Modern Hamiltonian class supporting CTAD, site auto-inference, and device tag dispatch.
+template <typename ExecSpace = Kokkos::DefaultExecutionSpace>
+class Hamiltonian : public MatrixFreeHamiltonian<ExecSpace> {
+public:
+    using Base = MatrixFreeHamiltonian<ExecSpace>;
 
+    Hamiltonian(std::shared_ptr<Basis> basis, std::shared_ptr<Site> site, const OpSum& ops, Device device = Device())
+        : Base(std::move(basis), std::move(site), ops, device) {}
+
+    Hamiltonian(std::shared_ptr<Basis> basis, const OpSum& ops, Device device = Device())
+        : Base(std::move(basis), ops, device) {}
+
+    template <typename BasisType>
+        requires std::is_base_of_v<Basis, std::decay_t<BasisType>>
+    Hamiltonian(const BasisType& basis, const OpSum& ops, Device device = Device())
+        : Base(std::make_shared<std::decay_t<BasisType>>(basis), ops, device) {}
+
+    template <typename BasisType>
+        requires std::is_base_of_v<Basis, std::decay_t<BasisType>>
+    Hamiltonian(const BasisType& basis, std::shared_ptr<Site> site, const OpSum& ops, Device device = Device())
+        : Base(std::make_shared<std::decay_t<BasisType>>(basis), std::move(site), ops, device) {}
+};
+
+// CTAD deduction guides
+template <typename BasisType, typename DeviceTag>
+    requires (!std::is_same_v<std::decay_t<DeviceTag>, Device>)
+Hamiltonian(const BasisType&, const OpSum&, DeviceTag)
+    -> Hamiltonian<typename traits::device_execution_space<std::decay_t<DeviceTag>>::type>;
+
+template <typename BasisType>
+Hamiltonian(const BasisType&, const OpSum&)
+    -> Hamiltonian<typename traits::device_execution_space<device::cpu>::type>;
+
+template <typename DeviceTag>
+    requires (!std::is_same_v<std::decay_t<DeviceTag>, Device>)
+Hamiltonian(std::shared_ptr<Basis>, const OpSum&, DeviceTag)
+    -> Hamiltonian<typename traits::device_execution_space<std::decay_t<DeviceTag>>::type>;
+
+Hamiltonian(std::shared_ptr<Basis>, const OpSum&)
+    -> Hamiltonian<typename traits::device_execution_space<device::cpu>::type>;
+
+template <typename BasisType, typename DeviceTag>
+    requires (!std::is_same_v<std::decay_t<DeviceTag>, Device>)
+Hamiltonian(const BasisType&, std::shared_ptr<Site>, const OpSum&, DeviceTag)
+    -> Hamiltonian<typename traits::device_execution_space<std::decay_t<DeviceTag>>::type>;
+
+template <typename BasisType>
+Hamiltonian(const BasisType&, std::shared_ptr<Site>, const OpSum&)
+    -> Hamiltonian<typename traits::device_execution_space<device::cpu>::type>;
+
+template <typename DeviceTag>
+    requires (!std::is_same_v<std::decay_t<DeviceTag>, Device>)
+Hamiltonian(std::shared_ptr<Basis>, std::shared_ptr<Site>, const OpSum&, DeviceTag)
+    -> Hamiltonian<typename traits::device_execution_space<std::decay_t<DeviceTag>>::type>;
+
+Hamiltonian(std::shared_ptr<Basis>, std::shared_ptr<Site>, const OpSum&)
+    -> Hamiltonian<typename traits::device_execution_space<device::cpu>::type>;
 
 } // namespace QKRYLOV_PRECISION_NAMESPACE
+
+using QKRYLOV_PRECISION_NAMESPACE::Hamiltonian;
+
 } // namespace qkrylov

@@ -133,7 +133,7 @@ If you use `qkrylov` in your research, please consider citing it:
 
 ```bibtex
 @software{qkrylov,
-  author = {Pal, Subhajyoti and Mukhopadhyay, Aritra},
+  author = {Pal, Subhajyoti and Mukhopadhyay, Aritra and Dasbehera, Pritipriya},
   title = {qkrylov: Matrix-free Krylov methods for quantum many-body physics},
   url = {https://github.com/sjp95/qkrylov}
 }

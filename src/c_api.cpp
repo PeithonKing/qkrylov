@@ -1093,6 +1093,21 @@ int qkrylov_lanczos_ground_state_complex(qkrylov_hamiltonian_h h,
     return qkrylov_lanczos_ground_state_complex_fp64(h, maxiter, tol, result, eigenvector_complex);
 }
 
+int qkrylov_lanczos_two_pass_ground_state(qkrylov_hamiltonian_h h,
+                                          int maxiter,
+                                          double tol,
+                                          qkrylov_lanczos_result_c_t* result) {
+    return qkrylov_lanczos_two_pass_ground_state_fp64(h, maxiter, tol, result);
+}
+
+int qkrylov_lanczos_two_pass_ground_state_complex(qkrylov_hamiltonian_h h,
+                                                  int maxiter,
+                                                  double tol,
+                                                  qkrylov_lanczos_result_c_t* result,
+                                                  double* eigenvector_complex) {
+    return qkrylov_lanczos_two_pass_ground_state_complex_fp64(h, maxiter, tol, result, eigenvector_complex);
+}
+
 int qkrylov_davidson_lowest_complex(qkrylov_hamiltonian_h h,
                                     int n_eig,
                                     int max_subspace,

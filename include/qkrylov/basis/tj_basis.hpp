@@ -22,6 +22,16 @@ public:
         const Sector& sector = Sector{}
     );
 
+    TJBasis(
+        int N,
+        const sector::Hubbard& h
+    ) : TJBasis(N, Sector(h)) {}
+
+    TJBasis(
+        int N,
+        const sector::Unconstrained& u
+    ) : TJBasis(N, Sector(u)) {}
+
     ~TJBasis() override = default;
 
     Index size() const override;
@@ -57,7 +67,11 @@ private:
     std::unordered_map<StateID, Index> lookup_;
 };
 
-
-
 } // namespace QKRYLOV_PRECISION_NAMESPACE
+
+namespace basis {
+    using TJ = QKRYLOV_PRECISION_NAMESPACE::TJBasis;
+    namespace sector = qkrylov::sector;
+}
+
 } // namespace qkrylov

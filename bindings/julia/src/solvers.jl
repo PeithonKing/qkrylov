@@ -1,5 +1,94 @@
 # Lanczos solver wrappers
 
+# SciML Problem Types
+abstract type AbstractQuantumProblem end
+
+struct GroundStateProblem{HType} <: AbstractQuantumProblem
+    H::HType
+end
+
+struct ExcitedStatesProblem{HType} <: AbstractQuantumProblem
+    H::HType
+    n_eig::Int
+end
+ExcitedStatesProblem(H; n_eig::Integer=1) = ExcitedStatesProblem(H, Int(n_eig))
+
+struct ThermalProblem{HType} <: AbstractQuantumProblem
+    H::HType
+    beta::Float64
+end
+ThermalProblem(H; beta::Real=1.0) = ThermalProblem(H, Float64(beta))
+
+struct DynamicsProblem{HType, VType} <: AbstractQuantumProblem
+    H::HType
+    phi0::VType
+end
+
+struct SpectralProblem{HType, VType} <: AbstractQuantumProblem
+    H::HType
+    op_psi0::VType
+    e0::Float64
+    omega::Float64
+    eta::Float64
+end
+
+# Algorithm Types & Variations
+abstract type AbstractQuantumAlgorithm end
+abstract type AbstractLanczosVariation end
+
+struct SinglePass <: AbstractLanczosVariation end
+struct TwoPass   <: AbstractLanczosVariation end
+
+struct Lanczos{V<:AbstractLanczosVariation} <: AbstractQuantumAlgorithm
+    variation::V
+    maxiter::Int
+    tol::Float64
+    return_state::Bool
+end
+
+function Lanczos(;
+    variation::AbstractLanczosVariation = SinglePass(),
+    maxiter::Integer = 200,
+    tol::Real = 1e-12,
+    return_state::Bool = true,
+    compute_eigenvector::Bool = return_state
+)
+    return Lanczos(variation, Int(maxiter), Float64(tol), return_state || compute_eigenvector)
+end
+
+struct Davidson <: AbstractQuantumAlgorithm
+    n_eig::Int
+    max_subspace::Int
+    tol::Float64
+    compute_eigenvectors::Bool
+end
+Davidson(; n_eig::Integer=1, max_subspace::Integer=20, tol::Real=1e-8, compute_eigenvectors::Bool=true) =
+    Davidson(Int(n_eig), Int(max_subspace), Float64(tol), compute_eigenvectors)
+
+struct FTLM <: AbstractQuantumAlgorithm
+    beta::Float64
+    n_random::Int
+    n_steps::Int
+end
+FTLM(; beta::Real=1.0, n_random::Integer=10, n_steps::Integer=50) =
+    FTLM(Float64(beta), Int(n_random), Int(n_steps))
+
+struct ContinuedFraction <: AbstractQuantumAlgorithm
+    n_iter::Int
+end
+ContinuedFraction(; n_iter::Integer=100) = ContinuedFraction(Int(n_iter))
+
+struct CorrectionVector <: AbstractQuantumAlgorithm
+    e0::Float64
+    omega::Float64
+    eta::Float64
+    maxiter::Int
+    tol::Float64
+    return_vector::Bool
+end
+CorrectionVector(; e0::Real=0.0, omega::Real=0.0, eta::Real=0.1, maxiter::Integer=100, tol::Real=1e-8, return_vector::Bool=false) =
+    CorrectionVector(Float64(e0), Float64(omega), Float64(eta), Int(maxiter), Float64(tol), return_vector)
+
 struct LanczosResultFP32C
     energy::Cfloat
     iterations::Cint
@@ -43,115 +132,211 @@ struct CorrectionVectorResultFP64C
     converged::Cint
 end
 
-struct LanczosResult{T<:Real}
+# Solution Interface
+abstract type AbstractQuantumSolution end
+
+struct GroundStateSolution{T<:Real, V} <: AbstractQuantumSolution
     energy::T
+    eigenvector::V
     iterations::Int
     converged::Bool
-    _state::Union{Vector{Complex{T}}, Nothing}
     has_state::Bool
 
-    function LanczosResult(energy::T, iterations::Integer, converged::Bool, state::Union{Vector{Complex{T}}, Nothing}=nothing) where {T<:Real}
-        return new{T}(energy, Int(iterations), converged, state, state !== nothing)
+    function GroundStateSolution(energy::T, eigenvector::V, iterations::Integer, converged::Bool) where {T<:Real, V}
+        return new{T, V}(energy, eigenvector, Int(iterations), converged, eigenvector !== nothing)
     end
 end
 
-function Base.getproperty(res::LanczosResult, sym::Symbol)
-    if sym === :state || sym === :eigenvector || sym === :vector
-        if !getfield(res, :has_state) || getfield(res, :_state) === nothing
-            error("Ground state wavefunction was not computed. Pass `return_state=true` to `lanczos_ground_state` to compute the state vector.")
+function GroundStateSolution(energy::T, iterations::Integer, converged::Bool, state::V=nothing) where {T<:Real, V}
+    return GroundStateSolution(energy, state, iterations, converged)
+end
+
+const LanczosResult{T} = GroundStateSolution{T, Union{Vector{Complex{T}}, Nothing}}
+function LanczosResult(energy::T, iterations::Integer, converged::Bool, state::Union{Vector{Complex{T}}, Nothing}=nothing) where {T<:Real}
+    return GroundStateSolution(energy, state, iterations, converged)
+end
+
+function Base.getproperty(sol::GroundStateSolution, sym::Symbol)
+    if sym === :value || sym === :energy
+        return getfield(sol, :energy)
+    elseif sym === :u || sym === :state || sym === :eigenvector || sym === :vector
+        vec = getfield(sol, :eigenvector)
+        if vec === nothing || !getfield(sol, :has_state)
+            error("Ground state wavefunction was not computed. Pass `return_state=true` to compute the state vector.")
         end
-        return getfield(res, :_state)
+        return vec
     end
-    return getfield(res, sym)
+    return getfield(sol, sym)
 end
 
-function Base.propertynames(res::LanczosResult, private::Bool=false)
-    return private ? fieldnames(LanczosResult) : (:energy, :iterations, :converged, :state, :eigenvector)
+function Base.propertynames(sol::GroundStateSolution, private::Bool=false)
+    return private ? fieldnames(GroundStateSolution) : (:energy, :eigenvector, :iterations, :converged, :u, :value, :state)
 end
 
-function Base.iterate(res::LanczosResult, state=1)
+function Base.iterate(sol::GroundStateSolution, state=1)
     if state == 1
-        return (res.energy, 2)
+        return (sol.energy, 2)
     elseif state == 2
-        if !res.has_state
-            error("Ground state wavefunction was not computed. Pass `return_state=true` to `lanczos_ground_state` to compute the state vector.")
+        if !sol.has_state || sol.eigenvector === nothing
+            error("Ground state wavefunction was not computed. Pass `return_state=true` to compute the state vector.")
         end
-        return (res.state, 3)
+        return (sol.eigenvector, 3)
     else
         return nothing
     end
 end
 
-function lanczos_ground_state(
-    H::MatrixFreeHamiltonian{Float64};
-    maxiter::Integer=100,
-    tol::Real=1e-12,
-    return_state::Bool=false,
-    compute_eigenvector::Bool=return_state
-)::LanczosResult{Float64}
+function Base.show(io::IO, sol::GroundStateSolution{T}) where {T}
+    status_str = sol.converged ? "converged = true" : "WARNING: maxiter hit without converging!"
+    evec = getfield(sol, :eigenvector)
+    vec_len = evec !== nothing ? length(evec) : 0
+    state_str = getfield(sol, :has_state) ? ", state = Vector{Complex{$T}}(dim=$vec_len)" : ""
+    print(io, "GroundStateSolution{$T}(energy = $(sol.energy), iterations = $(sol.iterations), $status_str$state_str)")
+end
+
+# Multiple Dispatch solve(prob, alg)
+function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float64}}, alg::Lanczos{SinglePass}; kwargs...)
+    H = prob.H
     dim = Int(dimension(H))
-    should_compute = return_state || compute_eigenvector
     res_c = Ref{LanczosResultFP64C}(LanczosResultFP64C(0.0, 0, 0))
 
-    if should_compute
+    if alg.return_state
         psi = Vector{ComplexF64}(undef, dim)
-
         GC.@preserve psi begin
             status = ccall(
                 (:qkrylov_lanczos_ground_state_complex_fp64, libqkrylov),
                 Cint,
                 (Ptr{Cvoid}, Cint, Cdouble, Ref{LanczosResultFP64C}, Ptr{Cdouble}),
-                H.ptr, Cint(maxiter), Cdouble(tol), res_c, pointer(psi)
+                H.ptr, Cint(alg.maxiter), Cdouble(alg.tol), res_c, pointer(psi)
             )
         end
-        _check_status(status, "Lanczos ground state solver failed")
-        return LanczosResult(res_c[].energy, Int(res_c[].iterations), res_c[].converged != 0, psi)
+        _check_status(status, "Lanczos single-pass ground state solver failed")
+        return GroundStateSolution(res_c[].energy, psi, Int(res_c[].iterations), res_c[].converged != 0)
     else
         status = ccall(
             (:qkrylov_lanczos_ground_state_fp64, libqkrylov),
             Cint,
             (Ptr{Cvoid}, Cint, Cdouble, Ref{LanczosResultFP64C}),
-            H.ptr, Cint(maxiter), Cdouble(tol), res_c
+            H.ptr, Cint(alg.maxiter), Cdouble(alg.tol), res_c
         )
-        _check_status(status, "Lanczos ground state solver failed")
-        return LanczosResult(res_c[].energy, Int(res_c[].iterations), res_c[].converged != 0, nothing)
+        _check_status(status, "Lanczos single-pass ground state solver failed")
+        return GroundStateSolution(res_c[].energy, nothing, Int(res_c[].iterations), res_c[].converged != 0)
     end
 end
 
-function lanczos_ground_state(
-    H::MatrixFreeHamiltonian{Float32};
-    maxiter::Integer=100,
-    tol::Real=1e-6,
-    return_state::Bool=false,
-    compute_eigenvector::Bool=return_state
-)::LanczosResult{Float32}
+function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float32}}, alg::Lanczos{SinglePass}; kwargs...)
+    H = prob.H
     dim = Int(dimension(H))
-    should_compute = return_state || compute_eigenvector
     res_c = Ref{LanczosResultFP32C}(LanczosResultFP32C(0.0f0, 0, 0))
 
-    if should_compute
+    if alg.return_state
         psi = Vector{ComplexF32}(undef, dim)
-
         GC.@preserve psi begin
             status = ccall(
                 (:qkrylov_lanczos_ground_state_complex_fp32, libqkrylov),
                 Cint,
                 (Ptr{Cvoid}, Cint, Cfloat, Ref{LanczosResultFP32C}, Ptr{Cfloat}),
-                H.ptr, Cint(maxiter), Cfloat(tol), res_c, pointer(psi)
+                H.ptr, Cint(alg.maxiter), Cfloat(alg.tol), res_c, pointer(psi)
             )
         end
-        _check_status(status, "Lanczos ground state solver failed")
-        return LanczosResult(res_c[].energy, Int(res_c[].iterations), res_c[].converged != 0, psi)
+        _check_status(status, "Lanczos single-pass ground state solver failed")
+        return GroundStateSolution(res_c[].energy, psi, Int(res_c[].iterations), res_c[].converged != 0)
     else
         status = ccall(
             (:qkrylov_lanczos_ground_state_fp32, libqkrylov),
             Cint,
             (Ptr{Cvoid}, Cint, Cfloat, Ref{LanczosResultFP32C}),
-            H.ptr, Cint(maxiter), Cfloat(tol), res_c
+            H.ptr, Cint(alg.maxiter), Cfloat(alg.tol), res_c
         )
-        _check_status(status, "Lanczos ground state solver failed")
-        return LanczosResult(res_c[].energy, Int(res_c[].iterations), res_c[].converged != 0, nothing)
+        _check_status(status, "Lanczos single-pass ground state solver failed")
+        return GroundStateSolution(res_c[].energy, nothing, Int(res_c[].iterations), res_c[].converged != 0)
     end
+end
+
+function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float64}}, alg::Lanczos{TwoPass}; kwargs...)
+    H = prob.H
+    dim = Int(dimension(H))
+    res_c = Ref{LanczosResultFP64C}(LanczosResultFP64C(0.0, 0, 0))
+
+    if alg.return_state
+        psi = Vector{ComplexF64}(undef, dim)
+        GC.@preserve psi begin
+            status = ccall(
+                (:qkrylov_lanczos_two_pass_ground_state_complex_fp64, libqkrylov),
+                Cint,
+                (Ptr{Cvoid}, Cint, Cdouble, Ref{LanczosResultFP64C}, Ptr{Cdouble}),
+                H.ptr, Cint(alg.maxiter), Cdouble(alg.tol), res_c, pointer(psi)
+            )
+        end
+        _check_status(status, "Lanczos two-pass ground state solver failed")
+        return GroundStateSolution(res_c[].energy, psi, Int(res_c[].iterations), res_c[].converged != 0)
+    else
+        status = ccall(
+            (:qkrylov_lanczos_two_pass_ground_state_fp64, libqkrylov),
+            Cint,
+            (Ptr{Cvoid}, Cint, Cdouble, Ref{LanczosResultFP64C}),
+            H.ptr, Cint(alg.maxiter), Cdouble(alg.tol), res_c
+        )
+        _check_status(status, "Lanczos two-pass ground state solver failed")
+        return GroundStateSolution(res_c[].energy, nothing, Int(res_c[].iterations), res_c[].converged != 0)
+    end
+end
+
+function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float32}}, alg::Lanczos{TwoPass}; kwargs...)
+    H = prob.H
+    dim = Int(dimension(H))
+    res_c = Ref{LanczosResultFP32C}(LanczosResultFP32C(0.0f0, 0, 0))
+
+    if alg.return_state
+        psi = Vector{ComplexF32}(undef, dim)
+        GC.@preserve psi begin
+            status = ccall(
+                (:qkrylov_lanczos_two_pass_ground_state_complex_fp32, libqkrylov),
+                Cint,
+                (Ptr{Cvoid}, Cint, Cfloat, Ref{LanczosResultFP32C}, Ptr{Cfloat}),
+                H.ptr, Cint(alg.maxiter), Cfloat(alg.tol), res_c, pointer(psi)
+            )
+        end
+        _check_status(status, "Lanczos two-pass ground state solver failed")
+        return GroundStateSolution(res_c[].energy, psi, Int(res_c[].iterations), res_c[].converged != 0)
+    else
+        status = ccall(
+            (:qkrylov_lanczos_two_pass_ground_state_fp32, libqkrylov),
+            Cint,
+            (Ptr{Cvoid}, Cint, Cfloat, Ref{LanczosResultFP32C}),
+            H.ptr, Cint(alg.maxiter), Cfloat(alg.tol), res_c
+        )
+        _check_status(status, "Lanczos two-pass ground state solver failed")
+        return GroundStateSolution(res_c[].energy, nothing, Int(res_c[].iterations), res_c[].converged != 0)
+    end
+end
+
+solve(prob::GroundStateProblem; kwargs...) = solve(prob, Lanczos(); kwargs...)
+
+function solve(prob::ExcitedStatesProblem, alg::Davidson=Davidson(); kwargs...)
+    return davidson_lowest(prob.H; n_eig=alg.n_eig, max_subspace=alg.max_subspace, tol=alg.tol, compute_eigenvectors=alg.compute_eigenvectors)
+end
+
+function solve(prob::ThermalProblem, alg::FTLM=FTLM(); kwargs...)
+    return ftlm(prob.H; beta=prob.beta, n_random=alg.n_random, n_steps=alg.n_steps)
+end
+
+function solve(prob::DynamicsProblem, alg::ContinuedFraction=ContinuedFraction(); kwargs...)
+    return continued_fraction_coeffs(prob.H, prob.phi0; n_iter=alg.n_iter)
+end
+
+function solve(prob::SpectralProblem, alg::CorrectionVector=CorrectionVector(); kwargs...)
+    return solver_correction_vector(prob.H, prob.op_psi0; e0=prob.e0, omega=prob.omega, eta=prob.eta, maxiter=alg.maxiter, tol=alg.tol, return_vector=alg.return_vector)
+end
+
+function lanczos_ground_state(
+    H::MatrixFreeHamiltonian;
+    maxiter::Integer=100,
+    tol::Real=(H.precision === Float32 ? 1e-6 : 1e-12),
+    return_state::Bool=false,
+    compute_eigenvector::Bool=return_state
+)
+    return solve(GroundStateProblem(H), Lanczos(variation=SinglePass(), maxiter=maxiter, tol=tol, return_state=return_state || compute_eigenvector))
 end
 
 # Davidson Preconditioned Eigensolver

@@ -43,6 +43,10 @@ int main() {
     assert(err_code == QKRYLOV_ERROR_INVALID_ARG);
     assert(std::string(qkrylov_get_last_error_message()).find("hamiltonian handle is null") != std::string::npos);
 
+    err_code = qkrylov_lanczos_two_pass_ground_state(nullptr, 10, 1e-6, nullptr);
+    assert(err_code == QKRYLOV_ERROR_INVALID_ARG);
+    assert(std::string(qkrylov_get_last_error_message()).find("hamiltonian handle is null") != std::string::npos);
+
     // Verify exception capture during Hamiltonian creation with unknown operator
     qkrylov_basis_h dummy_basis = qkrylov_spinhalf_basis_create(2, nullptr);
     qkrylov_site_h dummy_site = qkrylov_spinhalf_site_create();
@@ -322,6 +326,14 @@ int main() {
     // Exact Heisenberg N=4 ground state energy is -1.6160254037844386
     assert(std::abs(lanczos_res.energy - (-1.6160254037844386)) < 1e-10);
 
+    // Test Two-Pass Lanczos Ground State Solver via FP64 C API
+    qkrylov_lanczos_result_c_t tp_res;
+    std::vector<std::complex<double>> tp_psi(dim);
+    int tp_status = qkrylov_lanczos_two_pass_ground_state_complex(H, 200, 1e-12, &tp_res, reinterpret_cast<double*>(tp_psi.data()));
+    assert(tp_status == QKRYLOV_SUCCESS);
+    assert(tp_res.converged == 1);
+    assert(std::abs(tp_res.energy - lanczos_res.energy) < 1e-10);
+
     // Verify eigenvector normalization: ||psi||^2 == 1.0
     double norm_sq = 0.0;
     for (size_t i = 0; i < dim; ++i) {
@@ -409,6 +421,13 @@ int main() {
     std::cout << "C API Lanczos FP32 Ground State Energy: " << lanczos_res32.energy << std::endl;
     assert(lanczos_res32.converged == 1 || lanczos_res32.iterations == static_cast<int>(dim));
     assert(std::abs(lanczos_res32.energy - (-1.6160254038f)) < 1e-4f);
+
+    // Test Two-Pass Lanczos Ground State (FP32)
+    qkrylov_lanczos_result_fp32_t tp_res32;
+    int tp_status32 = qkrylov_lanczos_two_pass_ground_state_fp32(H32, 200, 1e-5f, &tp_res32);
+    assert(tp_status32 == QKRYLOV_SUCCESS);
+    assert(tp_res32.converged == 1 || tp_res32.iterations == static_cast<int>(dim));
+    assert(std::abs(tp_res32.energy - (-1.6160254038f)) < 1e-4f);
 
     // Test Davidson Lowest (FP32)
     std::vector<float> dav_evals32(n_eig);

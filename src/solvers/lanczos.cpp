@@ -96,23 +96,39 @@ TridiagResult tridiag_ground_state_full(const std::vector<Real>& alpha, const st
 
     return {d[min_idx], res_v};
 }
-}
+} // namespace
 
-template <typename ExecSpace>
-LanczosResult lanczos_ground_state(
-    const MatrixFreeHamiltonian<ExecSpace>& H,
-    int maxiter,
-    Real tol
+} // namespace QKRYLOV_PRECISION_NAMESPACE
+
+namespace solvers {
+
+template <typename Policy, typename ExecSpace>
+QKRYLOV_PRECISION_NAMESPACE::LanczosResult lanczos(
+    const QKRYLOV_PRECISION_NAMESPACE::MatrixFreeHamiltonian<ExecSpace>& H,
+    const LanczosConfig& config
 )
 {
+    using namespace QKRYLOV_PRECISION_NAMESPACE;
+    constexpr bool is_two_pass = std::is_same_v<Policy, policy::TwoPass>;
+    static_assert(
+        std::is_same_v<Policy, policy::Default> ||
+        std::is_same_v<Policy, policy::SinglePass> ||
+        std::is_same_v<Policy, policy::TwoPass>,
+        "Unknown solver policy"
+    );
+
     const Index dim = H.dimension();
     if (dim == 0) return {};
+
+    int maxiter = config.maxiter;
+    Real tol = config.tol;
 
     VectorView<ExecSpace> v_prev("v_prev", dim);
     VectorView<ExecSpace> v_curr("v_curr", dim);
     VectorView<ExecSpace> w("w", dim);
 
-    std::mt19937 rng(1234);
+    const uint32_t seed = 1234;
+    std::mt19937 rng(seed);
     std::uniform_real_distribution<Real> dist(-1.0, 1.0);
     
     auto v_curr_host = Kokkos::create_mirror_view(v_curr);
@@ -121,9 +137,11 @@ LanczosResult lanczos_ground_state(
     normalize(v_curr);
 
     std::vector<VectorView<ExecSpace>> basis_vectors;
-    VectorView<ExecSpace> v_curr_copy("basis_curr", dim);
-    Kokkos::deep_copy(v_curr_copy, v_curr);
-    basis_vectors.push_back(v_curr_copy);
+    if constexpr (!is_two_pass) {
+        VectorView<ExecSpace> v_curr_copy("basis_curr", dim);
+        Kokkos::deep_copy(v_curr_copy, v_curr);
+        basis_vectors.push_back(v_curr_copy);
+    }
 
     std::vector<Real> alphas;
     std::vector<Real> betas;
@@ -145,9 +163,11 @@ LanczosResult lanczos_ground_state(
             axpy(-betas.back(), v_prev, w);
         }
 
-        // Full reorthogonalization to maintain stability
-        for (const auto& bv : basis_vectors) {
-            axpy(-dot(bv, w), bv, w);
+        if constexpr (!is_two_pass) {
+            // Full reorthogonalization to maintain stability
+            for (const auto& bv : basis_vectors) {
+                axpy(-dot(bv, w), bv, w);
+            }
         }
 
         Real beta = norm(w);
@@ -156,7 +176,11 @@ LanczosResult lanczos_ground_state(
              is_converged = true;
              break;
         }
-        if (iter + 1 == std::min<int>(maxiter, dim)) {
+        if (iter + 1 == dim) {
+             is_converged = true;
+             break;
+        }
+        if (iter + 1 == maxiter) {
              break;
         }
 
@@ -166,9 +190,11 @@ LanczosResult lanczos_ground_state(
         Kokkos::deep_copy(v_curr, w);
         scal(1.0/beta, v_curr);
         
-        VectorView<ExecSpace> v_new("basis", dim);
-        Kokkos::deep_copy(v_new, v_curr);
-        basis_vectors.push_back(v_new);
+        if constexpr (!is_two_pass) {
+            VectorView<ExecSpace> v_new("basis", dim);
+            Kokkos::deep_copy(v_new, v_curr);
+            basis_vectors.push_back(v_new);
+        }
 
         if (iter > 0) {
             // Check convergence only every few iterations or after some initial steps
@@ -189,38 +215,78 @@ LanczosResult lanczos_ground_state(
     res.iterations = actual_iters;
     res.converged = is_converged;
 
-    // Compute Ritz vector
-    VectorView<ExecSpace> ritz("ritz", dim);
-    for (int i = 0; i < (int)alphas.size(); ++i) {
-        axpy(KComplex(final_tridiag.eigenvector[i], 0.0), basis_vectors[i], ritz);
-    }
-    normalize(ritz);
-    
-    copy_device_to_host(ritz, res.eigenvector);
+    if constexpr (!is_two_pass) {
+        // Compute Ritz vector using single pass
+        VectorView<ExecSpace> ritz("ritz", dim);
+        for (int i = 0; i < (int)alphas.size(); ++i) {
+            axpy(KComplex(final_tridiag.eigenvector[i], 0.0), basis_vectors[i], ritz);
+        }
+        normalize(ritz);
+        copy_device_to_host(ritz, res.eigenvector);
+        return res;
+    } else {
+        // Two-pass reconstruction
+        VectorView<ExecSpace> ritz("ritz", dim);
+        Kokkos::deep_copy(ritz, KComplex(0.0, 0.0));
 
-    return res;
+        rng.seed(seed);
+        for(Index i=0; i<dim; ++i) v_curr_host(i) = KComplex(dist(rng), dist(rng));
+        Kokkos::deep_copy(v_curr, v_curr_host);
+        normalize(v_curr);
+        
+        Kokkos::deep_copy(v_prev, KComplex(0.0, 0.0));
+
+        int m = static_cast<int>(alphas.size());
+        for (int iter = 0; iter < m; ++iter) {
+            axpy(KComplex(final_tridiag.eigenvector[iter], 0.0), v_curr, ritz);
+
+            if (iter + 1 == m) break;
+
+            H.apply(v_curr, w);
+            axpy(-alphas[iter], v_curr, w);
+            if (iter > 0) {
+                axpy(-betas[iter-1], v_prev, w);
+            }
+
+            Kokkos::deep_copy(v_prev, v_curr);
+            Kokkos::deep_copy(v_curr, w);
+            scal(1.0 / betas[iter], v_curr);
+        }
+
+        normalize(ritz);
+        copy_device_to_host(ritz, res.eigenvector);
+
+        return res;
+    }
 }
 
+} // namespace solvers
 
 // Explicit instantiations
+#define INSTANTIATE_LANCZOS(Space) \
+    template QKRYLOV_PRECISION_NAMESPACE::LanczosResult solvers::lanczos<solvers::policy::Default, Space>(const QKRYLOV_PRECISION_NAMESPACE::MatrixFreeHamiltonian<Space>&, const QKRYLOV_PRECISION_NAMESPACE::LanczosConfig&); \
+    template QKRYLOV_PRECISION_NAMESPACE::LanczosResult solvers::lanczos<solvers::policy::SinglePass, Space>(const QKRYLOV_PRECISION_NAMESPACE::MatrixFreeHamiltonian<Space>&, const QKRYLOV_PRECISION_NAMESPACE::LanczosConfig&); \
+    template QKRYLOV_PRECISION_NAMESPACE::LanczosResult solvers::lanczos<solvers::policy::TwoPass, Space>(const QKRYLOV_PRECISION_NAMESPACE::MatrixFreeHamiltonian<Space>&, const QKRYLOV_PRECISION_NAMESPACE::LanczosConfig&);
+
 #ifdef KOKKOS_ENABLE_SERIAL
-template LanczosResult lanczos_ground_state<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, int, Real);
+INSTANTIATE_LANCZOS(Kokkos::Serial)
 #endif
 #ifdef KOKKOS_ENABLE_OPENMP
-template LanczosResult lanczos_ground_state<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, int, Real);
+INSTANTIATE_LANCZOS(Kokkos::OpenMP)
 #endif
 #ifdef KOKKOS_ENABLE_THREADS
-template LanczosResult lanczos_ground_state<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, int, Real);
+INSTANTIATE_LANCZOS(Kokkos::Threads)
 #endif
 #ifdef KOKKOS_ENABLE_CUDA
-template LanczosResult lanczos_ground_state<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, int, Real);
+INSTANTIATE_LANCZOS(Kokkos::Cuda)
 #endif
 #ifdef KOKKOS_ENABLE_HIP
-template LanczosResult lanczos_ground_state<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, int, Real);
+INSTANTIATE_LANCZOS(Kokkos::HIP)
 #endif
 #ifdef KOKKOS_ENABLE_SYCL
-template LanczosResult lanczos_ground_state<Kokkos::Experimental::SYCL>(const MatrixFreeHamiltonian<Kokkos::Experimental::SYCL>&, int, Real);
+INSTANTIATE_LANCZOS(Kokkos::Experimental::SYCL)
 #endif
-}
 
-}
+#undef INSTANTIATE_LANCZOS
+
+} // namespace qkrylov

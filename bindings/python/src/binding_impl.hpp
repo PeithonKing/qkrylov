@@ -21,6 +21,7 @@
 #include "qkrylov/hamiltonian/matrix_free_hamiltonian.hpp"
 #include "qkrylov/core/device.hpp"
 #include "qkrylov/solvers/lanczos.hpp"
+#include "qkrylov/solvers/policy.hpp"
 #include "qkrylov/solvers/davidson.hpp"
 #include "qkrylov/solvers/dynamics.hpp"
 #include "qkrylov/solvers/ftlm.hpp"
@@ -97,7 +98,15 @@ static void bind_backend(nb::module_& m, const std::string& suffix, const std::s
     std::string lgs_name = "lanczos_ground_state_" + suffix + type_suffix;
     m.def(lgs_name.c_str(),
         [](const HType& H, int maxiter, Real tol) {
-            auto res = lanczos_ground_state<ExecSpace>(H, maxiter, tol);
+            auto res = solvers::lanczos<solvers::policy::SinglePass>(H, {maxiter, tol});
+            return nb::make_tuple(res.energy, vec_to_numpy(std::move(res.eigenvector)));
+        },
+        "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12);
+
+    std::string ltp_name = "lanczos_two_pass_" + suffix + type_suffix;
+    m.def(ltp_name.c_str(),
+        [](const HType& H, int maxiter, Real tol) {
+            auto res = solvers::lanczos<solvers::policy::TwoPass>(H, {maxiter, tol});
             return nb::make_tuple(res.energy, vec_to_numpy(std::move(res.eigenvector)));
         },
         "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12);

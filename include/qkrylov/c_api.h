@@ -315,6 +315,15 @@ QKRYLOV_API int   qkrylov_lanczos_ground_state_complex_fp32(qkrylov_hamiltonian_
                                                             float tol,
                                                             qkrylov_lanczos_result_fp32_t* result,
                                                             float* eigenvector_complex);
+QKRYLOV_API int   qkrylov_lanczos_two_pass_ground_state_fp32(qkrylov_hamiltonian_h h,
+                                                             int maxiter,
+                                                             float tol,
+                                                             qkrylov_lanczos_result_fp32_t* result);
+QKRYLOV_API int   qkrylov_lanczos_two_pass_ground_state_complex_fp32(qkrylov_hamiltonian_h h,
+                                                                     int maxiter,
+                                                                     float tol,
+                                                                     qkrylov_lanczos_result_fp32_t* result,
+                                                                     float* eigenvector_complex);
 QKRYLOV_API int   qkrylov_davidson_lowest_complex_fp32(qkrylov_hamiltonian_h h,
                                                        int n_eig,
                                                        int max_subspace,
@@ -370,6 +379,15 @@ QKRYLOV_API int    qkrylov_lanczos_ground_state_complex_fp64(qkrylov_hamiltonian
                                                               double tol,
                                                               qkrylov_lanczos_result_fp64_t* result,
                                                               double* eigenvector_complex);
+QKRYLOV_API int    qkrylov_lanczos_two_pass_ground_state_fp64(qkrylov_hamiltonian_h h,
+                                                              int maxiter,
+                                                              double tol,
+                                                              qkrylov_lanczos_result_fp64_t* result);
+QKRYLOV_API int    qkrylov_lanczos_two_pass_ground_state_complex_fp64(qkrylov_hamiltonian_h h,
+                                                                      int maxiter,
+                                                                      double tol,
+                                                                      qkrylov_lanczos_result_fp64_t* result,
+                                                                      double* eigenvector_complex);
 QKRYLOV_API int    qkrylov_davidson_lowest_complex_fp64(qkrylov_hamiltonian_h h,
                                                         int n_eig,
                                                        int max_subspace,
@@ -425,6 +443,15 @@ QKRYLOV_API int    qkrylov_lanczos_ground_state_complex(qkrylov_hamiltonian_h h,
                                                         double tol,
                                                         qkrylov_lanczos_result_c_t* result,
                                                         double* eigenvector_complex);
+QKRYLOV_API int    qkrylov_lanczos_two_pass_ground_state(qkrylov_hamiltonian_h h,
+                                                         int maxiter,
+                                                         double tol,
+                                                         qkrylov_lanczos_result_c_t* result);
+QKRYLOV_API int    qkrylov_lanczos_two_pass_ground_state_complex(qkrylov_hamiltonian_h h,
+                                                                 int maxiter,
+                                                                 double tol,
+                                                                 qkrylov_lanczos_result_c_t* result,
+                                                                 double* eigenvector_complex);
 QKRYLOV_API int    qkrylov_davidson_lowest_complex(qkrylov_hamiltonian_h h,
                                                    int n_eig,
                                                    int max_subspace,

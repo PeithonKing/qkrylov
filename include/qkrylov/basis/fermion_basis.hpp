@@ -22,6 +22,16 @@ public:
         const Sector& sector = Sector{}
     );
 
+    FermionBasis(
+        int N,
+        const sector::Particles& p
+    ) : FermionBasis(N, Sector(p)) {}
+
+    FermionBasis(
+        int N,
+        const sector::Unconstrained& u
+    ) : FermionBasis(N, Sector(u)) {}
+
     ~FermionBasis() override = default;
 
     Index size() const override;
@@ -59,7 +69,11 @@ private:
     std::unordered_map<StateID, Index> lookup_;
 };
 
-
-
 } // namespace QKRYLOV_PRECISION_NAMESPACE
+
+namespace basis {
+    using Fermion = QKRYLOV_PRECISION_NAMESPACE::FermionBasis;
+    namespace sector = qkrylov::sector;
+}
+
 } // namespace qkrylov

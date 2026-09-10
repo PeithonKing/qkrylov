@@ -14,8 +14,23 @@
 #endif
 
 namespace qkrylov {
+
+namespace device {
+
+struct cpu { int id = 0; };
+struct gpu { int id = 0; };
+
+struct openmp { int id = 0; };
+struct serial { int id = 0; };
+struct cuda { int id = 0; };
+struct hip { int id = 0; };
+struct sycl { int id = 0; };
+
+} // namespace device
+
 namespace QKRYLOV_PRECISION_NAMESPACE {
 
+namespace device = qkrylov::device;
 
 /// Selects which device to target.
 ///
@@ -30,6 +45,14 @@ struct Device {
     Device() = default;
 
     explicit Device(int device_id) : id(device_id) {}
+
+    Device(const device::cpu& c) : id(c.id) {}
+    Device(const device::gpu& g) : id(g.id) {}
+    Device(const device::cuda& c) : id(c.id) {}
+    Device(const device::hip& h) : id(h.id) {}
+    Device(const device::sycl& s) : id(s.id) {}
+    Device(const device::openmp& o) : id(o.id) {}
+    Device(const device::serial& s) : id(s.id) {}
 
     explicit Device(const std::string& s) {
         if (s == "cpu") {
