@@ -191,6 +191,103 @@ using QuantumKrylov
         @test length(psi_destruct) == 16
     end
 
+    @testset "SciML Problem-Algorithm solve() Interface" begin
+        # 4-site 1D Heisenberg chain (L=4 <= 15)
+        N = 4
+        basis = SpinHalfBasis(N)
+        site = SpinHalfSite()
+        op = OpSum()
+        for i in 0:(N-1)
+            next_i = mod(i + 1, N)
+            add_term!(op, 1.0, "Sz", i, "Sz", next_i)
+            add_term!(op, 0.5, "Sp", i, "Sm", next_i)
+            add_term!(op, 0.5, "Sm", i, "Sp", next_i)
+        end
+        H = MatrixFreeHamiltonian(basis, site, op)
+
+        prob = GroundStateProblem(H)
+        @test prob isa AbstractQuantumProblem
+        @test prob.H === H
+
+        # 1. SinglePass Lanczos
+        alg_sp = Lanczos(variation=SinglePass(), maxiter=50, tol=1e-12)
+        @test alg_sp isa AbstractQuantumAlgorithm
+        @test alg_sp.variation isa SinglePass
+        sol_sp = solve(prob, alg_sp)
+        @test sol_sp isa AbstractQuantumSolution
+        @test sol_sp isa GroundStateSolution
+        @test isapprox(sol_sp.value, -2.0, atol=1e-6)
+        @test isapprox(sol_sp.energy, -2.0, atol=1e-6)
+        @test sol_sp.converged == true
+        @test sol_sp.iterations > 0
+        @test length(sol_sp.u) == 16
+        @test length(sol_sp.state) == 16
+        @test length(sol_sp.eigenvector) == 16
+        @test sol_sp.u === sol_sp.eigenvector
+        @test isapprox(H * sol_sp.u, sol_sp.value .* sol_sp.u, atol=1e-5)
+
+        # Destructuring test
+        E0, psi = sol_sp
+        @test isapprox(E0, -2.0, atol=1e-6)
+        @test length(psi) == 16
+        @test psi === sol_sp.u
+
+        # Default algorithm dispatch
+        sol_default = solve(prob)
+        @test isapprox(sol_default.value, -2.0, atol=1e-6)
+        @test isapprox(sol_default.u, sol_sp.u, atol=1e-5)
+
+        # 2. TwoPass Lanczos Variation
+        alg_tp = Lanczos(variation=TwoPass(), maxiter=50, tol=1e-12, return_state=true)
+        @test alg_tp.variation isa TwoPass
+        sol_tp = solve(prob, alg_tp)
+        @test isapprox(sol_tp.value, -2.0, atol=1e-6)
+        @test isapprox(sol_tp.value, sol_sp.value, atol=1e-10)
+        @test sol_tp.converged == true
+        @test length(sol_tp.u) == 16
+        @test isapprox(H * sol_tp.u, sol_tp.value .* sol_tp.u, atol=1e-5)
+
+        # Destructuring TwoPass
+        E0_tp, psi_tp = sol_tp
+        @test isapprox(E0_tp, -2.0, atol=1e-6)
+        @test length(psi_tp) == 16
+
+        # 3. Energy-only calculations (return_state=false)
+        sol_sp_no_state = solve(prob, Lanczos(variation=SinglePass(), maxiter=50, tol=1e-12, return_state=false))
+        @test isapprox(sol_sp_no_state.value, -2.0, atol=1e-6)
+        @test_throws ErrorException sol_sp_no_state.u
+        @test_throws ErrorException sol_sp_no_state.state
+
+        sol_tp_no_state = solve(prob, Lanczos(variation=TwoPass(), maxiter=50, tol=1e-12, return_state=false))
+        @test isapprox(sol_tp_no_state.value, -2.0, atol=1e-6)
+        @test_throws ErrorException sol_tp_no_state.u
+
+        # 4. ExcitedStatesProblem with Davidson
+        ex_prob = ExcitedStatesProblem(H, 2)
+        @test ex_prob isa AbstractQuantumProblem
+        sol_dav = solve(ex_prob, Davidson(n_eig=2, max_subspace=10, tol=1e-6))
+        @test length(sol_dav.eigenvalues) == 2
+        @test isapprox(sol_dav.eigenvalues[1], -2.0, atol=1e-5)
+
+        # 5. ThermalProblem with FTLM
+        th_prob = ThermalProblem(H, 1.0)
+        @test th_prob isa AbstractQuantumProblem
+        sol_ftlm = solve(th_prob, FTLM(beta=1.0, n_random=5, n_steps=20))
+        @test sol_ftlm.partition_function > 0.0
+
+        # 6. DynamicsProblem with ContinuedFraction
+        dyn_prob = DynamicsProblem(H, psi)
+        @test dyn_prob isa AbstractQuantumProblem
+        sol_dyn = solve(dyn_prob, ContinuedFraction(n_iter=10))
+        @test length(sol_dyn.alphas) > 0
+
+        # 7. SpectralProblem with CorrectionVector
+        spec_prob = SpectralProblem(H, psi, -2.0, 0.5, 0.1)
+        @test spec_prob isa AbstractQuantumProblem
+        sol_spec = solve(spec_prob, CorrectionVector(e0=-2.0, omega=0.5, eta=0.1, maxiter=50, tol=1e-6))
+        @test sol_spec.spectral_function >= 0.0
+    end
+
     @testset "Davidson Solver" begin
         N = 4
         basis = SpinHalfBasis(N)
@@ -277,9 +374,19 @@ using QuantumKrylov
         @test dimension(H_cpu) == 4
         @test H_cpu.device == "cpu"
 
+        # Typed device traits
+        H_cpu_trait = MatrixFreeHamiltonian(basis, op; device=CPUDevice())
+        @test H_cpu_trait.device isa AbstractDevice
+        @test H_cpu_trait.device isa CPUDevice
+        @test H_cpu_trait.device == "cpu"
+        @test H_cpu_trait.device == CPUDevice()
+
         # Requesting GPU on CPU build throws an informative ArgumentError
         @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device="cuda")
         @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device="gpu")
+        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device=CUDADevice())
+        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device=HIPDevice())
+        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device=SYCLDevice())
     end
 
     @testset "Hubbard & Boson Operator Generators" begin
