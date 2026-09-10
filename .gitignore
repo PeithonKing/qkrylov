@@ -57,5 +57,6 @@ whl_out/
 
 # private work
 private/
+.agents/
 bindings/julia/manual/
 external/
