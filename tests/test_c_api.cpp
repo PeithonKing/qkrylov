@@ -39,7 +39,7 @@ int main() {
     assert(std::string(qkrylov_get_last_error_message()).find("hamiltonian handle is null") != std::string::npos);
 
     // Verify invalid argument on solvers
-    err_code = qkrylov_lanczos_ground_state(nullptr, 10, 1e-6, nullptr);
+    err_code = qkrylov_lanczos_ground_state(nullptr, 10, 1e-6, 0, nullptr);
     assert(err_code == QKRYLOV_ERROR_INVALID_ARG);
     assert(std::string(qkrylov_get_last_error_message()).find("hamiltonian handle is null") != std::string::npos);
 
@@ -314,7 +314,7 @@ int main() {
     // Test Lanczos Ground State Solver via FP64 C API (random start with nullptr)
     qkrylov_lanczos_result_c_t lanczos_res;
     std::vector<std::complex<double>> psi_cx(dim);
-    int solver_res = qkrylov_lanczos_ground_state_complex(H, 200, 1e-12, &lanczos_res, reinterpret_cast<double*>(psi_cx.data()));
+    int solver_res = qkrylov_lanczos_ground_state_complex(H, 200, 1e-12, 0, &lanczos_res, reinterpret_cast<double*>(psi_cx.data()));
     assert(solver_res == QKRYLOV_SUCCESS);
     assert(lanczos_res.converged == 1);
 
@@ -404,7 +404,7 @@ int main() {
     // Test Lanczos Ground State (FP32)
     qkrylov_lanczos_result_fp32_t lanczos_res32;
     std::vector<std::complex<float>> psi_cx32(dim);
-    int solver_res32 = qkrylov_lanczos_ground_state_complex_fp32(H32, 200, 1e-5f, &lanczos_res32, reinterpret_cast<float*>(psi_cx32.data()));
+    int solver_res32 = qkrylov_lanczos_ground_state_complex_fp32(H32, 200, 1e-5f, 0, &lanczos_res32, reinterpret_cast<float*>(psi_cx32.data()));
     assert(solver_res32 == QKRYLOV_SUCCESS);
     std::cout << "C API Lanczos FP32 Ground State Energy: " << lanczos_res32.energy << std::endl;
     assert(lanczos_res32.converged == 1 || lanczos_res32.iterations == static_cast<int>(dim));
@@ -463,7 +463,7 @@ int main() {
     qkrylov_lanczos_result_c_t lanczos_s1_res;
     std::vector<std::complex<double>> psi0_s1(dim_s1);
     int gs_status = qkrylov_lanczos_ground_state_complex(
-        H_s1, 200, 1e-10, &lanczos_s1_res, reinterpret_cast<double*>(psi0_s1.data())
+        H_s1, 200, 1e-10, 0, &lanczos_s1_res, reinterpret_cast<double*>(psi0_s1.data())
     );
     assert(gs_status == QKRYLOV_SUCCESS);
     assert(lanczos_s1_res.converged == 1);

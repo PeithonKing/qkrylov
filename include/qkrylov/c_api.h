@@ -309,11 +309,13 @@ typedef qkrylov_correction_vector_result_fp64_t qkrylov_correction_vector_result
 QKRYLOV_API int   qkrylov_lanczos_ground_state_fp32(qkrylov_hamiltonian_h h,
                                                     int maxiter,
                                                     float tol,
+                                                    int two_pass,
                                                     qkrylov_lanczos_result_fp32_t* result);
 QKRYLOV_API int   qkrylov_lanczos_ground_state_complex_fp32(qkrylov_hamiltonian_h h,
                                                             int maxiter,
                                                             float tol,
-                                                            qkrylov_lanczos_result_fp32_t* result,
+                                                            int two_pass,
+                                                    qkrylov_lanczos_result_fp32_t* result,
                                                             float* eigenvector_complex);
 QKRYLOV_API int   qkrylov_davidson_lowest_complex_fp32(qkrylov_hamiltonian_h h,
                                                        int n_eig,
@@ -364,10 +366,12 @@ QKRYLOV_API int   qkrylov_vector_copy_fp32(uint64_t dim, const float* src_comple
 QKRYLOV_API int    qkrylov_lanczos_ground_state_fp64(qkrylov_hamiltonian_h h,
                                                      int maxiter,
                                                      double tol,
-                                                     qkrylov_lanczos_result_fp64_t* result);
+                                                     int two_pass,
+                                                              qkrylov_lanczos_result_fp64_t* result);
 QKRYLOV_API int    qkrylov_lanczos_ground_state_complex_fp64(qkrylov_hamiltonian_h h,
                                                               int maxiter,
                                                               double tol,
+                                                              int two_pass,
                                                               qkrylov_lanczos_result_fp64_t* result,
                                                               double* eigenvector_complex);
 QKRYLOV_API int    qkrylov_davidson_lowest_complex_fp64(qkrylov_hamiltonian_h h,
@@ -419,10 +423,12 @@ QKRYLOV_API int    qkrylov_vector_copy_fp64(uint64_t dim, const double* src_comp
 QKRYLOV_API int    qkrylov_lanczos_ground_state(qkrylov_hamiltonian_h h,
                                                 int maxiter,
                                                 double tol,
-                                                qkrylov_lanczos_result_c_t* result);
+                                                int two_pass,
+                                                        qkrylov_lanczos_result_c_t* result);
 QKRYLOV_API int    qkrylov_lanczos_ground_state_complex(qkrylov_hamiltonian_h h,
                                                         int maxiter,
                                                         double tol,
+                                                        int two_pass,
                                                         qkrylov_lanczos_result_c_t* result,
                                                         double* eigenvector_complex);
 QKRYLOV_API int    qkrylov_davidson_lowest_complex(qkrylov_hamiltonian_h h,

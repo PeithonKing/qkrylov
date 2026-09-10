@@ -85,17 +85,36 @@ int main()
         os
     );
 
-    auto res =
+    auto res1 =
         lanczos_ground_state<Kokkos::DefaultExecutionSpace>(
             H,
             200,
-            1e-12
+            1e-12,
+            false // Single-pass
+        );
+
+    auto res2 =
+        lanczos_ground_state<Kokkos::DefaultExecutionSpace>(
+            H,
+            200,
+            1e-12,
+            true // Two-pass
         );
 
     std::cout
-        << "Energy = "
-        << res.energy
+        << "Energy (single-pass) = "
+        << res1.energy
         << "\n";
+
+    std::cout
+        << "Energy (two-pass)    = "
+        << res2.energy
+        << "\n";
+
+    if (std::abs(res1.energy - res2.energy) > 1e-10) {
+        std::cerr << "Mismatch between single-pass and two-pass energy!\n";
+        return 1;
+    }
 
     return 0;
 }

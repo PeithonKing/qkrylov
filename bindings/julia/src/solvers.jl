@@ -86,6 +86,7 @@ function lanczos_ground_state(
     H::MatrixFreeHamiltonian{Float64};
     maxiter::Integer=100,
     tol::Real=1e-12,
+    two_pass::Bool=false,
     return_state::Bool=false,
     compute_eigenvector::Bool=return_state
 )::LanczosResult{Float64}
@@ -100,8 +101,8 @@ function lanczos_ground_state(
             status = ccall(
                 (:qkrylov_lanczos_ground_state_complex_fp64, libqkrylov),
                 Cint,
-                (Ptr{Cvoid}, Cint, Cdouble, Ref{LanczosResultFP64C}, Ptr{Cdouble}),
-                H.ptr, Cint(maxiter), Cdouble(tol), res_c, pointer(psi)
+                (Ptr{Cvoid}, Cint, Cdouble, Cint, Ref{LanczosResultFP64C}, Ptr{Cdouble}),
+                H.ptr, Cint(maxiter), Cdouble(tol), Cint(two_pass ? 1 : 0), res_c, pointer(psi)
             )
         end
         _check_status(status, "Lanczos ground state solver failed")
@@ -110,8 +111,8 @@ function lanczos_ground_state(
         status = ccall(
             (:qkrylov_lanczos_ground_state_fp64, libqkrylov),
             Cint,
-            (Ptr{Cvoid}, Cint, Cdouble, Ref{LanczosResultFP64C}),
-            H.ptr, Cint(maxiter), Cdouble(tol), res_c
+            (Ptr{Cvoid}, Cint, Cdouble, Cint, Ref{LanczosResultFP64C}),
+            H.ptr, Cint(maxiter), Cdouble(tol), Cint(two_pass ? 1 : 0), res_c
         )
         _check_status(status, "Lanczos ground state solver failed")
         return LanczosResult(res_c[].energy, Int(res_c[].iterations), res_c[].converged != 0, nothing)
@@ -122,6 +123,7 @@ function lanczos_ground_state(
     H::MatrixFreeHamiltonian{Float32};
     maxiter::Integer=100,
     tol::Real=1e-6,
+    two_pass::Bool=false,
     return_state::Bool=false,
     compute_eigenvector::Bool=return_state
 )::LanczosResult{Float32}
@@ -136,8 +138,8 @@ function lanczos_ground_state(
             status = ccall(
                 (:qkrylov_lanczos_ground_state_complex_fp32, libqkrylov),
                 Cint,
-                (Ptr{Cvoid}, Cint, Cfloat, Ref{LanczosResultFP32C}, Ptr{Cfloat}),
-                H.ptr, Cint(maxiter), Cfloat(tol), res_c, pointer(psi)
+                (Ptr{Cvoid}, Cint, Cfloat, Cint, Ref{LanczosResultFP32C}, Ptr{Cfloat}),
+                H.ptr, Cint(maxiter), Cfloat(tol), Cint(two_pass ? 1 : 0), res_c, pointer(psi)
             )
         end
         _check_status(status, "Lanczos ground state solver failed")
@@ -146,8 +148,8 @@ function lanczos_ground_state(
         status = ccall(
             (:qkrylov_lanczos_ground_state_fp32, libqkrylov),
             Cint,
-            (Ptr{Cvoid}, Cint, Cfloat, Ref{LanczosResultFP32C}),
-            H.ptr, Cint(maxiter), Cfloat(tol), res_c
+            (Ptr{Cvoid}, Cint, Cfloat, Cint, Ref{LanczosResultFP32C}),
+            H.ptr, Cint(maxiter), Cfloat(tol), Cint(two_pass ? 1 : 0), res_c
         )
         _check_status(status, "Lanczos ground state solver failed")
         return LanczosResult(res_c[].energy, Int(res_c[].iterations), res_c[].converged != 0, nothing)

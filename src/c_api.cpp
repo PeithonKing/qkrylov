@@ -1081,16 +1081,18 @@ int qkrylov_hamiltonian_diagonal_device(qkrylov_hamiltonian_h h,
 int qkrylov_lanczos_ground_state(qkrylov_hamiltonian_h h,
                                  int maxiter,
                                  double tol,
+                                 int two_pass,
                                  qkrylov_lanczos_result_c_t* result) {
-    return qkrylov_lanczos_ground_state_fp64(h, maxiter, tol, result);
+    return qkrylov_lanczos_ground_state_fp64(h, maxiter, tol, two_pass, result);
 }
 
 int qkrylov_lanczos_ground_state_complex(qkrylov_hamiltonian_h h,
                                          int maxiter,
                                          double tol,
+                                         int two_pass,
                                          qkrylov_lanczos_result_c_t* result,
                                          double* eigenvector_complex) {
-    return qkrylov_lanczos_ground_state_complex_fp64(h, maxiter, tol, result, eigenvector_complex);
+    return qkrylov_lanczos_ground_state_complex_fp64(h, maxiter, tol, two_pass, result, eigenvector_complex);
 }
 
 int qkrylov_davidson_lowest_complex(qkrylov_hamiltonian_h h,

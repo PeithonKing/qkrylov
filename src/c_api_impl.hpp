@@ -480,15 +480,17 @@ int SUFFIX(qkrylov_lanczos_ground_state)(
     qkrylov_hamiltonian_h h,
     int maxiter,
     Scalar tol,
+    int two_pass,
     LanczosResT* result)
 {
-    return SUFFIX(qkrylov_lanczos_ground_state_complex)(h, maxiter, tol, result, nullptr);
+    return SUFFIX(qkrylov_lanczos_ground_state_complex)(h, maxiter, tol, two_pass, result, nullptr);
 }
 
 int SUFFIX(qkrylov_lanczos_ground_state_complex)(
     qkrylov_hamiltonian_h h,
     int maxiter,
     Scalar tol,
+    int two_pass,
     LanczosResT* result,
     Scalar* eigenvector_complex)
 {
@@ -510,7 +512,7 @@ int SUFFIX(qkrylov_lanczos_ground_state_complex)(
     }
     try {
         auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        auto res = lanczos_ground_state(*H, maxiter, static_cast<Real>(tol));
+        auto res = lanczos_ground_state(*H, maxiter, static_cast<Real>(tol), (two_pass != 0));
         result->energy     = static_cast<Scalar>(res.energy);
         result->iterations = res.iterations;
         result->converged  = res.converged ? 1 : 0;
