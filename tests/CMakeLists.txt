@@ -17,6 +17,7 @@ set(QKRYLOV_TESTS
     test_workflow
     test_c_api
     test_spin1_correction_vector
+    test_m1_core
 )
 
 foreach(test_name IN LISTS QKRYLOV_TESTS)

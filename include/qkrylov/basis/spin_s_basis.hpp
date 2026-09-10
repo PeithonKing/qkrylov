@@ -22,6 +22,18 @@ public:
         const Sector& sector = Sector{}
     );
 
+    SpinSBasis(int N, double S, const sector::Sz& sz)
+        : SpinSBasis(N, S, Sector(sz)) {}
+
+    SpinSBasis(int N, double S, const sector::Unconstrained& u)
+        : SpinSBasis(N, S, Sector(u)) {}
+
+    SpinSBasis(int N, const sector::Sz& sz)
+        : SpinSBasis(N, 0.5, Sector(sz)) {}
+
+    SpinSBasis(int N, const sector::Unconstrained& u)
+        : SpinSBasis(N, 0.5, Sector(u)) {}
+
     ~SpinSBasis() override = default;
 
     Index size() const override;
@@ -57,4 +69,10 @@ private:
 };
 
 } // namespace QKRYLOV_PRECISION_NAMESPACE
+
+namespace basis {
+    using SpinS = QKRYLOV_PRECISION_NAMESPACE::SpinSBasis;
+    namespace sector = qkrylov::sector;
+}
+
 } // namespace qkrylov

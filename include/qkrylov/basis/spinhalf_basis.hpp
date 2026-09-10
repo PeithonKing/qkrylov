@@ -22,6 +22,16 @@ public:
         const Sector& sector = Sector{}
     );
 
+    SpinHalfBasis(
+        int N,
+        const sector::Sz& sz
+    ) : SpinHalfBasis(N, Sector(sz)) {}
+
+    SpinHalfBasis(
+        int N,
+        const sector::Unconstrained& u
+    ) : SpinHalfBasis(N, Sector(u)) {}
+
     ~SpinHalfBasis() override = default;
 
     Index size() const override;
@@ -64,7 +74,11 @@ private:
     std::unordered_map<StateID, Index> lookup_;
 };
 
-
-
 } // namespace QKRYLOV_PRECISION_NAMESPACE
+
+namespace basis {
+    using SpinHalf = QKRYLOV_PRECISION_NAMESPACE::SpinHalfBasis;
+    namespace sector = qkrylov::sector;
+}
+
 } // namespace qkrylov

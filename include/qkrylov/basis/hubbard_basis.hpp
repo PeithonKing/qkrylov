@@ -22,6 +22,16 @@ public:
         const Sector& sector = Sector{}
     );
 
+    HubbardBasis(
+        int N,
+        const sector::Hubbard& h
+    ) : HubbardBasis(N, Sector(h)) {}
+
+    HubbardBasis(
+        int N,
+        const sector::Unconstrained& u
+    ) : HubbardBasis(N, Sector(u)) {}
+
     ~HubbardBasis() override = default;
 
     Index size() const override;
@@ -59,7 +69,11 @@ private:
     std::unordered_map<StateID, Index> lookup_;
 };
 
-
-
 } // namespace QKRYLOV_PRECISION_NAMESPACE
+
+namespace basis {
+    using Hubbard = QKRYLOV_PRECISION_NAMESPACE::HubbardBasis;
+    namespace sector = qkrylov::sector;
+}
+
 } // namespace qkrylov

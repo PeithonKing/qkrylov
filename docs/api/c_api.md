@@ -7,20 +7,20 @@ It enables seamless zero-copy interop with languages such as **C**, **Julia (`cc
 ---
 
 ## Table of Contents
-1. [Overview & Core Features](#overview--core-features)
-2. [Include & Linking](#include--linking)
-3. [Opaque Handles & Data Types](#opaque-handles--data-types)
+1. [Overview & Core Features](#overview-core-features)
+2. [Include & Linking](#include-linking)
+3. [Opaque Handles & Data Types](#opaque-handles-data-types)
 4. [Error Codes](#error-codes)
 5. [API Function Reference](#api-function-reference)
    - [Sector API](#1-sector-api)
    - [Basis API](#2-basis-api)
    - [Site API](#3-site-api)
    - [OpSum API](#4-opsum-api)
-   - [Device & Hardware Query API](#5-device--hardware-query-api)
+   - [Device & Hardware Query API](#5-device-hardware-query-api)
    - [Matrix-Free Hamiltonian API](#6-matrix-free-hamiltonian-api)
    - [Solvers API](#7-solvers-api)
-   - [Kokkos Parallel Vector Operations (BLAS-1)](#8-kokkos-parallel-vector-operations-blas-1)
-   - [Device-Resident Vectors & Zero-Copy GPU SpMV](#9-device-resident-vectors--zero-copy-gpu-spmv)
+   - [Vector Operations (Kokkos Parallel BLAS-1 Kernels)](#vector-operations-kokkos-parallel-blas-1-kernels)
+   - [Device-Resident Vectors & Zero-Copy GPU SpMV](#9-device-resident-vectors-zero-copy-gpu-spmv)
 6. [Complete C Example](#complete-c-example)
 
 ---

@@ -18,12 +18,10 @@ using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main()
 {
-    Sector sec;
-
     auto basis =
-        std::make_shared<SpinHalfBasis>(
+        std::make_shared<basis::SpinHalf>(
             2,
-            sec
+            basis::sector::Unconstrained{}
         );
 
     auto site =
@@ -85,21 +83,30 @@ int main()
         os
     );
 
+    LanczosConfig config{200, 1e-12};
+
     auto res1 =
-        lanczos_ground_state<Kokkos::DefaultExecutionSpace>(
+        solvers::lanczos<solvers::policy::SinglePass>(
             H,
-            200,
-            1e-12,
-            false // Single-pass
+            config
         );
 
     auto res2 =
-        lanczos_ground_state<Kokkos::DefaultExecutionSpace>(
+        solvers::lanczos<solvers::policy::TwoPass>(
             H,
-            200,
-            1e-12,
-            true // Two-pass
+            config
         );
+
+    // Verify structured binding unpack
+    auto [e, v] = solvers::lanczos<solvers::policy::TwoPass>(H, config);
+    if (std::abs(e - res2.energy) > 1e-12) {
+        std::cerr << "Structured binding energy mismatch!\n";
+        return 1;
+    }
+    if (v.size() != res2.eigenvector.size()) {
+        std::cerr << "Structured binding eigenvector size mismatch!\n";
+        return 1;
+    }
 
     std::cout
         << "Energy (single-pass) = "
@@ -109,6 +116,11 @@ int main()
     std::cout
         << "Energy (two-pass)    = "
         << res2.energy
+        << "\n";
+
+    std::cout
+        << "Energy (structured)  = "
+        << e
         << "\n";
 
     if (std::abs(res1.energy - res2.energy) > 1e-10) {

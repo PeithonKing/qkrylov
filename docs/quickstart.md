@@ -2,23 +2,49 @@
 
 Welcome to **qkrylov**! In this guide, we'll walk you through solving the quantum Heisenberg model step-by-step. By the end of this tutorial, you'll know how to define a Hilbert space, build operators, construct a matrix-free Hamiltonian, and find its ground state.
 
-## Prerequisites
+## Installation
 
-Before we begin, ensure you have installed the library:
+Before we begin, ensure you have installed the library for your preferred environment:
 
-=== "Python"
-    ```bash
-    pip install qkrylov
-    ```
-=== "C++"
-    ```bash
-    # Ensure you have a modern C++ compiler (C++17+) and OpenMP installed.
-    # Clone the repository and include the headers in your project.
-    git clone https://github.com/sjp95/qkrylov
-    ```
-=== "Julia"
-    !!! note "Coming Soon"
-        Julia bindings are planned via `extern "C"` FFI. See the [roadmap](#).
+=== "🐍 Python (Pip)"
+
+    === "CPU Only"
+        ```bash
+        pip install qkrylov
+        ```
+    === "CUDA 12 (Linux)"
+        ```bash
+        pip install qkrylov[cuda] --extra-index-url https://sjp95.github.io/qkrylov/whl/cu12
+        ```
+
+=== "🔴 Julia (Pkg)"
+
+    === "CPU Only"
+        ```julia
+        using Pkg
+        Pkg.add(url="https://github.com/sjp95/qkrylov.git", subdir="bindings/julia")
+        ```
+    === "CUDA 12 (Linux)"
+        ```julia
+        using Pkg
+        # Julia automatically detects CUDA on Linux and downloads the GPU binary
+        Pkg.add(url="https://github.com/sjp95/qkrylov.git", subdir="bindings/julia")
+        ```
+
+=== "⚙️ C++ (Source)"
+
+    === "CPU Only"
+        ```bash
+        mkdir build && cd build
+        cmake .. -DKokkos_ENABLE_OPENMP=ON
+        make -j4
+        ```
+    === "CUDA 12 (Linux)"
+        ```bash
+        mkdir build && cd build
+        cmake .. -DKokkos_ENABLE_CUDA=ON -DCMAKE_CUDA_COMPILER=$(which nvcc)
+        make -j4
+        ```
 
 ## Step 1: Define the Hilbert Space (Basis)
 
