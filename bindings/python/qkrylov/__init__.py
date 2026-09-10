@@ -11,12 +11,26 @@ from .operators import (
     Nup, Ndn, Nupdn,
     Bdag, B, N
 )
+from . import operators
+from . import site
+from . import basis
+from . import hamiltonian
+from . import solvers
+
 from .site import Site, SpinHalfSite, SpinSSite, FermionSite, HubbardSite, TJSite
 from .basis import Basis, SpinHalfBasis, SpinSBasis, FermionBasis, HubbardBasis, TJBasis
-from .hamiltonian import MatrixFreeHamiltonian
+from .hamiltonian import MatrixFreeHamiltonian, Hamiltonian
 from .solvers import (
+    Solver,
+    Lanczos,
+    LanczosTwoPass,
+    Davidson,
+    FTLM,
+    ContinuedFraction,
+    CorrectionVector,
     LanczosResult,
     lanczos_ground_state,
+    lanczos_two_pass,
     DavidsonResult,
     davidson_lowest,
     DynamicsResult,
@@ -30,13 +44,13 @@ from .solvers import (
 )
 
 import os
-import site
+import site as _py_site
 import glob
 import ctypes
 
 # Preload NVIDIA CUDA libraries from pip packages if they exist
 try:
-    for site_dir in site.getsitepackages():
+    for site_dir in _py_site.getsitepackages():
         cuda_libs = glob.glob(os.path.join(site_dir, "nvidia", "*", "lib"))
         for lib_dir in cuda_libs:
             for so_file in glob.glob(os.path.join(lib_dir, "*.so*")):
@@ -93,12 +107,28 @@ __all__ = [
     "HubbardBasis",
     "TJBasis",
     
+    # Submodules
+    "operators",
+    "site",
+    "basis",
+    "hamiltonian",
+    "solvers",
+
     # Hamiltonian
     "MatrixFreeHamiltonian",
+    "Hamiltonian",
     
     # Solvers
+    "Solver",
+    "Lanczos",
+    "LanczosTwoPass",
+    "Davidson",
+    "FTLM",
+    "ContinuedFraction",
+    "CorrectionVector",
     "LanczosResult",
     "lanczos_ground_state",
+    "lanczos_two_pass",
     "DavidsonResult",
     "davidson_lowest",
     "DynamicsResult",
