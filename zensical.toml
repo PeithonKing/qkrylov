@@ -28,6 +28,7 @@ nav = [
     { "Python API" = "api/python.md" },
     { "Julia API" = "api/julia.md" },
     { "C++ Core API" = "api/cpp.md" },
+    { "C ABI Specification" = "api/c-abi.md" },
   ]},
   { "Contributing" = "contributing.md" },
 ]
