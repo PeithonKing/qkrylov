@@ -15,7 +15,8 @@ struct Sz {
     int sz2 = 0; // Stores 2 * Sz internally to represent half-integers cleanly
     constexpr Sz() = default;
     constexpr explicit Sz(int val) : sz2(val * 2) {}
-    constexpr explicit Sz(double val) : sz2(static_cast<int>(std::round(val * 2.0))) {}
+    constexpr explicit Sz(double val)
+        : sz2(static_cast<int>(val >= 0.0 ? (val * 2.0 + 0.5) : (val * 2.0 - 0.5))) {}
 };
 
 // Fermionic particle number conservation
@@ -42,10 +43,6 @@ struct Bosons {
 };
 
 } // namespace sector
-
-namespace QKRYLOV_PRECISION_NAMESPACE {
-
-namespace sector = qkrylov::sector;
 
 struct Sector
 {
@@ -87,7 +84,10 @@ struct Sector
     Sector(const sector::Bosons& b) : use_nb(true), nb(b.nb) {}
 };
 
+namespace QKRYLOV_PRECISION_NAMESPACE {
 
+namespace sector = qkrylov::sector;
+using qkrylov::Sector;
 
 } // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

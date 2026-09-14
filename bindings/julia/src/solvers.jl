@@ -13,11 +13,27 @@ struct ExcitedStatesProblem{HType} <: AbstractQuantumProblem
 end
 ExcitedStatesProblem(H; n_eig::Integer=1) = ExcitedStatesProblem(H, Int(n_eig))
 
-struct ThermalProblem{HType} <: AbstractQuantumProblem
+struct ThermalProblem{HType, BType, OType} <: AbstractQuantumProblem
     H::HType
-    beta::Float64
+    betas::BType
+    observables::OType
+    is_sweep::Bool
 end
-ThermalProblem(H; beta::Real=1.0) = ThermalProblem(H, Float64(beta))
+ThermalProblem(H; beta::Real=1.0, observables=MatrixFreeHamiltonian[]) = ThermalProblem(H, [Float64(beta)], observables, false)
+ThermalProblem(H, beta::Real; observables=MatrixFreeHamiltonian[]) = ThermalProblem(H, [Float64(beta)], observables, false)
+ThermalProblem(H, betas::AbstractVector{<:Real}; observables=MatrixFreeHamiltonian[]) = ThermalProblem(H, Vector{Float64}(betas), observables, true)
+
+function Base.getproperty(prob::ThermalProblem, s::Symbol)
+    if s === :beta
+        return getfield(prob, :betas)[1]
+    else
+        return getfield(prob, s)
+    end
+end
+
+function Base.propertynames(prob::ThermalProblem, private::Bool=false)
+    return private ? fieldnames(ThermalProblem) : (:H, :betas, :observables, :beta, :is_sweep)
+end
 
 struct DynamicsProblem{HType, VType} <: AbstractQuantumProblem
     H::HType
@@ -36,8 +52,12 @@ end
 abstract type AbstractQuantumAlgorithm end
 abstract type AbstractLanczosVariation end
 
-struct SinglePass <: AbstractLanczosVariation end
-struct TwoPass   <: AbstractLanczosVariation end
+struct OnePass <: AbstractLanczosVariation end
+struct TwoPass <: AbstractLanczosVariation end
+
+# C++ policy parity aliases
+const OnePass_DKGS = OnePass
+const OnePass_DGKS = OnePass
 
 struct Lanczos{V<:AbstractLanczosVariation} <: AbstractQuantumAlgorithm
     variation::V
@@ -47,7 +67,7 @@ struct Lanczos{V<:AbstractLanczosVariation} <: AbstractQuantumAlgorithm
 end
 
 function Lanczos(;
-    variation::AbstractLanczosVariation = SinglePass(),
+    variation::AbstractLanczosVariation = OnePass(),
     maxiter::Integer = 200,
     tol::Real = 1e-12,
     return_state::Bool = true,
@@ -69,9 +89,12 @@ struct FTLM <: AbstractQuantumAlgorithm
     beta::Float64
     n_random::Int
     n_steps::Int
+    seed::UInt64
 end
-FTLM(; beta::Real=1.0, n_random::Integer=10, n_steps::Integer=50) =
-    FTLM(Float64(beta), Int(n_random), Int(n_steps))
+FTLM(; beta::Real=1.0, n_random::Integer=50, n_steps::Integer=100, seed::Integer=42) =
+    FTLM(Float64(beta), Int(n_random), Int(n_steps), UInt64(seed))
+FTLM(beta::Real, n_random::Integer, n_steps::Integer) =
+    FTLM(Float64(beta), Int(n_random), Int(n_steps), UInt64(42))
 
 struct ContinuedFraction <: AbstractQuantumAlgorithm
     n_iter::Int
@@ -120,6 +143,78 @@ struct FTLMResultFP64C
     partition_function::Cdouble
     internal_energy::Cdouble
     specific_heat::Cdouble
+end
+
+struct FTLMSweepResultFP32C
+    num_betas::Cint
+    num_observables::Cint
+    dimension::Int64
+    beta_grid::Ptr{Cfloat}
+    partition_functions::Ptr{Cfloat}
+    free_energies::Ptr{Cfloat}
+    internal_energies::Ptr{Cfloat}
+    specific_heats::Ptr{Cfloat}
+    entropies::Ptr{Cfloat}
+    effective_samples::Ptr{Cfloat}
+    observable_expectations_re::Ptr{Cfloat}
+    observable_expectations_im::Ptr{Cfloat}
+    observable_expectations::Ptr{Cfloat}
+    observable_errors::Ptr{Cfloat}
+end
+
+struct FTLMSweepResultFP64C
+    num_betas::Cint
+    num_observables::Cint
+    dimension::Int64
+    beta_grid::Ptr{Cdouble}
+    partition_functions::Ptr{Cdouble}
+    free_energies::Ptr{Cdouble}
+    internal_energies::Ptr{Cdouble}
+    specific_heats::Ptr{Cdouble}
+    entropies::Ptr{Cdouble}
+    effective_samples::Ptr{Cdouble}
+    observable_expectations_re::Ptr{Cdouble}
+    observable_expectations_im::Ptr{Cdouble}
+    observable_expectations::Ptr{Cdouble}
+    observable_errors::Ptr{Cdouble}
+end
+
+struct RealTimeResultFP32C
+    num_times::Cint
+    num_observables::Cint
+    time_grid::Ptr{Cfloat}
+    survival_probabilities_re::Ptr{Cfloat}
+    survival_probabilities_im::Ptr{Cfloat}
+    observable_expectations_re::Ptr{Cfloat}
+    observable_expectations_im::Ptr{Cfloat}
+end
+
+struct RealTimeResultFP64C
+    num_times::Cint
+    num_observables::Cint
+    time_grid::Ptr{Cdouble}
+    survival_probabilities_re::Ptr{Cdouble}
+    survival_probabilities_im::Ptr{Cdouble}
+    observable_expectations_re::Ptr{Cdouble}
+    observable_expectations_im::Ptr{Cdouble}
+end
+
+struct FTLMDynamicsResultFP32C
+    beta::Cfloat
+    num_times::Cint
+    time_grid::Ptr{Cfloat}
+    correlations_re::Ptr{Cfloat}
+    correlations_im::Ptr{Cfloat}
+    correlation_errors::Ptr{Cfloat}
+end
+
+struct FTLMDynamicsResultFP64C
+    beta::Cdouble
+    num_times::Cint
+    time_grid::Ptr{Cdouble}
+    correlations_re::Ptr{Cdouble}
+    correlations_im::Ptr{Cdouble}
+    correlation_errors::Ptr{Cdouble}
 end
 
 struct CorrectionVectorResultFP32C
@@ -197,7 +292,7 @@ function Base.show(io::IO, sol::GroundStateSolution{T}) where {T}
 end
 
 # Multiple Dispatch solve(prob, alg)
-function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float64}}, alg::Lanczos{SinglePass}; kwargs...)
+function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float64}}, alg::Lanczos{OnePass}; kwargs...)
     H = prob.H
     dim = Int(dimension(H))
     res_c = Ref{LanczosResultFP64C}(LanczosResultFP64C(0.0, 0, 0))
@@ -212,7 +307,7 @@ function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float64}}, alg::
                 H.ptr, Cint(alg.maxiter), Cdouble(alg.tol), res_c, pointer(psi)
             )
         end
-        _check_status(status, "Lanczos single-pass ground state solver failed")
+        _check_status(status, "Lanczos one-pass ground state solver failed")
         return GroundStateSolution(res_c[].energy, psi, Int(res_c[].iterations), res_c[].converged != 0)
     else
         status = ccall(
@@ -221,12 +316,12 @@ function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float64}}, alg::
             (Ptr{Cvoid}, Cint, Cdouble, Ref{LanczosResultFP64C}),
             H.ptr, Cint(alg.maxiter), Cdouble(alg.tol), res_c
         )
-        _check_status(status, "Lanczos single-pass ground state solver failed")
+        _check_status(status, "Lanczos one-pass ground state solver failed")
         return GroundStateSolution(res_c[].energy, nothing, Int(res_c[].iterations), res_c[].converged != 0)
     end
 end
 
-function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float32}}, alg::Lanczos{SinglePass}; kwargs...)
+function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float32}}, alg::Lanczos{OnePass}; kwargs...)
     H = prob.H
     dim = Int(dimension(H))
     res_c = Ref{LanczosResultFP32C}(LanczosResultFP32C(0.0f0, 0, 0))
@@ -241,7 +336,7 @@ function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float32}}, alg::
                 H.ptr, Cint(alg.maxiter), Cfloat(alg.tol), res_c, pointer(psi)
             )
         end
-        _check_status(status, "Lanczos single-pass ground state solver failed")
+        _check_status(status, "Lanczos one-pass ground state solver failed")
         return GroundStateSolution(res_c[].energy, psi, Int(res_c[].iterations), res_c[].converged != 0)
     else
         status = ccall(
@@ -250,7 +345,7 @@ function solve(prob::GroundStateProblem{<:MatrixFreeHamiltonian{Float32}}, alg::
             (Ptr{Cvoid}, Cint, Cfloat, Ref{LanczosResultFP32C}),
             H.ptr, Cint(alg.maxiter), Cfloat(alg.tol), res_c
         )
-        _check_status(status, "Lanczos single-pass ground state solver failed")
+        _check_status(status, "Lanczos one-pass ground state solver failed")
         return GroundStateSolution(res_c[].energy, nothing, Int(res_c[].iterations), res_c[].converged != 0)
     end
 end
@@ -315,8 +410,20 @@ end
 
 solve(prob::GroundStateProblem; kwargs...) = solve(prob, Lanczos(); kwargs...)
 
-function solve(prob::ExcitedStatesProblem, alg::Lanczos; kwargs...)
+function solve(prob::ExcitedStatesProblem, alg::Lanczos{OnePass}; kwargs...)
     return lanczos_lowest(prob.H; n_eig=prob.n_eig, maxiter=alg.maxiter, tol=alg.tol, compute_eigenvectors=alg.return_state)
+end
+
+function solve(prob::ExcitedStatesProblem, alg::Lanczos{TwoPass}; kwargs...)
+    if prob.n_eig > 1
+        throw(ArgumentError(
+            "Selected Lanczos variation (TwoPass) only supports ground-state calculations (n_eig = 1). " *
+            "Use OnePass for an arbitrary number of low energy states."
+        ))
+    end
+    sol_gs = solve(GroundStateProblem(prob.H), alg; kwargs...)
+    evecs = sol_gs.state === nothing ? nothing : [sol_gs.state]
+    return ExcitedStatesSolution([sol_gs.energy], evecs, sol_gs.iterations, sol_gs.converged)
 end
 
 function solve(prob::ExcitedStatesProblem, alg::Davidson=Davidson(); kwargs...)
@@ -324,7 +431,11 @@ function solve(prob::ExcitedStatesProblem, alg::Davidson=Davidson(); kwargs...)
 end
 
 function solve(prob::ThermalProblem, alg::FTLM=FTLM(); kwargs...)
-    return ftlm(prob.H; beta=prob.beta, n_random=alg.n_random, n_steps=alg.n_steps)
+    if prob.is_sweep || length(prob.betas) > 1 || !isempty(prob.observables)
+        return ftlm_sweep(prob.H; betas=prob.betas, observables=prob.observables, n_random=alg.n_random, n_steps=alg.n_steps, seed=alg.seed)
+    else
+        return ftlm(prob.H; beta=prob.beta, n_random=alg.n_random, n_steps=alg.n_steps)
+    end
 end
 
 function solve(prob::DynamicsProblem, alg::ContinuedFraction=ContinuedFraction(); kwargs...)
@@ -342,7 +453,7 @@ function lanczos_ground_state(
     return_state::Bool=false,
     compute_eigenvector::Bool=return_state
 )
-    return solve(GroundStateProblem(H), Lanczos(variation=SinglePass(), maxiter=maxiter, tol=tol, return_state=return_state || compute_eigenvector))
+    return solve(GroundStateProblem(H), Lanczos(variation=OnePass(), maxiter=maxiter, tol=tol, return_state=return_state || compute_eigenvector))
 end
 
 # Excited States Eigensolver Solutions (Davidson and Lanczos Lowest)
@@ -735,6 +846,410 @@ function ftlm(
     )
 end
 
+struct FTLMSweepResult{T<:Real}
+    dimension::Int
+    beta_grid::Vector{T}
+    partition_functions::Vector{T}
+    free_energies::Vector{T}
+    internal_energies::Vector{T}
+    specific_heats::Vector{T}
+    entropies::Vector{T}
+    effective_samples::Vector{T}
+    observable_expectations::Vector{Vector{Complex{T}}}
+    observable_errors::Vector{Vector{T}}
+end
+
+function Base.getproperty(res::FTLMSweepResult, s::Symbol)
+    if s === :partition_function
+        return getfield(res, :partition_functions)[1]
+    elseif s === :internal_energy
+        return getfield(res, :internal_energies)[1]
+    elseif s === :specific_heat
+        return getfield(res, :specific_heats)[1]
+    elseif s === :free_energy
+        return getfield(res, :free_energies)[1]
+    elseif s === :entropy
+        return getfield(res, :entropies)[1]
+    elseif s === :beta
+        return getfield(res, :beta_grid)[1]
+    else
+        return getfield(res, s)
+    end
+end
+
+function ftlm_sweep(
+    H::MatrixFreeHamiltonian{Float64};
+    betas::AbstractVector{<:Real}=[1.0],
+    observables::Vector{<:MatrixFreeHamiltonian{Float64}}=MatrixFreeHamiltonian{Float64}[],
+    n_random::Integer=50,
+    n_steps::Integer=100,
+    seed::Integer=42
+)::FTLMSweepResult{Float64}
+    nb = length(betas)
+    n_obs = length(observables)
+    beta_arr = Vector{Float64}(betas)
+    obs_ptrs = [obs.ptr for obs in observables]
+
+    res_c = Ref{FTLMSweepResultFP64C}()
+    status = ccall(
+        (:qkrylov_ftlm_sweep_fp64, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Cdouble}, Cint, Ptr{Ptr{Cvoid}}, Cint, Cint, Cint, Culonglong, Ref{FTLMSweepResultFP64C}),
+        H.ptr, pointer(beta_arr), Cint(nb), isempty(obs_ptrs) ? C_NULL : pointer(obs_ptrs), Cint(n_obs), Cint(n_random), Cint(n_steps), Culonglong(seed), res_c
+    )
+    _check_status(status, "FTLM sweep failed")
+
+    raw = res_c[]
+    dim = Int(raw.dimension)
+    b_grid = copy(unsafe_wrap(Array, raw.beta_grid, nb))
+    z_arr  = copy(unsafe_wrap(Array, raw.partition_functions, nb))
+    f_arr  = copy(unsafe_wrap(Array, raw.free_energies, nb))
+    e_arr  = copy(unsafe_wrap(Array, raw.internal_energies, nb))
+    cv_arr = copy(unsafe_wrap(Array, raw.specific_heats, nb))
+    s_arr  = copy(unsafe_wrap(Array, raw.entropies, nb))
+    r_eff  = copy(unsafe_wrap(Array, raw.effective_samples, nb))
+
+    obs_exp = Vector{Vector{ComplexF64}}(undef, n_obs)
+    obs_err = Vector{Vector{Float64}}(undef, n_obs)
+    if n_obs > 0
+        raw_re = unsafe_wrap(Array, raw.observable_expectations_re, (nb, n_obs))
+        raw_im = unsafe_wrap(Array, raw.observable_expectations_im, (nb, n_obs))
+        raw_err = unsafe_wrap(Array, raw.observable_errors, (nb, n_obs))
+        for oi in 1:n_obs
+            obs_exp[oi] = complex.(copy(raw_re[:, oi]), copy(raw_im[:, oi]))
+            obs_err[oi] = copy(raw_err[:, oi])
+        end
+    end
+
+    ccall((:qkrylov_ftlm_sweep_result_free_fp64, libqkrylov), Cvoid, (Ref{FTLMSweepResultFP64C},), res_c)
+
+    return FTLMSweepResult{Float64}(dim, b_grid, z_arr, f_arr, e_arr, cv_arr, s_arr, r_eff, obs_exp, obs_err)
+end
+
+function ftlm_sweep(
+    H::MatrixFreeHamiltonian{Float32};
+    betas::AbstractVector{<:Real}=[1.0],
+    observables::Vector{<:MatrixFreeHamiltonian{Float32}}=MatrixFreeHamiltonian{Float32}[],
+    n_random::Integer=50,
+    n_steps::Integer=100,
+    seed::Integer=42
+)::FTLMSweepResult{Float32}
+    nb = length(betas)
+    n_obs = length(observables)
+    beta_arr = Vector{Float32}(betas)
+    obs_ptrs = [obs.ptr for obs in observables]
+
+    res_c = Ref{FTLMSweepResultFP32C}()
+    status = ccall(
+        (:qkrylov_ftlm_sweep_fp32, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Cfloat}, Cint, Ptr{Ptr{Cvoid}}, Cint, Cint, Cint, Culonglong, Ref{FTLMSweepResultFP32C}),
+        H.ptr, pointer(beta_arr), Cint(nb), isempty(obs_ptrs) ? C_NULL : pointer(obs_ptrs), Cint(n_obs), Cint(n_random), Cint(n_steps), Culonglong(seed), res_c
+    )
+    _check_status(status, "FTLM sweep failed")
+
+    raw = res_c[]
+    dim = Int(raw.dimension)
+    b_grid = copy(unsafe_wrap(Array, raw.beta_grid, nb))
+    z_arr  = copy(unsafe_wrap(Array, raw.partition_functions, nb))
+    f_arr  = copy(unsafe_wrap(Array, raw.free_energies, nb))
+    e_arr  = copy(unsafe_wrap(Array, raw.internal_energies, nb))
+    cv_arr = copy(unsafe_wrap(Array, raw.specific_heats, nb))
+    s_arr  = copy(unsafe_wrap(Array, raw.entropies, nb))
+    r_eff  = copy(unsafe_wrap(Array, raw.effective_samples, nb))
+
+    obs_exp = Vector{Vector{ComplexF32}}(undef, n_obs)
+    obs_err = Vector{Vector{Float32}}(undef, n_obs)
+    if n_obs > 0
+        raw_re = unsafe_wrap(Array, raw.observable_expectations_re, (nb, n_obs))
+        raw_im = unsafe_wrap(Array, raw.observable_expectations_im, (nb, n_obs))
+        raw_err = unsafe_wrap(Array, raw.observable_errors, (nb, n_obs))
+        for oi in 1:n_obs
+            obs_exp[oi] = complex.(copy(raw_re[:, oi]), copy(raw_im[:, oi]))
+            obs_err[oi] = copy(raw_err[:, oi])
+        end
+    end
+
+    ccall((:qkrylov_ftlm_sweep_result_free_fp32, libqkrylov), Cvoid, (Ref{FTLMSweepResultFP32C},), res_c)
+
+    return FTLMSweepResult{Float32}(dim, b_grid, z_arr, f_arr, e_arr, cv_arr, s_arr, r_eff, obs_exp, obs_err)
+end
+
+function ftlm_sweep_streamed(
+    H::MatrixFreeHamiltonian{Float64};
+    betas::AbstractVector{<:Real}=[1.0],
+    observables::Vector{<:MatrixFreeHamiltonian{Float64}}=MatrixFreeHamiltonian{Float64}[],
+    n_random::Integer=50,
+    n_steps::Integer=100,
+    seed::Integer=42
+)::FTLMSweepResult{Float64}
+    nb = length(betas)
+    n_obs = length(observables)
+    beta_arr = Vector{Float64}(betas)
+    obs_ptrs = [obs.ptr for obs in observables]
+
+    res_c = Ref{FTLMSweepResultFP64C}()
+    status = ccall(
+        (:qkrylov_ftlm_sweep_streamed_fp64, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Cdouble}, Cint, Ptr{Ptr{Cvoid}}, Cint, Cint, Cint, Culonglong, Ref{FTLMSweepResultFP64C}),
+        H.ptr, pointer(beta_arr), Cint(nb), isempty(obs_ptrs) ? C_NULL : pointer(obs_ptrs), Cint(n_obs), Cint(n_random), Cint(n_steps), Culonglong(seed), res_c
+    )
+    _check_status(status, "FTLM streamed sweep failed")
+
+    raw = res_c[]
+    dim = Int(raw.dimension)
+    b_grid = copy(unsafe_wrap(Array, raw.beta_grid, nb))
+    z_arr  = copy(unsafe_wrap(Array, raw.partition_functions, nb))
+    f_arr  = copy(unsafe_wrap(Array, raw.free_energies, nb))
+    e_arr  = copy(unsafe_wrap(Array, raw.internal_energies, nb))
+    cv_arr = copy(unsafe_wrap(Array, raw.specific_heats, nb))
+    s_arr  = copy(unsafe_wrap(Array, raw.entropies, nb))
+    r_eff  = copy(unsafe_wrap(Array, raw.effective_samples, nb))
+
+    obs_exp = Vector{Vector{ComplexF64}}(undef, n_obs)
+    obs_err = Vector{Vector{Float64}}(undef, n_obs)
+    if n_obs > 0
+        raw_re = unsafe_wrap(Array, raw.observable_expectations_re, (nb, n_obs))
+        raw_im = unsafe_wrap(Array, raw.observable_expectations_im, (nb, n_obs))
+        raw_err = unsafe_wrap(Array, raw.observable_errors, (nb, n_obs))
+        for oi in 1:n_obs
+            obs_exp[oi] = complex.(copy(raw_re[:, oi]), copy(raw_im[:, oi]))
+            obs_err[oi] = copy(raw_err[:, oi])
+        end
+    end
+
+    ccall((:qkrylov_ftlm_sweep_result_free_fp64, libqkrylov), Cvoid, (Ref{FTLMSweepResultFP64C},), res_c)
+
+    return FTLMSweepResult{Float64}(dim, b_grid, z_arr, f_arr, e_arr, cv_arr, s_arr, r_eff, obs_exp, obs_err)
+end
+
+function ftlm_sweep_streamed(
+    H::MatrixFreeHamiltonian{Float32};
+    betas::AbstractVector{<:Real}=[1.0],
+    observables::Vector{<:MatrixFreeHamiltonian{Float32}}=MatrixFreeHamiltonian{Float32}[],
+    n_random::Integer=50,
+    n_steps::Integer=100,
+    seed::Integer=42
+)::FTLMSweepResult{Float32}
+    nb = length(betas)
+    n_obs = length(observables)
+    beta_arr = Vector{Float32}(betas)
+    obs_ptrs = [obs.ptr for obs in observables]
+
+    res_c = Ref{FTLMSweepResultFP32C}()
+    status = ccall(
+        (:qkrylov_ftlm_sweep_streamed_fp32, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Cfloat}, Cint, Ptr{Ptr{Cvoid}}, Cint, Cint, Cint, Culonglong, Ref{FTLMSweepResultFP32C}),
+        H.ptr, pointer(beta_arr), Cint(nb), isempty(obs_ptrs) ? C_NULL : pointer(obs_ptrs), Cint(n_obs), Cint(n_random), Cint(n_steps), Culonglong(seed), res_c
+    )
+    _check_status(status, "FTLM streamed sweep failed")
+
+    raw = res_c[]
+    dim = Int(raw.dimension)
+    b_grid = copy(unsafe_wrap(Array, raw.beta_grid, nb))
+    z_arr  = copy(unsafe_wrap(Array, raw.partition_functions, nb))
+    f_arr  = copy(unsafe_wrap(Array, raw.free_energies, nb))
+    e_arr  = copy(unsafe_wrap(Array, raw.internal_energies, nb))
+    cv_arr = copy(unsafe_wrap(Array, raw.specific_heats, nb))
+    s_arr  = copy(unsafe_wrap(Array, raw.entropies, nb))
+    r_eff  = copy(unsafe_wrap(Array, raw.effective_samples, nb))
+
+    obs_exp = Vector{Vector{ComplexF32}}(undef, n_obs)
+    obs_err = Vector{Vector{Float32}}(undef, n_obs)
+    if n_obs > 0
+        raw_re = unsafe_wrap(Array, raw.observable_expectations_re, (nb, n_obs))
+        raw_im = unsafe_wrap(Array, raw.observable_expectations_im, (nb, n_obs))
+        raw_err = unsafe_wrap(Array, raw.observable_errors, (nb, n_obs))
+        for oi in 1:n_obs
+            obs_exp[oi] = complex.(copy(raw_re[:, oi]), copy(raw_im[:, oi]))
+            obs_err[oi] = copy(raw_err[:, oi])
+        end
+    end
+
+    ccall((:qkrylov_ftlm_sweep_result_free_fp32, libqkrylov), Cvoid, (Ref{FTLMSweepResultFP32C},), res_c)
+
+    return FTLMSweepResult{Float32}(dim, b_grid, z_arr, f_arr, e_arr, cv_arr, s_arr, r_eff, obs_exp, obs_err)
+end
+
+# -----------------------------------------------------------------------------
+# Decoupled FTLM: Krylov Subspace Sampling & Instant Multi-Temperature Sweeps
+# -----------------------------------------------------------------------------
+
+"""
+    FTLMSamples{T<:Union{Float32, Float64}}
+
+Opaque handle holding stochastically generated Krylov subspace samples and projected
+observable matrices. Allows zero-cost re-evaluation across arbitrary temperature grids.
+"""
+mutable struct FTLMSamples{T<:Union{Float32, Float64}}
+    ptr::Ptr{Cvoid}
+    precision::Type{T}
+
+    function FTLMSamples{T}(ptr::Ptr{Cvoid}) where {T<:Union{Float32, Float64}}
+        obj = new{T}(ptr, T)
+        finalizer(obj) do o
+            if o.ptr != C_NULL
+                ccall((:qkrylov_ftlm_samples_destroy, libqkrylov), Cvoid, (Ptr{Cvoid},), o.ptr)
+                o.ptr = C_NULL
+            end
+        end
+        return obj
+    end
+end
+
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, s::FTLMSamples) = s.ptr
+Base.show(io::IO, s::FTLMSamples{T}) where {T} = print(io, "FTLMSamples{$T}(ptr = $(s.ptr))")
+
+"""
+    ftlm_sample(H::MatrixFreeHamiltonian; observables=[], n_random=50, n_steps=100, seed=42) -> FTLMSamples
+
+Stage 1 of the decoupled FTLM workflow. Runs `n_random` Lanczos expansions of length `n_steps`
+on `H` and projects all operators in `observables` onto the Krylov subspace.
+Computes all computationally heavy matrix-vector products (SpMV) in this stage.
+"""
+function ftlm_sample(
+    H::MatrixFreeHamiltonian{Float64};
+    observables::Vector{<:MatrixFreeHamiltonian{Float64}}=MatrixFreeHamiltonian{Float64}[],
+    n_random::Integer=50,
+    n_steps::Integer=100,
+    seed::Integer=42
+)::FTLMSamples{Float64}
+    n_obs = length(observables)
+    obs_ptrs = [obs.ptr for obs in observables]
+    out_ptr = Ref{Ptr{Cvoid}}(C_NULL)
+
+    status = ccall(
+        (:qkrylov_ftlm_sample_fp64, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Cint, Cint, Cint, Culonglong, Ref{Ptr{Cvoid}}),
+        H.ptr, isempty(obs_ptrs) ? C_NULL : pointer(obs_ptrs), Cint(n_obs), Cint(n_random), Cint(n_steps), Culonglong(seed), out_ptr
+    )
+    _check_status(status, "FTLM sampling failed")
+    return FTLMSamples{Float64}(out_ptr[])
+end
+
+function ftlm_sample(
+    H::MatrixFreeHamiltonian{Float32};
+    observables::Vector{<:MatrixFreeHamiltonian{Float32}}=MatrixFreeHamiltonian{Float32}[],
+    n_random::Integer=50,
+    n_steps::Integer=100,
+    seed::Integer=42
+)::FTLMSamples{Float32}
+    n_obs = length(observables)
+    obs_ptrs = [obs.ptr for obs in observables]
+    out_ptr = Ref{Ptr{Cvoid}}(C_NULL)
+
+    status = ccall(
+        (:qkrylov_ftlm_sample_fp32, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Cint, Cint, Cint, Culonglong, Ref{Ptr{Cvoid}}),
+        H.ptr, isempty(obs_ptrs) ? C_NULL : pointer(obs_ptrs), Cint(n_obs), Cint(n_random), Cint(n_steps), Culonglong(seed), out_ptr
+    )
+    _check_status(status, "FTLM sampling failed")
+    return FTLMSamples{Float32}(out_ptr[])
+end
+
+"""
+    ftlm_evaluate_sweep(samples::FTLMSamples, betas) -> FTLMSweepResult
+
+Stage 2 of the decoupled FTLM workflow. Evaluates the thermodynamic equations of state
+and all projected observables on the grid `betas` with zero additional matrix-vector products.
+"""
+function ftlm_evaluate_sweep(
+    samples::FTLMSamples{Float64},
+    betas::AbstractVector{<:Real}
+)::FTLMSweepResult{Float64}
+    nb = length(betas)
+    beta_arr = Vector{Float64}(betas)
+
+    res_c = Ref{FTLMSweepResultFP64C}()
+    status = ccall(
+        (:qkrylov_ftlm_evaluate_sweep_fp64, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Cdouble}, Cint, Ref{FTLMSweepResultFP64C}),
+        samples.ptr, pointer(beta_arr), Cint(nb), res_c
+    )
+    _check_status(status, "FTLM evaluate sweep failed")
+
+    raw = res_c[]
+    dim = Int(raw.dimension)
+    n_obs = Int(raw.num_observables)
+    b_grid = copy(unsafe_wrap(Array, raw.beta_grid, nb))
+    z_arr  = copy(unsafe_wrap(Array, raw.partition_functions, nb))
+    f_arr  = copy(unsafe_wrap(Array, raw.free_energies, nb))
+    e_arr  = copy(unsafe_wrap(Array, raw.internal_energies, nb))
+    cv_arr = copy(unsafe_wrap(Array, raw.specific_heats, nb))
+    s_arr  = copy(unsafe_wrap(Array, raw.entropies, nb))
+    r_eff  = copy(unsafe_wrap(Array, raw.effective_samples, nb))
+
+    obs_exp = Vector{Vector{ComplexF64}}(undef, n_obs)
+    obs_err = Vector{Vector{Float64}}(undef, n_obs)
+    if n_obs > 0
+        raw_re = unsafe_wrap(Array, raw.observable_expectations_re, (nb, n_obs))
+        raw_im = unsafe_wrap(Array, raw.observable_expectations_im, (nb, n_obs))
+        raw_err = unsafe_wrap(Array, raw.observable_errors, (nb, n_obs))
+        for oi in 1:n_obs
+            obs_exp[oi] = complex.(copy(raw_re[:, oi]), copy(raw_im[:, oi]))
+            obs_err[oi] = copy(raw_err[:, oi])
+        end
+    end
+
+    ccall((:qkrylov_ftlm_sweep_result_free_fp64, libqkrylov), Cvoid, (Ref{FTLMSweepResultFP64C},), res_c)
+
+    return FTLMSweepResult{Float64}(dim, b_grid, z_arr, f_arr, e_arr, cv_arr, s_arr, r_eff, obs_exp, obs_err)
+end
+
+function ftlm_evaluate_sweep(
+    samples::FTLMSamples{Float32},
+    betas::AbstractVector{<:Real}
+)::FTLMSweepResult{Float32}
+    nb = length(betas)
+    beta_arr = Vector{Float32}(betas)
+
+    res_c = Ref{FTLMSweepResultFP32C}()
+    status = ccall(
+        (:qkrylov_ftlm_evaluate_sweep_fp32, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Cfloat}, Cint, Ref{FTLMSweepResultFP32C}),
+        samples.ptr, pointer(beta_arr), Cint(nb), res_c
+    )
+    _check_status(status, "FTLM evaluate sweep failed")
+
+    raw = res_c[]
+    dim = Int(raw.dimension)
+    n_obs = Int(raw.num_observables)
+    b_grid = copy(unsafe_wrap(Array, raw.beta_grid, nb))
+    z_arr  = copy(unsafe_wrap(Array, raw.partition_functions, nb))
+    f_arr  = copy(unsafe_wrap(Array, raw.free_energies, nb))
+    e_arr  = copy(unsafe_wrap(Array, raw.internal_energies, nb))
+    cv_arr = copy(unsafe_wrap(Array, raw.specific_heats, nb))
+    s_arr  = copy(unsafe_wrap(Array, raw.entropies, nb))
+    r_eff  = copy(unsafe_wrap(Array, raw.effective_samples, nb))
+
+    obs_exp = Vector{Vector{ComplexF32}}(undef, n_obs)
+    obs_err = Vector{Vector{Float32}}(undef, n_obs)
+    if n_obs > 0
+        raw_re = unsafe_wrap(Array, raw.observable_expectations_re, (nb, n_obs))
+        raw_im = unsafe_wrap(Array, raw.observable_expectations_im, (nb, n_obs))
+        raw_err = unsafe_wrap(Array, raw.observable_errors, (nb, n_obs))
+        for oi in 1:n_obs
+            obs_exp[oi] = complex.(copy(raw_re[:, oi]), copy(raw_im[:, oi]))
+            obs_err[oi] = copy(raw_err[:, oi])
+        end
+    end
+
+    ccall((:qkrylov_ftlm_sweep_result_free_fp32, libqkrylov), Cvoid, (Ref{FTLMSweepResultFP32C},), res_c)
+
+    return FTLMSweepResult{Float32}(dim, b_grid, z_arr, f_arr, e_arr, cv_arr, s_arr, r_eff, obs_exp, obs_err)
+end
+
+ftlm_evaluate_sweep(samples::FTLMSamples, beta::Real) = ftlm_evaluate_sweep(samples, [beta])
+
+# SciML interface extension for FTLMSamples
+solve(prob::ThermalProblem, samples::FTLMSamples; kwargs...) = ftlm_evaluate_sweep(samples, prob.betas)
+
 # Correction Vector Spectroscopy Solver
 struct CorrectionVectorResult{T<:Real}
     spectral_function::T
@@ -823,6 +1338,187 @@ function solver_correction_vector(
 end
 
 # -----------------------------------------------------------------------------
+# Real-Time Pure-State Quantum Evolution
+# -----------------------------------------------------------------------------
+
+struct RealTimeResult{T<:Real}
+    time_grid::Vector{T}
+    survival_probabilities::Vector{Complex{T}}
+    observable_expectations::Vector{Vector{Complex{T}}}
+end
+
+function time_evolve(
+    H::MatrixFreeHamiltonian{Float64},
+    psi0::AbstractVector{<:Number};
+    times::Union{AbstractVector{<:Real}, Nothing}=nothing,
+    time_grid::AbstractVector{<:Real}=[0.0],
+    observables::Vector{<:MatrixFreeHamiltonian{Float64}}=MatrixFreeHamiltonian{Float64}[],
+    n_steps::Integer=30
+)::RealTimeResult{Float64}
+    actual_times = times !== nothing ? times : time_grid
+    nt = length(actual_times)
+    n_obs = length(observables)
+    t_arr = Vector{Float64}(actual_times)
+    psi_arr = Vector{ComplexF64}(psi0)
+    obs_ptrs = [obs.ptr for obs in observables]
+
+    res_c = Ref{RealTimeResultFP64C}()
+    status = ccall(
+        (:qkrylov_time_evolve_fp64, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Cdouble}, Ptr{Cdouble}, Cint, Ptr{Ptr{Cvoid}}, Cint, Cint, Ref{RealTimeResultFP64C}),
+        H.ptr, pointer(psi_arr), pointer(t_arr), Cint(nt), isempty(obs_ptrs) ? C_NULL : pointer(obs_ptrs), Cint(n_obs), Cint(n_steps), res_c
+    )
+    _check_status(status, "Real-time evolution failed")
+
+    raw = res_c[]
+    s_re = unsafe_wrap(Array, raw.survival_probabilities_re, nt)
+    s_im = unsafe_wrap(Array, raw.survival_probabilities_im, nt)
+    surv = complex.(s_re, s_im)
+
+    obs_exp = Vector{Vector{ComplexF64}}()
+    if n_obs > 0 && raw.observable_expectations_re != C_NULL
+        raw_re = unsafe_wrap(Array, raw.observable_expectations_re, (nt, n_obs))
+        raw_im = unsafe_wrap(Array, raw.observable_expectations_im, (nt, n_obs))
+        for j in 1:n_obs
+            re_slice = copy(raw_re[:, j])
+            im_slice = copy(raw_im[:, j])
+            push!(obs_exp, complex.(re_slice, im_slice))
+        end
+    end
+
+    ccall((:qkrylov_real_time_result_free_fp64, libqkrylov), Cvoid, (Ref{RealTimeResultFP64C},), res_c)
+
+    return RealTimeResult{Float64}(t_arr, surv, obs_exp)
+end
+
+function time_evolve(
+    H::MatrixFreeHamiltonian{Float32},
+    psi0::AbstractVector{<:Number};
+    times::Union{AbstractVector{<:Real}, Nothing}=nothing,
+    time_grid::AbstractVector{<:Real}=[0.0f0],
+    observables::Vector{<:MatrixFreeHamiltonian{Float32}}=MatrixFreeHamiltonian{Float32}[],
+    n_steps::Integer=30
+)::RealTimeResult{Float32}
+    actual_times = times !== nothing ? times : time_grid
+    nt = length(actual_times)
+    n_obs = length(observables)
+    t_arr = Vector{Float32}(actual_times)
+    psi_arr = Vector{ComplexF32}(psi0)
+    obs_ptrs = [obs.ptr for obs in observables]
+
+    res_c = Ref{RealTimeResultFP32C}()
+    status = ccall(
+        (:qkrylov_time_evolve_fp32, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Ptr{Cfloat}, Ptr{Cfloat}, Cint, Ptr{Ptr{Cvoid}}, Cint, Cint, Ref{RealTimeResultFP32C}),
+        H.ptr, pointer(psi_arr), pointer(t_arr), Cint(nt), isempty(obs_ptrs) ? C_NULL : pointer(obs_ptrs), Cint(n_obs), Cint(n_steps), res_c
+    )
+    _check_status(status, "Real-time evolution failed")
+
+    raw = res_c[]
+    s_re = unsafe_wrap(Array, raw.survival_probabilities_re, nt)
+    s_im = unsafe_wrap(Array, raw.survival_probabilities_im, nt)
+    surv = complex.(s_re, s_im)
+
+    obs_exp = Vector{Vector{ComplexF32}}()
+    if n_obs > 0 && raw.observable_expectations_re != C_NULL
+        raw_re = unsafe_wrap(Array, raw.observable_expectations_re, (nt, n_obs))
+        raw_im = unsafe_wrap(Array, raw.observable_expectations_im, (nt, n_obs))
+        for j in 1:n_obs
+            re_slice = copy(raw_re[:, j])
+            im_slice = copy(raw_im[:, j])
+            push!(obs_exp, complex.(re_slice, im_slice))
+        end
+    end
+
+    ccall((:qkrylov_real_time_result_free_fp32, libqkrylov), Cvoid, (Ref{RealTimeResultFP32C},), res_c)
+
+    return RealTimeResult{Float32}(t_arr, surv, obs_exp)
+end
+
+# -----------------------------------------------------------------------------
+# Finite-Temperature Real-Time Dynamics: C_AB(t) = <A(t) B(0)>_beta
+# -----------------------------------------------------------------------------
+
+struct FTLMDynamicsResult{T<:Real}
+    beta::T
+    time_grid::Vector{T}
+    correlations::Vector{Complex{T}}
+    correlation_errors::Vector{T}
+end
+
+function ftlm_dynamics(
+    H::MatrixFreeHamiltonian{Float64},
+    A::MatrixFreeHamiltonian{Float64},
+    B::MatrixFreeHamiltonian{Float64};
+    beta::Real=1.0,
+    times::Union{AbstractVector{<:Real}, Nothing}=nothing,
+    time_grid::AbstractVector{<:Real}=[0.0],
+    n_random::Integer=50,
+    n_steps::Integer=100,
+    seed::Integer=42
+)::FTLMDynamicsResult{Float64}
+    actual_times = times !== nothing ? times : time_grid
+    nt = length(actual_times)
+    t_arr = Vector{Float64}(actual_times)
+
+    res_c = Ref{FTLMDynamicsResultFP64C}()
+    status = ccall(
+        (:qkrylov_ftlm_dynamics_fp64, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Cdouble, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cdouble}, Cint, Cint, Cint, Culonglong, Ref{FTLMDynamicsResultFP64C}),
+        H.ptr, Cdouble(beta), A.ptr, B.ptr, pointer(t_arr), Cint(nt), Cint(n_random), Cint(n_steps), Culonglong(seed), res_c
+    )
+    _check_status(status, "FTLM dynamics failed")
+
+    raw = res_c[]
+    c_re = copy(unsafe_wrap(Array, raw.correlations_re, nt))
+    c_im = copy(unsafe_wrap(Array, raw.correlations_im, nt))
+    errs = copy(unsafe_wrap(Array, raw.correlation_errors, nt))
+    corr = complex.(c_re, c_im)
+
+    ccall((:qkrylov_ftlm_dynamics_result_free_fp64, libqkrylov), Cvoid, (Ref{FTLMDynamicsResultFP64C},), res_c)
+
+    return FTLMDynamicsResult{Float64}(Float64(beta), t_arr, corr, errs)
+end
+
+function ftlm_dynamics(
+    H::MatrixFreeHamiltonian{Float32},
+    A::MatrixFreeHamiltonian{Float32},
+    B::MatrixFreeHamiltonian{Float32};
+    beta::Real=1.0,
+    times::Union{AbstractVector{<:Real}, Nothing}=nothing,
+    time_grid::AbstractVector{<:Real}=[0.0f0],
+    n_random::Integer=50,
+    n_steps::Integer=100,
+    seed::Integer=42
+)::FTLMDynamicsResult{Float32}
+    actual_times = times !== nothing ? times : time_grid
+    nt = length(actual_times)
+    t_arr = Vector{Float32}(actual_times)
+
+    res_c = Ref{FTLMDynamicsResultFP32C}()
+    status = ccall(
+        (:qkrylov_ftlm_dynamics_fp32, libqkrylov),
+        Cint,
+        (Ptr{Cvoid}, Cfloat, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cfloat}, Cint, Cint, Cint, Culonglong, Ref{FTLMDynamicsResultFP32C}),
+        H.ptr, Cfloat(beta), A.ptr, B.ptr, pointer(t_arr), Cint(nt), Cint(n_random), Cint(n_steps), Culonglong(seed), res_c
+    )
+    _check_status(status, "FTLM dynamics failed")
+
+    raw = res_c[]
+    c_re = copy(unsafe_wrap(Array, raw.correlations_re, nt))
+    c_im = copy(unsafe_wrap(Array, raw.correlations_im, nt))
+    errs = copy(unsafe_wrap(Array, raw.correlation_errors, nt))
+    corr = complex.(c_re, c_im)
+
+    ccall((:qkrylov_ftlm_dynamics_result_free_fp32, libqkrylov), Cvoid, (Ref{FTLMDynamicsResultFP32C},), res_c)
+
+    return FTLMDynamicsResult{Float32}(Float32(beta), t_arr, corr, errs)
+end
+
+# -----------------------------------------------------------------------------
 # Base.show Formatting for Solver Results
 # -----------------------------------------------------------------------------
 
@@ -852,4 +1548,12 @@ function Base.show(io::IO, res::CorrectionVectorResult{T}) where {T}
     status_str = res.converged ? "converged = true" : "WARNING: maxiter hit without converging!"
     vec_str = res.has_vector ? ", vector = Vector{Complex{$T}}(dim=$(length(res._vector)))" : ""
     print(io, "CorrectionVectorResult{$T}(S = $(res.spectral_function), iterations = $(res.iterations), $status_str$vec_str)")
+end
+
+function Base.show(io::IO, res::RealTimeResult{T}) where {T}
+    print(io, "RealTimeResult{$T}(num_times = $(length(res.time_grid)), num_observables = $(length(res.observable_expectations)))")
+end
+
+function Base.show(io::IO, res::FTLMDynamicsResult{T}) where {T}
+    print(io, "FTLMDynamicsResult{$T}(beta = $(res.beta), num_times = $(length(res.time_grid)))")
 end

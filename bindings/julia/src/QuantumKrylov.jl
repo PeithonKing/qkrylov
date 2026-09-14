@@ -26,13 +26,14 @@ export MatrixFreeHamiltonian, diagonal, diagonal_device
 export DeviceVector, mul!
 export solve
 export AbstractQuantumProblem, GroundStateProblem, ExcitedStatesProblem, ThermalProblem, DynamicsProblem, SpectralProblem
-export AbstractQuantumAlgorithm, AbstractLanczosVariation, SinglePass, TwoPass
+export AbstractQuantumAlgorithm, AbstractLanczosVariation, OnePass, TwoPass, OnePass_DKGS
 export Lanczos, Davidson, FTLM, ContinuedFraction, CorrectionVector
 export AbstractQuantumSolution, GroundStateSolution, LanczosResult, ExcitedStatesSolution
 export lanczos_ground_state, lanczos_lowest, LanczosLowestResult
 export davidson_lowest, DavidsonResult
 export continued_fraction_coeffs, ContinuedFractionResult, evaluate_spectral_function
-export ftlm, FTLMResult
+export ftlm, FTLMResult, ftlm_sweep, ftlm_sweep_streamed, FTLMSweepResult, FTLMSamples, ftlm_sample, ftlm_evaluate_sweep
+export RealTimeResult, time_evolve, FTLMDynamicsResult, ftlm_dynamics
 export solver_correction_vector, CorrectionVectorResult
 export vector_dot, vector_norm, vector_axpy!, vector_scal!, vector_normalize!, vector_zero_fill!, vector_copy!
 export AbstractDevice, CPUDevice, CUDADevice, HIPDevice, SYCLDevice
