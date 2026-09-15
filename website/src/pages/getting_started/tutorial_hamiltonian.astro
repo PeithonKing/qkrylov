@@ -1,0 +1,14 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import Content, { frontmatter } from '../../content/docs/getting_started/tutorial_hamiltonian/main.ipynb';
+
+const pageFrontmatter = {
+  title: 'Building the Hamiltonian',
+  description: 'Construct a 1D Heisenberg Spin-1/2 chain with qkrylov in Python, C++, and Julia',
+  ...(frontmatter || {}),
+};
+---
+
+<StarlightPage frontmatter={pageFrontmatter}>
+  <Content />
+</StarlightPage>

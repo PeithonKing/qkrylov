@@ -1,0 +1,18 @@
+PROJECT_NAME           = "qkrylov"
+INPUT                  = ../../include/qkrylov
+STRIP_FROM_PATH        = ../../include
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp *.h
+GENERATE_XML           = YES
+XML_OUTPUT             = .tools/xml
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+PREDEFINED             = QKRYLOV_PRECISION_NAMESPACE=fp64
+JAVADOC_AUTOBRIEF      = YES
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO

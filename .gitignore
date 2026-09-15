@@ -65,3 +65,7 @@ external/
 docs/getting_started/tutorial_hamiltonian/index.md
 docs/getting_started/tutorial_hamiltonian/tutorial_hamiltonian.*
 docs/getting_started/tutorial_hamiltonian/images/
+
+# Auto-generated documentation
+docs/src/content/docs/api/auto/
+docs/scripts/.tools/
