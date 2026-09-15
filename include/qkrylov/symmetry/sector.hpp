@@ -3,14 +3,20 @@
 #include "qkrylov/core/types.hpp"
 #include <cmath>
 
+/// \file sector.hpp
+/// \brief Quantum number sectors, symmetry tags, and conservation constraints.
+
 namespace qkrylov {
 
 namespace sector {
 
-// Unconstrained Hilbert space (no symmetries applied)
+/// \brief Unconstrained Hilbert space tag representing the full Fock space without symmetry projection.
 struct Unconstrained {};
 
-// Total Sz conservation (supports integer or half-integer)
+/// \brief Total \f$S^z\f$ spin projection conservation tag.
+///
+/// Stores \f$2 \times S^z\f$ internally to represent half-integers without rounding errors.
+/// <TODO-LLM: Explain abelian U(1) spin conservation in quantum spin chains and representation of half-integer sectors here>
 struct Sz {
     int sz2 = 0; // Stores 2 * Sz internally to represent half-integers cleanly
     constexpr Sz() = default;
@@ -19,7 +25,7 @@ struct Sz {
         : sz2(static_cast<int>(val >= 0.0 ? (val * 2.0 + 0.5) : (val * 2.0 - 0.5))) {}
 };
 
-// Fermionic particle number conservation
+/// \brief Total fermionic particle number conservation tag.
 struct Particles {
     int n = 0;
     constexpr Particles() = default;
@@ -27,7 +33,7 @@ struct Particles {
 };
 using ParticleNumber = Particles;
 
-// Hubbard / t-J spin-resolved particle conservation
+/// \brief Spin-resolved particle number conservation tag for Hubbard and t-J models.
 struct Hubbard {
     int nup = 0;
     int ndn = 0;
@@ -35,7 +41,7 @@ struct Hubbard {
     constexpr Hubbard(int up, int dn) : nup(up), ndn(dn) {}
 };
 
-// Bosonic particle conservation
+/// \brief Bosonic particle number conservation tag.
 struct Bosons {
     int nb = 0;
     constexpr Bosons() = default;
@@ -44,6 +50,8 @@ struct Bosons {
 
 } // namespace sector
 
+/// \brief Unified symmetry sector configuration specifying active quantum numbers.
+/// <TODO-LLM: Document symmetry decomposition, block diagonalization efficiency, and state filtering algorithms here>
 struct Sector
 {
     //

@@ -1,3 +1,17 @@
+"""
+    QuantumKrylov
+
+Native high-performance Julia interface to the `qkrylov` C++20 matrix-free Krylov subspace methods and quantum dynamics library.
+
+# Features
+- Zero-copy native `ccall` interface into Kokkos-accelerated C++ kernels.
+- Dual-precision numerical execution (`Float64` and `Float32`).
+- Hardware device traits for OpenMP CPU, NVIDIA CUDA, AMD HIP, and Intel SYCL.
+- Full integration with the Julia SciML Common Interface (`solve(prob, alg)`).
+
+# Notes
+<TODO-LLM: Explain the Julia module architecture, native ccall binding layer, and SciML common interface integration here>
+"""
 module QuantumKrylov
 
 using qkrylov_jll

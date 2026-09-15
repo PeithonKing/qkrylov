@@ -1,5 +1,20 @@
 # MatrixFreeHamiltonian & operator overloading
 
+"""
+    MatrixFreeHamiltonian{T<:Union{Float32, Float64}}
+
+Matrix-free quantum Hamiltonian linear operator.
+Evaluates matrix-vector products \$H |v\\rangle\$ on-the-fly without allocating sparse or dense matrices in RAM.
+Supports dual-precision floating-point arithmetic (`Float64` and `Float32`) across CPU and GPU hardware.
+
+# Constructors
+- `MatrixFreeHamiltonian{T}(basis, site, opsum; device=CPUDevice())`
+- `MatrixFreeHamiltonian(basis, site, opsum; device=CPUDevice(), precision=...)`
+- `MatrixFreeHamiltonian(basis, opsum; device=CPUDevice(), precision=...)`
+
+# Notes
+<TODO-LLM: Explain matrix-free SpMV algorithm, Kokkos parallel kernel dispatch, and zero-RAM scaling here>
+"""
 mutable struct MatrixFreeHamiltonian{T<:Union{Float32, Float64}}
     ptr::Ptr{Cvoid}
     basis::AbstractBasis

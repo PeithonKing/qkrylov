@@ -1,7 +1,23 @@
 # Site wrapper structs
 
+"""
+    AbstractSite
+
+Abstract base type for physical local quantum site degrees of freedom.
+
+# Notes
+<TODO-LLM: Explain local Hilbert space site definitions and operator mapping here>
+"""
 abstract type AbstractSite end
 
+"""
+    SpinHalfSite <: AbstractSite
+
+Two-level spin-1/2 site (\$d=2\$) with basis states \$|\\uparrow\\rangle\$ and \$|\\downarrow\\rangle\$.
+
+# Notes
+<TODO-LLM: Explain Pauli spin-1/2 representation and bit-level encoding here>
+"""
 mutable struct SpinHalfSite <: AbstractSite
     ptr::Ptr{Cvoid}
 

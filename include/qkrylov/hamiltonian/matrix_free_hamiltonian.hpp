@@ -46,12 +46,17 @@ inline std::shared_ptr<Site> infer_site_from_basis(const Basis& basis) {
     throw std::invalid_argument("Cannot infer site type from basis. Please provide site explicitly.");
 }
 
-/// Matrix-free Hamiltonian with pre-compiled operator action.
+/// \file matrix_free_hamiltonian.hpp
+/// \brief Pre-compiled matrix-free Hamiltonian operator executing on-the-fly matrix-vector products.
+
+/// \brief Matrix-free Hamiltonian operator executing on-the-fly matrix-vector products.
 ///
 /// At construction time, the operator sum is evaluated for every basis state
 /// to build a CSR (Compressed Sparse Row) representation on the device.
 /// This one-time cost eliminates per-apply virtual dispatch, string matching,
 /// and hash-map lookups — enabling both GPU execution and faster CPU paths.
+/// <TODO-LLM: Detail CSR kernel compilation, SIMD alignment, and memory bandwidth saturation here>
+/// \tparam ExecSpace Target Kokkos execution space.
 template <typename ExecSpace>
 class MatrixFreeHamiltonian
 {

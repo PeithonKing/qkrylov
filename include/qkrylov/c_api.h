@@ -40,14 +40,28 @@ QKRYLOV_API void        qkrylov_clear_last_error(void);
 /* -----------------------------------------------------------------------------
  * Opaque Handles
  * ----------------------------------------------------------------------------- */
+/// \brief Opaque handle representing a symmetry sector and quantum number constraints.
+/// <TODO-LLM: Detail C ABI memory management, allocation lifecycle, and sector ownership here>
 typedef struct qkrylov_sector_t       qkrylov_sector_t;
 typedef struct qkrylov_sector_t*      qkrylov_sector_h;
+
+/// \brief Opaque handle representing a many-body quantum Fock space basis.
+/// <TODO-LLM: Explain C ABI state index mapping and thread-safety invariants here>
 typedef struct qkrylov_basis_t        qkrylov_basis_t;
 typedef struct qkrylov_basis_t*       qkrylov_basis_h;
+
+/// \brief Opaque handle representing a local physical site degree of freedom.
+/// <TODO-LLM: Document local site operator evaluation across the C ABI barrier here>
 typedef struct qkrylov_site_t         qkrylov_site_t;
 typedef struct qkrylov_site_t*        qkrylov_site_h;
+
+/// \brief Opaque handle representing a symbolic sum of interaction terms.
+/// <TODO-LLM: Detail serialized operator polynomial transfer across language runtimes here>
 typedef struct qkrylov_opsum_t        qkrylov_opsum_t;
 typedef struct qkrylov_opsum_t*       qkrylov_opsum_h;
+
+/// \brief Opaque handle representing a compiled matrix-free Hamiltonian operator.
+/// <TODO-LLM: Explain C ABI SpMV dispatch, memory alignment, and device execution context here>
 typedef struct qkrylov_hamiltonian_t  qkrylov_hamiltonian_t;
 typedef struct qkrylov_hamiltonian_t* qkrylov_hamiltonian_h;
 typedef struct qkrylov_device_vector_t  qkrylov_device_vector_t;
