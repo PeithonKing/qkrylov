@@ -15,8 +15,10 @@ struct device_execution_space<device::cpu> {
     using type = Kokkos::OpenMP;
 #elif defined(KOKKOS_ENABLE_THREADS)
     using type = Kokkos::Threads;
-#else
+#elif defined(KOKKOS_ENABLE_SERIAL)
     using type = Kokkos::Serial;
+#else
+    using type = Kokkos::DefaultHostExecutionSpace;
 #endif
 };
 
@@ -44,7 +46,11 @@ struct device_execution_space<device::openmp> {
 
 template <>
 struct device_execution_space<device::serial> {
+#if defined(KOKKOS_ENABLE_SERIAL)
     using type = Kokkos::Serial;
+#else
+    using type = Kokkos::DefaultHostExecutionSpace;
+#endif
 };
 
 template <>
