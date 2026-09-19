@@ -65,17 +65,23 @@ jobs:
           echo "Generating meta redirects to /qkrylov/${{ env.VERSION_DIR }}/"
           REDIRECT_HTML='<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=/qkrylov/${{ env.VERSION_DIR }}/"></head><body>Redirecting to latest release...</body></html>'
           
-          # Root redirect
-          echo $REDIRECT_HTML > website/dist/index.html
-          
-          # Latest folder redirect
-          mkdir -p website/dist/latest
-          echo $REDIRECT_HTML > website/dist/latest/index.html
+          mkdir -p website/redirects/latest
+          echo $REDIRECT_HTML > website/redirects/index.html
+          echo $REDIRECT_HTML > website/redirects/latest/index.html
 
-      - name: Deploy to gh-pages branch
+      - name: Deploy versioned docs
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./website/dist
           destination_dir: ./${{ env.VERSION_DIR }}
+          keep_files: true
+
+      - name: Deploy root redirects
+        if: startsWith(github.ref_name, 'release_v')
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./website/redirects
+          destination_dir: .
           keep_files: true # CRUCIAL: Do not delete existing versions in other folders!
