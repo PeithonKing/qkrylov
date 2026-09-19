@@ -28,13 +28,17 @@ struct sycl { int id = 0; };
 
 } // namespace device
 
-/// Selects which device to target.
+/// \file device.hpp
+/// \brief Hardware device discovery, runtime target selection, and Kokkos lifecycle management.
+
+/// \brief Target device descriptor specifying hardware architecture and device ordinal.
 ///
 /// - On GPU builds: the `id` field selects which GPU (0, 1, 2, ...).
 /// - On CPU builds: the `id` field is ignored.
 ///
 /// Accepted string formats: "cpu", "cuda:0", "cuda:1", "hip:0",
 /// "gpu:0", "gpu:1", "sycl:0", or just "gpu" (defaults to device 0).
+/// <TODO-LLM: Document device string grammar, multi-GPU rank binding, and NUMA node affinity here>
 struct Device {
     int id = 0;
 

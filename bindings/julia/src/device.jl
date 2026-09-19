@@ -2,6 +2,14 @@
 using Libdl
 
 # Hardware Device Traits
+"""
+    AbstractDevice
+
+Abstract base trait representing target hardware execution devices for Kokkos kernels.
+
+# Notes
+<TODO-LLM: Explain hardware device trait dispatch and Kokkos backend selection here>
+"""
 abstract type AbstractDevice end
 struct CPUDevice   <: AbstractDevice end
 struct CUDADevice  <: AbstractDevice end
@@ -35,6 +43,9 @@ end
 
 Return `true` if the underlying `libqkrylov` binary was compiled with GPU acceleration
 (CUDA, HIP, or SYCL), or `false` for a CPU-only build.
+
+# Notes
+<TODO-LLM: Explain compile-time Kokkos GPU configuration detection here>
 """
 function is_gpu_build()::Bool
     if !_has_symbol(:qkrylov_is_gpu_build)
@@ -48,20 +59,25 @@ end
 
 Return the name of the compiled GPU backend ("cuda", "hip", "sycl") if available,
 or `nothing` if built for CPU only. (Matches Python API `qkrylov.find_gpu()`).
+
+# Notes
+<TODO-LLM: Explain hardware GPU runtime discovery here>
 """
 function find_gpu()::Union{String, Nothing}
-    if !_has_symbol(:qkrylov_find_gpu)
+    if !is_gpu_build() || !_has_symbol(:qkrylov_backend_name)
         return nothing
     end
-    ptr = ccall((:qkrylov_find_gpu, libqkrylov), Cstring, ())
-    return ptr == C_NULL ? nothing : unsafe_string(ptr)
+    c_str = ccall((:qkrylov_backend_name, libqkrylov), Cstring, ())
+    return c_str == C_NULL ? nothing : unsafe_string(c_str)
 end
 
 """
     gpu_count() -> Int
 
-Return the number of available physical GPUs detected on the system.
-(Matches Python API `qkrylov.gpu_count()`).
+Return the number of available physical GPUs detected on the host system.
+
+# Notes
+<TODO-LLM: Explain multi-GPU enumeration semantics here>
 """
 function gpu_count()::Int
     if !_has_symbol(:qkrylov_gpu_count)
@@ -73,7 +89,7 @@ end
 """
     initialize_device!(device::AbstractString="cpu")
 
-Explicitly initialize Kokkos execution spaces for a targeted device (e.g. "cpu", "cuda:0").
+Initialize the target Kokkos execution device (e.g. "cpu", "cuda:0", "hip:0").
 """
 function initialize_device!(device::AbstractString="cpu")
     if !_has_symbol(:qkrylov_initialize_device)
@@ -92,6 +108,9 @@ end
 Opaque handle to hardware-accelerated device-resident memory (GPU VRAM or host Kokkos View).
 Enables zero-copy matrix-vector multiplication (`H * v_dev` or `mul!(y_dev, H, x_dev)`) and pure
 device BLAS-1 operations without CPU host staging overhead.
+
+# Notes
+<TODO-LLM: Explain device memory layout, Kokkos View handles, and zero-copy GPU execution here>
 """
 mutable struct DeviceVector{T<:Union{Float32, Float64}}
     ptr::Ptr{Cvoid}

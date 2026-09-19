@@ -1,40 +1,68 @@
-name: Deploy Docs
+name: Deploy Multi-Version Docs
 
-on:
+'on':
   push:
     branches:
       - main
       - master
+      - 'release_v*'
     paths:
-      - 'docs/**'
-      - 'zensical.toml'
+      - 'docs/**'          # markdown content changes
+      - 'website/**'       # build tooling changes
       - '.github/workflows/deploy_docs.yaml'
   workflow_dispatch:
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+permissions:
+  contents: write # Required for pushing to the gh-pages branch
+  pages: write
+  id-token: write
 
+concurrency:
+  group: "pages-deploy-${{ github.ref_name }}"
+  cancel-in-progress: false
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Determine Version & Base Path
+        id: versioning
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
+            VERSION_DIR="dev"
+          else
+            # Extract e.g. 'v1.4' from 'release_v1.4'
+            VERSION_DIR="${BRANCH_NAME#release_}"
+          fi
+          echo "Deploying to folder: $VERSION_DIR"
+          echo "VERSION_DIR=$VERSION_DIR" >> $GITHUB_ENV
+          echo "ASTRO_BASE_PATH=/qkrylov/$VERSION_DIR" >> $GITHUB_ENV
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.12'
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'website/package-lock.json'
 
-      - name: Install Zensical
-        run: pip install zensical
+      - name: Install dependencies
+        working-directory: website
+        run: npm ci
 
-      - name: Build Docs
-        run: python build_polyglot.py build_ci
+      - name: Build documentation
+        working-directory: website
+        env:
+          ASTRO_BASE_PATH: ${{ env.ASTRO_BASE_PATH }}
+        run: npm run build
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          keep_files: true  # CRITICAL: Do not delete whl/ index files if they exist!
+          publish_dir: ./website/dist
+          destination_dir: ./${{ env.VERSION_DIR }}
+          keep_files: true # CRUCIAL: Do not delete existing versions in other folders!

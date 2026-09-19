@@ -1,10 +1,22 @@
 import enum
 import numpy as np
-from typing import List, Tuple, Union, Sequence
+from typing import List, Tuple, Union, Sequence, Any
 from . import _qkrylov_cpp as _cpp
 
 class Op(str, enum.Enum):
-    """Enumeration of standard quantum operators to prevent typos."""
+    """Enumeration of quantum operator symbols to prevent string typos.
+
+    Each symbol acts locally on a single site:
+
+    - **Spin operators:** ``Sz`` (diagonal, returns ±1/2), ``Sp``/``Sm``
+      (raising/lowering, flip one spin and multiply by sqrt(S(S+1)-m(m±1))),
+      ``Sx = (Sp+Sm)/2``, ``Sy = -i(Sp-Sm)/2``.
+    - **Fermionic operators:** ``CdagUp``/``CUp`` (creation/annihilation, spin-up),
+      ``CdagDn``/``CDn`` (spin-down), with Jordan-Wigner phase tracked
+      automatically by the C++ kernel.
+    - **Number operators:** ``Nup``, ``Ndn``, ``Nupdn`` (double occupancy).
+    - **Bosonic operators:** ``Bdag``/``B`` (creation/annihilation), ``N`` (number).
+    """
     Sz = "Sz"
     Sp = "Sp"
     Sm = "Sm"
@@ -23,7 +35,21 @@ class Op(str, enum.Enum):
 
 
 class LocalOpExpr:
-    """Represents a local operator acting on a site, e.g. Sz(0)."""
+    """Symbolic representation of a local quantum operator acting at a specific site.
+
+    ``LocalOpExpr`` nodes are lightweight Python objects that defer all
+    evaluation to C++. Multiplying two ``LocalOpExpr`` instances returns a
+    ``TermExpr`` — a symbolic product. Adding ``TermExpr`` instances returns
+    an ``OpSumExpr``. The full expression tree is then compiled into a C++
+    operator sum list when passed to :class:`~qkrylov.operators.OpSum`.
+
+    Parameters
+    ----------
+    name : str
+        Operator symbol (e.g., 'Sz', 'Sp', 'CdagUp').
+    site : int
+        Zero-indexed site index.
+    """
     def __init__(self, name: str, site: int):
         self.name = name
         self.site = site
@@ -42,7 +68,21 @@ class LocalOpExpr:
 
 
 class TermExpr:
-    """Represents a term in the Hamiltonian, e.g. 1.0 * Sz(0) * Sz(1)."""
+    """Symbolic representation of a scalar-weighted product of local operators.
+
+    The term ``TermExpr(coeff, [op1, op2, ...])`` preserves the user's
+    operator ordering exactly as written. The C++ backend handles the physical
+    ordering (normal order, Jordan-Wigner phase) internally during the SpMV.
+    Users should not reorder operators manually; the backend is correct for
+    any ordering of creation/annihilation operators on distinct sites.
+
+    Parameters
+    ----------
+    coeff : complex
+        Scalar coupling coefficient.
+    ops : List[LocalOpExpr]
+        List of local operator factors acting on specific sites.
+    """
     def __init__(self, coeff: complex, ops: List[LocalOpExpr]):
         self.coeff = coeff
         self.ops = ops
@@ -76,7 +116,19 @@ class TermExpr:
 
 
 class OpSumExpr:
-    """Represents a sum of terms, e.g. 1.0*Sz(0)*Sz(1) + 0.5*Sp(0)*Sm(1)."""
+    """Symbolic sum of many-body interaction terms.
+
+    ``OpSumExpr`` accumulates terms as a flat list. Duplicate terms (same
+    sites, same operators, different coefficients) are **not** automatically
+    consolidated at the Python level — this happens inside the C++ ``OpSum``
+    builder when the expression is compiled. This makes Python-level construction
+    O(number of terms) with no quadratic merging overhead.
+
+    Parameters
+    ----------
+    terms : List[TermExpr]
+        Sequence of interaction terms in the sum.
+    """
     def __init__(self, terms: List[TermExpr]):
         self.terms = terms
 
@@ -129,9 +181,39 @@ def N(i: int) -> LocalOpExpr: return LocalOpExpr("N", i)
 
 
 class OpSum:
-    """Symbolic expression builder for quantum interactions."""
+    """High-performance symbolic expression builder for Hamiltonian interaction terms.
 
-    def __init__(self, dtype=np.float32):
+    Binds Python operator definitions into efficient C++ interaction lists.
+    When you call ``ops += term``, the Python ``TermExpr`` is immediately
+    serialized into the C++ ``OpSum`` object as a packed struct containing
+    (coefficient, [(operator_enum, site_index), ...]). During Hamiltonian
+    construction, the C++ backend iterates over all basis states, evaluates
+    each term's action, and builds the CSR connectivity table in one pass.
+    This one-time O(N * terms) cost eliminates any per-SpMV interpretation.
+
+    Parameters
+    ----------
+    dtype : Any, default=np.float32
+        Floating point precision for coupling coefficients.
+
+    Attributes
+    ----------
+    dtype : Any
+        Floating point precision.
+    size : int
+        Number of interaction terms in the sum.
+
+    Methods
+    -------
+    add_term(coeff, *ops)
+        Add a multi-site interaction term with scalar coefficient.
+    clear()
+        Remove all terms from the builder.
+    """
+    dtype: Any
+    _cpp_obj: Any
+
+    def __init__(self, dtype: Any = np.float32):
         suffix = '_FP64' if dtype == np.float64 else '_FP32'
         self.dtype = dtype
         self._cpp_obj = getattr(_cpp, f'OpSum{suffix}')()
@@ -139,21 +221,22 @@ class OpSum:
     def add_term(self, coeff: complex, *ops: Union[str, Op, int]):
         if len(ops) % 2 != 0:
             raise ValueError("Operators must be provided in (name, site) pairs.")
-        processed_ops = []
+        processed_ops: List[Union[str, int]] = []
         for i in range(0, len(ops), 2):
-            op_name = ops[i].value if isinstance(ops[i], Op) else str(ops[i])
+            op_item = ops[i]
+            op_name = op_item.value if isinstance(op_item, Op) else str(op_item)
             site = int(ops[i+1])
             processed_ops.extend([op_name, site])
         tup = (coeff,) + tuple(processed_ops)
         self._cpp_obj.__iadd__(tup)
 
-    def __iadd__(self, term: Union[Tuple, TermExpr, OpSumExpr]):
+    def __iadd__(self, term: Union[Tuple[Any, ...], TermExpr, OpSumExpr]) -> "OpSum":
         if isinstance(term, tuple):
             if len(term) < 3 or len(term) % 2 == 0:
                 raise ValueError("Term must be a tuple of (coeff, op1, site1, ...)")
             self.add_term(term[0], *term[1:])
         elif isinstance(term, TermExpr):
-            ops_flat = []
+            ops_flat: List[Union[str, Op, int]] = []
             for op in term.ops:
                 ops_flat.extend([op.name, op.site])
             self.add_term(term.coeff, *ops_flat)

@@ -1,0 +1,31 @@
+{
+  "baseUrl": "",
+  "copyImages": false,
+  "fileExt": "md",
+  "filesFilter": [],
+  "folderClassesName": "classes",
+  "folderFilesName": "files",
+  "folderNamespacesName": "namespaces",
+  "foldersToGenerate": [
+    "classes",
+    "files",
+    "namespaces"
+  ],
+  "formulaBlockEnd": "$$",
+  "formulaBlockStart": "$$",
+  "formulaInlineEnd": "$",
+  "formulaInlineStart": "$",
+  "indexClassesName": "index",
+  "indexClassesTitle": "C++ Core API",
+  "indexFilesName": "index_files",
+  "indexFilesTitle": "Files",
+  "indexNamespacesName": "index_namespaces",
+  "indexNamespacesTitle": "Namespaces",
+  "indexInFolders": false,
+  "linkLowercase": true,
+  "linkSuffix": ".md",
+  "mainPageInRoot": false,
+  "replaceUnderscoresInAnchors": true,
+  "sort": true,
+  "useFolders": true
+}

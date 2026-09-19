@@ -1,0 +1,122 @@
+---
+interface Props {
+  tutorialName: string;
+}
+
+const { tutorialName } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const dlBase = `${base}/downloads/${tutorialName}`;
+---
+
+<div class="polyglot-download-bar">
+  <a href={`${dlBase}/main.ipynb`} download title="Download Jupyter Notebook" class="dl-btn">
+    <span class="dl-icon">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/3/38/Jupyter_logo.svg" alt="Jupyter" />
+    </span>
+    <span class="dl-label">Notebook</span>
+    <span class="dl-ext">.ipynb</span>
+  </a>
+
+  <a href={`${dlBase}/main.jl`} download title="Download Julia Script" class="dl-btn">
+    <span class="dl-icon">
+      <img src="https://raw.githubusercontent.com/JuliaLang/julia-logo-graphics/master/images/julia-dots.svg" alt="Julia" />
+    </span>
+    <span class="dl-label">Julia Script</span>
+    <span class="dl-ext">.jl</span>
+  </a>
+
+  <a href={`${dlBase}/main.cpp`} download title="Download C++ Source" class="dl-btn">
+    <span class="dl-icon">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/1/18/ISO_C%2B%2B_Logo.svg" alt="C++" />
+    </span>
+    <span class="dl-label">C++ Source</span>
+    <span class="dl-ext">.cpp</span>
+  </a>
+</div>
+
+<style>
+  .polyglot-download-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 1.5rem 0 2.5rem 0;
+  }
+
+  /* Define base (dark) theme variables */
+  .dl-btn {
+    --btn-bg: var(--sl-color-black);
+    --btn-bg-hover: var(--sl-color-gray-6);
+    --btn-border: var(--sl-color-gray-5);
+    --btn-border-hover: var(--sl-color-gray-4);
+    --btn-text: var(--sl-color-white);
+    --btn-ext-text: var(--sl-color-gray-3);
+    --btn-shadow: none;
+    --btn-shadow-hover: none;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 1.1rem 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--btn-border);
+    background-color: var(--btn-bg);
+    color: var(--btn-text);
+    box-shadow: var(--btn-shadow);
+    text-decoration: none;
+    font-size: var(--sl-text-sm);
+    font-family: var(--sl-font);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .dl-btn:hover {
+    background-color: var(--btn-bg-hover);
+    border-color: var(--btn-border-hover);
+    box-shadow: var(--btn-shadow-hover);
+    transform: translateY(-1px);
+  }
+
+  .dl-btn:active {
+    transform: translateY(0);
+  }
+
+  .dl-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .dl-icon img {
+    width: 1.25rem;
+    height: 1.25rem;
+    object-fit: contain;
+  }
+
+  .dl-label {
+    font-weight: 500;
+    color: var(--btn-text);
+  }
+
+  .dl-ext {
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-xs);
+    color: var(--btn-ext-text);
+    opacity: 0.75;
+  }
+
+  /* 
+   * Light mode overrides via CSS variables. 
+   * Using :global allows these to attach to the HTML root and cascade down naturally,
+   * completely bypassing Astro's scoped class specificity wars. 
+   */
+  :global([data-theme="light"]) {
+    --btn-bg: var(--sl-color-white);
+    --btn-bg-hover: var(--sl-color-gray-6);
+    --btn-border: var(--sl-color-gray-5);
+    --btn-border-hover: var(--sl-color-gray-4);
+    --btn-text: var(--sl-color-black);
+    --btn-ext-text: var(--sl-color-gray-4);
+    --btn-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    --btn-shadow-hover: 0 2px 4px rgba(0,0,0,0.08);
+  }
+</style>

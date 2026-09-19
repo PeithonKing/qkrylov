@@ -1,0 +1,23 @@
+{
+  "name": "qkrylov-docs",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "gen-api": "node scripts/gen-api.mjs",
+    "prebuild": "npm run gen-api",
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.0",
+    "@astrojs/mdx": "^8.0.1",
+    "@astrojs/starlight": "^0.42.0",
+    "astro": "^7.3.2",
+    "katex": "^0.18.7",
+    "rehype-katex": "^7.0.1",
+    "remark-directive": "^4.0.0",
+    "remark-math": "^6.0.0"
+  }
+}

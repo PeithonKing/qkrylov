@@ -10,9 +10,14 @@
 #include <optional>
 #include <type_traits>
 
+/// \file lanczos.hpp
+/// \brief Ground state & lowest eigenpair Lanczos solver.
+
 namespace qkrylov {
 namespace QKRYLOV_PRECISION_NAMESPACE {
 
+/// \brief Configuration parameters for Lanczos iteration.
+/// <TODO-LLM: Detail convergence criteria and Ritz value residual estimation here>
 struct LanczosConfig
 {
     int n_eig = 1;                               // Number of lowest eigenpairs to compute (OnePass_DKGS)
@@ -26,6 +31,8 @@ struct LanczosConfig
     bool compute_eigenvectors = true;            // Compute state vector(s) when policy supports it
 };
 
+/// \brief Container holding the converged ground state energy and eigenvector.
+/// <TODO-LLM: Document tridiagonal matrix projection and eigenvector reconstruction here>
 struct LanczosResult
 {
     Real energy = Real(0.0);                     // Lowest eigenvalue (lambda_0)

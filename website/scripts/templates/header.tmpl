@@ -1,0 +1,26 @@
+---
+{% if exists("title") and title != "" -%}
+title: "{{title}}"
+{% else if exists("name") and name != "" -%}
+title: "{{name}}"
+{% else -%}
+title: "C++ Core API"
+{% endif -%}
+{% if exists("summary") and summary != "" -%}
+description: "{{summary}}"
+{% else if exists("title") and title != "" -%}
+description: "{{title}} reference documentation for qkrylov C++ core"
+{% else if exists("name") and name != "" -%}
+description: "{{name}} reference documentation for qkrylov C++ core"
+{% else -%}
+description: "C++ Core API reference documentation for qkrylov"
+{% endif -%}
+---
+
+{% if exists("title") -%}
+# {{title}}
+{% else if exists("kind") and kind != "page" -%}
+# {{name}} {{title(kind)}} Reference
+{% else if exists("name") -%}
+# {{name}}
+{% endif %}

@@ -1,6 +1,14 @@
 # Lanczos solver wrappers
 
 # SciML Problem Types
+"""
+    AbstractQuantumProblem
+
+Abstract supertype for all quantum problem specifications compatible with the SciML interface.
+
+# Notes
+<TODO-LLM: Explain SciML Common Problem interface for quantum mechanics here>
+"""
 abstract type AbstractQuantumProblem end
 
 struct GroundStateProblem{HType} <: AbstractQuantumProblem

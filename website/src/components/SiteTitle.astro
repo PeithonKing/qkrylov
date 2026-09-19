@@ -1,0 +1,101 @@
+---
+import Default from '@astrojs/starlight/components/SiteTitle.astro';
+import type { Props } from '@astrojs/starlight/props';
+
+// When CI builds the docs, ASTRO_BASE_PATH is set to e.g. /qkrylov/v1.4
+const currentPath = Astro.url.pathname;
+let currentVersion = 'dev'; // fallback default
+
+// Try to infer current version from URL segment
+const match = currentPath.match(/^\/qkrylov\/(dev|v\d+\.\d+)/);
+if (match) {
+  currentVersion = match[1];
+}
+
+// In a real environment, you might generate this JSON during the build.
+// For now, hardcoded known versions to demonstrate the dropdown.
+const versions = ['dev', 'v1.6', 'v1.5', 'v1.4'];
+
+// Ensure SemVer sorting: dev always first, then vX.Y descending
+const sortedVersions = versions.sort((a, b) => {
+  if (a === 'dev') return -1;
+  if (b === 'dev') return 1;
+  // Basic semver sort (e.g. v1.5 vs v1.4)
+  const aNum = parseFloat(a.replace('v', ''));
+  const bNum = parseFloat(b.replace('v', ''));
+  return bNum - aNum; 
+});
+---
+
+<div class="versioned-title">
+  <Default {...Astro.props} />
+  
+  <div class="version-picker">
+    <select id="docs-version-select" aria-label="Select Documentation Version">
+      {sortedVersions.map(v => (
+        <option value={v} selected={v === currentVersion}>{v === 'dev' ? 'dev (main)' : v}</option>
+      ))}
+    </select>
+  </div>
+</div>
+
+<script>
+  const select = document.getElementById('docs-version-select');
+  if (select) {
+    select.addEventListener('change', (e) => {
+      const targetVersion = (e.target as HTMLSelectElement).value;
+      const currentUrl = new URL(window.location.href);
+      
+      // We expect the path to be like /qkrylov/dev/quickstart or /qkrylov/v1.4/quickstart
+      // If someone visits /qkrylov/quickstart locally without subfolders, we handle that gracefully.
+      const pathParts = currentUrl.pathname.split('/').filter(Boolean);
+      
+      // Ensure 'qkrylov' is first (GitHub pages base)
+      let newPath = '';
+      if (pathParts[0] === 'qkrylov') {
+        const hasVersion = pathParts.length > 1 && (pathParts[1] === 'dev' || pathParts[1].match(/^v\d+\.\d+/));
+        if (hasVersion) {
+          pathParts[1] = targetVersion; // replace existing version
+        } else {
+          pathParts.splice(1, 0, targetVersion); // inject version
+        }
+        newPath = '/' + pathParts.join('/') + '/';
+      } else {
+        // Localhost without /qkrylov base
+        const hasVersion = pathParts.length > 0 && (pathParts[0] === 'dev' || pathParts[0].match(/^v\d+\.\d+/));
+        if (hasVersion) {
+          pathParts[0] = targetVersion;
+        } else {
+          pathParts.unshift(targetVersion);
+        }
+        newPath = '/' + pathParts.join('/') + '/';
+      }
+      
+      window.location.pathname = newPath;
+    });
+  }
+</script>
+
+<style>
+  .versioned-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .version-picker select {
+    background-color: var(--sl-color-bg-nav);
+    color: var(--sl-color-text-accent);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.25rem;
+    padding: 0.15rem 0.5rem;
+    font-size: var(--sl-text-sm);
+    cursor: pointer;
+    outline: none;
+    font-weight: 500;
+  }
+  
+  .version-picker select:hover {
+    border-color: var(--sl-color-gray-4);
+  }
+</style>

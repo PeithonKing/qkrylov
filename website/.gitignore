@@ -1,0 +1,10 @@
+# Astro build artifacts
+node_modules/
+dist/
+.astro/
+
+# gen-api bootstrapped tools
+scripts/.tools/
+
+# Auto-generated API reference pages — do not commit
+src/content/docs/api/auto/
