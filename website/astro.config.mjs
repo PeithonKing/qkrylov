@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import mdx from '@astrojs/mdx';
@@ -90,7 +91,7 @@ export default defineConfig({
     plugins: [polyglotIpynbPlugin()],
     resolve: {
       alias: {
-        '@components': '/extra/qkrylov/website/src/components',
+        '@components': fileURLToPath(new URL('./src/components', import.meta.url)),
       },
     },
   },
