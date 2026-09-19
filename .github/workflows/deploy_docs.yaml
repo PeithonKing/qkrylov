@@ -59,6 +59,19 @@ jobs:
           ASTRO_BASE_PATH: ${{ env.ASTRO_BASE_PATH }}
         run: npm run build
 
+      - name: Generate Root & Latest HTML Redirects
+        if: startsWith(github.ref_name, 'release_v')
+        run: |
+          echo "Generating meta redirects to /qkrylov/${{ env.VERSION_DIR }}/"
+          REDIRECT_HTML='<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=/qkrylov/${{ env.VERSION_DIR }}/"></head><body>Redirecting to latest release...</body></html>'
+          
+          # Root redirect
+          echo $REDIRECT_HTML > website/dist/index.html
+          
+          # Latest folder redirect
+          mkdir -p website/dist/latest
+          echo $REDIRECT_HTML > website/dist/latest/index.html
+
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
         with:
