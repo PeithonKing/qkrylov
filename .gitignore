@@ -69,3 +69,5 @@ docs/getting_started/tutorial_hamiltonian/images/
 # Auto-generated documentation
 docs/src/content/docs/api/auto/
 docs/scripts/.tools/
+website/public/.generated_webp/
+website/public/downloads/

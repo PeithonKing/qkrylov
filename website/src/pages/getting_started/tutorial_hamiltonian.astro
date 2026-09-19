@@ -1,6 +1,6 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import Content, { frontmatter } from '../../content/docs/getting_started/tutorial_hamiltonian/main.ipynb';
+import Content, { frontmatter, getHeadings } from '../../content/docs/getting_started/tutorial_hamiltonian/main.ipynb';
 
 const pageFrontmatter = {
   title: 'Building the Hamiltonian',
@@ -9,6 +9,6 @@ const pageFrontmatter = {
 };
 ---
 
-<StarlightPage frontmatter={pageFrontmatter}>
+<StarlightPage frontmatter={pageFrontmatter} headings={getHeadings()}>
   <Content />
 </StarlightPage>

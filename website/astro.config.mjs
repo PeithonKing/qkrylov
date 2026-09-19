@@ -10,11 +10,14 @@ import polyglotIpynbPlugin from './plugins/polyglot-vite-plugin.mjs';
 
 export default defineConfig({
   site: 'https://sjp95.github.io',
-  base: '/qkrylov',
+  base: process.env.ASTRO_BASE_PATH || '/qkrylov',
   integrations: [
     starlight({
       title: 'qkrylov',
       customCss: ['katex/dist/katex.min.css'],
+      components: {
+        SiteTitle: './src/components/SiteTitle.astro',
+      },
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/sjp95/qkrylov' },
       ],
@@ -85,6 +88,11 @@ export default defineConfig({
   ],
   vite: {
     plugins: [polyglotIpynbPlugin()],
+    resolve: {
+      alias: {
+        '@components': '/extra/qkrylov/website/src/components',
+      },
+    },
   },
   markdown: {
     processor: unified({
