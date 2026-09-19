@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 const WEBSITE_ROOT = path.resolve(__dirname, '..');      // website/
 const REPO_ROOT = path.resolve(WEBSITE_ROOT, '..');      // repo root
 const SCRIPTS_DIR = __dirname;                           // website/scripts/
-const AUTO_DIR = path.resolve(REPO_ROOT, 'docs/src/content/docs/api/auto');
+const AUTO_DIR = path.resolve(REPO_ROOT, 'website/src/content/docs/api/auto');
 const TOOLS_BIN = path.resolve(SCRIPTS_DIR, '.tools/bin');
 
 console.log('[gen-api] Starting polyglot API documentation pipeline...');

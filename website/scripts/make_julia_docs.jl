@@ -8,7 +8,7 @@ using Pkg
 SCRIPT_DIR = @__DIR__
 REPO_ROOT = normpath(joinpath(SCRIPT_DIR, "../.."))
 JULIA_SRC = joinpath(REPO_ROOT, "bindings", "julia")
-OUT_DIR = joinpath(REPO_ROOT, "docs", "src", "content", "docs", "api", "auto", "julia")
+OUT_DIR = joinpath(REPO_ROOT, "website", "src", "content", "docs", "api", "auto", "julia")
 mkpath(OUT_DIR)
 
 # Source files we care about (in logical order)
@@ -25,6 +25,7 @@ SOURCE_FILES = [
 
 # Activate the Julia environment and load the module
 Pkg.activate(JULIA_SRC, io=devnull)
+Pkg.instantiate()
 include(joinpath(JULIA_SRC, "src", "QuantumKrylov.jl"))
 using .QuantumKrylov
 
