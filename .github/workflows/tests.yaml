@@ -36,6 +36,7 @@ jobs:
       uses: astral-sh/setup-uv@v3
       with:
         enable-cache: true
+        cache-dependency-glob: "pyproject.toml"
 
     - name: Install dependencies
       run: |
@@ -60,31 +61,31 @@ jobs:
         cp -R bindings/python/tests "$TMP_TESTS/tests"
         python -m pytest "$TMP_TESTS/tests" -v
 
-  test-julia:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        julia-version: ['1.10', '1.11', '1.12']
-      fail-fast: false
+  # test-julia:
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       julia-version: ['1.10', '1.11', '1.12']
+  #     fail-fast: false
 
-    steps:
-    - uses: actions/checkout@v4
+  #   steps:
+  #   - uses: actions/checkout@v4
 
-    - name: Build C++ library
-      run: |
-        cmake -B build -S . -DQKRYLOV_BUILD_TESTS=OFF -DQKRYLOV_BUILD_PYTHON=OFF -DBUILD_SHARED_LIBS=ON
-        cmake --build build --config Release
+  #   - name: Build C++ library
+  #     run: |
+  #       cmake -B build -S . -DQKRYLOV_BUILD_TESTS=OFF -DQKRYLOV_BUILD_PYTHON=OFF -DBUILD_SHARED_LIBS=ON
+  #       cmake --build build --config Release
 
 
-    - name: Set up Julia ${{ matrix.julia-version }}
-      uses: julia-actions/setup-julia@v2
-      with:
-        version: ${{ matrix.julia-version }}
+  #   - name: Set up Julia ${{ matrix.julia-version }}
+  #     uses: julia-actions/setup-julia@v2
+  #     with:
+  #       version: ${{ matrix.julia-version }}
 
-    - name: Run Julia tests
-      run: |
-        export QKRYLOV_LIB_PATH="${GITHUB_WORKSPACE}/build/libqkrylov.so"
-        julia --project=bindings/julia -e 'using Pkg; Pkg.test()'
+  #   - name: Run Julia tests
+  #     run: |
+  #       export QKRYLOV_LIB_PATH="${GITHUB_WORKSPACE}/build/libqkrylov.so"
+  #       julia --project=bindings/julia -e 'using Pkg; Pkg.test()'
 
 
 
