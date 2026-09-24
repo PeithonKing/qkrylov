@@ -49,7 +49,7 @@ jobs:
 
     - name: Install Python package
       run: |
-        uv pip install --system .[test]
+        uv pip install --system --no-cache .[test]
 
     - name: Run C++ tests
       run: |
