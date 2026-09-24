@@ -226,7 +226,7 @@ class OpSum:
             op_name = op_item.value if isinstance(op_item, Op) else str(op_item)
             site = int(ops[i+1])
             processed_ops.extend([op_name, site])
-        tup = (coeff,) + tuple(processed_ops)
+        tup = (complex(coeff),) + tuple(processed_ops)
         self._cpp_obj.__iadd__(tup)
 
     def __iadd__(self, term: Union[Tuple[Any, ...], TermExpr, OpSumExpr]) -> "OpSum":

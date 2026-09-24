@@ -8,7 +8,7 @@ def test_basis():
     assert basis.nsites == 4
 
 def test_fermion_basis():
-    basis = qkrylov.FermionBasis(4, conserve_n=True, n=2)
+    basis = qkrylov.FermionBasis(4, n=2)
     assert basis.size == 6
 
 def test_hamiltonian():
