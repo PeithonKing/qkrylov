@@ -1,3 +1,4 @@
+#include "qkrylov/sites/spinhalf_site.hpp"
 #undef NDEBUG
 #include <cassert>
 #include <iostream>
@@ -47,33 +48,33 @@ void test_strong_sectors_and_bases() {
     std::cout << "Testing strong sectors and basis constructors..." << std::endl;
     
     // SpinHalf with strong Sz and Unconstrained
-    basis::SpinHalf b_sh_sz(4, basis::sector::Sz{0});
+    basis::SpinHalf b_sh_sz(4, [](){ Sector s; s.sz={0}; return s; }());
     assert(b_sh_sz.size() == 6);
-    basis::SpinHalf b_sh_un(4, basis::sector::Unconstrained{});
+    basis::SpinHalf b_sh_un(4, Sector{});
     assert(b_sh_un.size() == 16);
 
     // SpinS with strong Sz and Unconstrained
-    basis::SpinS b_ss_sz(2, 0.5, basis::sector::Sz{0});
+    basis::SpinS b_ss_sz(2, 0.5, [](){ Sector s; s.sz={0}; return s; }());
     assert(b_ss_sz.size() == 2);
-    basis::SpinS b_ss_un(2, 0.5, basis::sector::Unconstrained{});
+    basis::SpinS b_ss_un(2, 0.5, Sector{});
     assert(b_ss_un.size() == 4);
 
     // Fermion with strong Particles and Unconstrained
     basis::Fermion b_ferm_p(4, basis::sector::Particles{2});
     assert(b_ferm_p.size() == 6);
-    basis::Fermion b_ferm_un(4, basis::sector::Unconstrained{});
+    basis::Fermion b_ferm_un(4, Sector{});
     assert(b_ferm_un.size() == 16);
 
     // Hubbard with strong Hubbard and Unconstrained
     basis::Hubbard b_hub_h(2, basis::sector::Hubbard{1, 1});
     assert(b_hub_h.size() == 4);
-    basis::Hubbard b_hub_un(2, basis::sector::Unconstrained{});
+    basis::Hubbard b_hub_un(2, Sector{});
     assert(b_hub_un.size() == 16);
 
     // TJ with strong Hubbard and Unconstrained
     basis::TJ b_tj_h(2, basis::sector::Hubbard{1, 0});
     assert(b_tj_h.size() == 2);
-    basis::TJ b_tj_un(2, basis::sector::Unconstrained{});
+    basis::TJ b_tj_un(2, Sector{});
     assert(b_tj_un.size() == 9);
 
     // Bosons sector check
@@ -89,13 +90,13 @@ void test_device_tags_and_ctad_hamiltonian() {
     static_assert(std::is_same_v<traits::device_traits<device::cpu>::execution_space,
                                 traits::device_execution_space_t<device::cpu>>);
 
-    auto basis = basis::SpinHalf(2, basis::sector::Sz{0});
+    auto basis = basis::SpinHalf(2, [](){ Sector s; s.sz={0}; return s; }());
 
     OpSum os;
     os += 1.0 * Sz(0) * Sz(1) + 0.5 * Sp(0) * Sm(1) + 0.5 * Sm(0) * Sp(1);
 
     // CTAD with site auto-inference and device::cpu
-    Hamiltonian H_cpu(basis, os, device::cpu{});
+    Hamiltonian H_cpu(basis, std::make_shared<SpinHalfSite>(), os, device::cpu{});
     assert(H_cpu.dimension() == 2);
 
     // CTAD with site auto-inference and default device
@@ -103,7 +104,7 @@ void test_device_tags_and_ctad_hamiltonian() {
     assert(H_def.dimension() == 2);
 
     // CTAD with device::gpu (maps to Cuda/HIP/SYCL or CPU fallback)
-    Hamiltonian H_gpu(basis, os, device::gpu{});
+    Hamiltonian H_gpu(basis, std::make_shared<SpinHalfSite>(), os, device::gpu{});
     assert(H_gpu.dimension() == 2);
 
     std::cout << "Device tags and CTAD Hamiltonian OK!" << std::endl;
@@ -112,11 +113,11 @@ void test_device_tags_and_ctad_hamiltonian() {
 void test_solvers_structured_bindings() {
     std::cout << "Testing policy dispatch and structured bindings..." << std::endl;
 
-    auto basis = basis::SpinHalf(2, basis::sector::Unconstrained{});
+    auto basis = basis::SpinHalf(2, Sector{});
     OpSum os;
     os += 1.0 * Sz(0) * Sz(1) + 0.5 * Sp(0) * Sm(1) + 0.5 * Sm(0) * Sp(1);
 
-    Hamiltonian H(basis, os, device::cpu{});
+    Hamiltonian H(basis, std::make_shared<SpinHalfSite>(), os, device::cpu{});
     LanczosConfig config;
     config.maxiter = 100;
     config.tol = (sizeof(Real) == 4) ? Real(1e-6) : Real(1e-12);

@@ -21,7 +21,7 @@ int main()
     auto basis =
         std::make_shared<basis::SpinHalf>(
             2,
-            basis::sector::Unconstrained{}
+            Sector{}
         );
 
     auto site =

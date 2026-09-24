@@ -1,4 +1,5 @@
 #include "qkrylov/sites/spin_s_site.hpp"
+#include "qkrylov/sites/spin_s_site.hpp"
 #include "qkrylov/basis/spin_s_basis.hpp"
 #include "qkrylov/hamiltonian/matrix_free_hamiltonian.hpp"
 #include "qkrylov/operators/opsum.hpp"

@@ -19,7 +19,7 @@ using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 int main()
 {
     const int N = 4;
-    auto basis = std::make_shared<SpinHalfBasis>(N, Sector(sector::Sz{0}));
+    auto basis = std::make_shared<SpinHalfBasis>(N, [](){ Sector s; s.sz={0}; return s; }());
     auto site  = std::make_shared<SpinHalfSite>();
 
     // 4-site AFM Heisenberg ring: J sum_i (S^z_i S^z_{i+1} + 0.5 S^+_i S^-_{i+1} + 0.5 S^-_i S^+_{i+1})

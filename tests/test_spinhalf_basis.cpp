@@ -8,7 +8,7 @@ using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
 
 int main()
 {
-    basis::SpinHalf basis(10, basis::sector::Sz{0});
+    basis::SpinHalf basis(10, [](){ Sector s; s.sz={0}; return s; }());
 
     std::cout
         << "Basis dimension (Sz=0) = "
@@ -20,7 +20,7 @@ int main()
         return 1;
     }
 
-    basis::SpinHalf b_full(4, basis::sector::Unconstrained{});
+    basis::SpinHalf b_full(4, Sector{});
     if (b_full.size() != 16) {
         std::cerr << "Expected dimension 16 for 4 sites unconstrained, got " << b_full.size() << std::endl;
         return 1;

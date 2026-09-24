@@ -20,7 +20,7 @@ void test_heisenberg_workflow() {
     std::cout << "Running test_heisenberg_workflow..." << std::endl;
 
     // 4-site chain with Sz=0 sector (dimension = C(4,2) = 6)
-    auto basis = basis::SpinHalf(4, basis::sector::Sz{0});
+    auto basis = basis::SpinHalf(4, [](){ Sector s; s.sz={0}; return s; }());
     assert(basis.size() == 6 && "Sz=0 sector of 4-site chain should have dim 6");
     assert(basis.nsites() == 4 && "Basis should have 4 sites");
 
@@ -31,7 +31,7 @@ void test_heisenberg_workflow() {
     }
     assert(os.size() == 9 && "Should have 9 terms for 3 bonds");
 
-    Hamiltonian H(basis, os, device::cpu{});
+    Hamiltonian H(basis, std::make_shared<SpinHalfSite>(), os, device::cpu{});
     assert(H.dimension() == 6 && "Hamiltonian dimension should match Sz=0 sector size");
 
     LanczosConfig cfg;

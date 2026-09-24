@@ -17,7 +17,7 @@ int main() {
     std::cout << "=== Running test_lanczos_policies ===" << std::endl;
 
     const int N = 4;
-    auto basis = std::make_shared<SpinHalfBasis>(N, Sector(sector::Sz{0}));
+    auto basis = std::make_shared<SpinHalfBasis>(N, [](){ Sector s; s.sz={0}; return s; }());
     auto site  = std::make_shared<SpinHalfSite>();
 
     // 4-site AFM Heisenberg ring

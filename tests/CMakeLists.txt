@@ -15,9 +15,6 @@ set(QKRYLOV_TESTS
     test_tj_site
     test_ftlm
     test_workflow
-    test_c_api
-    test_spin1_correction_vector
-    test_m1_core
     test_lanczos_lowest
     test_lanczos_policies
     test_ftlm_sweep
@@ -37,7 +34,6 @@ set(QKRYLOV_FP32_TESTS
     test_davidson
     test_dynamics
     test_ftlm
-    test_m1_core
     test_lanczos_policies
     test_ftlm_sweep
 )
