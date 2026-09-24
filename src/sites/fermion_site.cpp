@@ -1,3 +1,4 @@
+#include "qkrylov/operators/opsum.hpp"
 #include "qkrylov/core/types.hpp"
 #include "qkrylov/sites/fermion_site.hpp"
 
@@ -5,7 +6,7 @@
 #include <bit>
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 
 bool FermionSite::occupied(
@@ -16,7 +17,7 @@ bool FermionSite::occupied(
     return (state >> site) & 1ULL;
 }
 
-Real FermionSite::phase(
+double FermionSite::phase(
     StateID state,
     int site
 )
@@ -83,6 +84,54 @@ LocalAction FermionSite::apply(
     );
 }
 
+std::vector<Instruction> FermionSite::compile(const OperatorTerm& term) const {
+    std::vector<Instruction> insts;
+    insts.push_back({0, 0, 0, 0, term.coeff});
+
+    for (const auto& factor : term.factors) {
+        std::vector<Instruction> next_insts;
+        for (auto inst : insts) {
+            uint64_t bit = 1ULL << factor.site;
+            
+            if (factor.op == "N") {
+                if (inst.check_mask & bit) {
+                    if (!(inst.expected_bits & bit)) continue;
+                }
+                inst.check_mask |= bit;
+                inst.expected_bits |= bit;
+                next_insts.push_back(inst);
+            }
+            else if (factor.op == "Id") {
+                next_insts.push_back(inst);
+            }
+            else if (factor.op == "C") {
+                if (inst.check_mask & bit) {
+                    if (!(inst.expected_bits & bit)) continue;
+                }
+                inst.check_mask |= bit;
+                inst.expected_bits |= bit;
+                inst.flip_mask ^= bit;
+                inst.sign_mask ^= ((1ULL << factor.site) - 1);
+                next_insts.push_back(inst);
+            }
+            else if (factor.op == "Cdag") {
+                if (inst.check_mask & bit) {
+                    if (inst.expected_bits & bit) continue;
+                }
+                inst.check_mask |= bit;
+                inst.expected_bits &= ~bit;
+                inst.flip_mask ^= bit;
+                inst.sign_mask ^= ((1ULL << factor.site) - 1);
+                next_insts.push_back(inst);
+            }
+            else {
+                throw std::runtime_error("Unknown fermion operator: " + factor.op);
+            }
+        }
+        insts = std::move(next_insts);
+    }
+    return insts;
 }
 
 }
+

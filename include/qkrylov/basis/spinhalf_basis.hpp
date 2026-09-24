@@ -14,20 +14,12 @@ class SpinHalfBasis : public Basis
 {
 public:
 
+    int bits_per_site() const override { return 1; }
+
     SpinHalfBasis(
         int N,
         const Sector& sector = Sector{}
     );
-
-    SpinHalfBasis(
-        int N,
-        const sector::Sz& sz
-    ) : SpinHalfBasis(N, Sector(sz)) {}
-
-    SpinHalfBasis(
-        int N,
-        const sector::Unconstrained& u
-    ) : SpinHalfBasis(N, Sector(u)) {}
 
     ~SpinHalfBasis() override = default;
 
@@ -75,7 +67,7 @@ using qkrylov::SpinHalfBasis;
 
 namespace basis {
     using SpinHalf = qkrylov::SpinHalfBasis;
-    namespace sector = qkrylov::sector;
+    
 }
 
 } // namespace qkrylov

@@ -213,10 +213,9 @@ class OpSum:
     dtype: Any
     _cpp_obj: Any
 
-    def __init__(self, dtype: Any = np.float32):
-        suffix = '_FP64' if dtype == np.float64 else '_FP32'
+    def __init__(self, dtype: Any = np.float64):
         self.dtype = dtype
-        self._cpp_obj = getattr(_cpp, f'OpSum{suffix}')()
+        self._cpp_obj = getattr(_cpp, 'OpSum')() if hasattr(_cpp, 'OpSum') else getattr(_cpp, 'OpSum')()
 
     def add_term(self, coeff: complex, *ops: Union[str, Op, int]):
         if len(ops) % 2 != 0:

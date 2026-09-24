@@ -1,14 +1,11 @@
-#include "qkrylov/core/types.hpp"
 #include "qkrylov/hamiltonian/matrix_free_hamiltonian.hpp"
 #include "qkrylov/linalg/vector_ops.hpp"
-
 #include <stdexcept>
-#include <vector>
 #include <algorithm>
+#include <string>
 
 namespace qkrylov {
 namespace QKRYLOV_PRECISION_NAMESPACE {
-
 
 template <typename ExecSpace>
 MatrixFreeHamiltonian<ExecSpace>::MatrixFreeHamiltonian(
@@ -17,151 +14,93 @@ MatrixFreeHamiltonian<ExecSpace>::MatrixFreeHamiltonian(
     const OpSum& ops,
     Device device
 )
-    : device_(device),
-      basis_(std::move(basis)),
+    : basis_(std::move(basis)),
       site_(std::move(site)),
-      ops_(ops)
+      ops_(ops),
+      device_(std::move(device))
 {
-    detail::initialize_kokkos(device_);
+    if (!basis_ || !site_) {
+        throw std::invalid_argument("MatrixFreeHamiltonian requires both Basis and Site.");
+    }
+    if (basis_->bits_per_site() != site_->bits_per_site()) {
+        throw std::invalid_argument(
+            "Basis and Site dimension mismatch (bits_per_site: " + 
+            std::to_string(basis_->bits_per_site()) + " vs " + 
+            std::to_string(site_->bits_per_site()) + "). " +
+            "You are mixing incompatible physics rules."
+        );
+    }
 
+    detail::ensure_kokkos_initialized();
     dim_ = basis_->size();
-    const Index dim = dim_;
+    if (dim_ == 0) return;
 
-    // ----------------------------------------------------------------
-    // Phase 1: Build the CSR on host using the existing Basis / Site
-    //          virtual interfaces.  This runs once at construction time
-    //          and eliminates all virtual dispatch, string matching, and
-    //          hash-map lookups from the per-apply hot path.
-    // ----------------------------------------------------------------
+    std::vector<KComplex> h_diagonal(dim_, KComplex(0.0, 0.0));
 
-    std::vector<Index>   h_row_offsets(dim + 1);
-    std::vector<Index>   h_col_indices;
-    std::vector<KComplex> h_values;
-    std::vector<KComplex> h_diagonal(dim, KComplex(0.0, 0.0));
-
-    // Conservative reservation (most terms produce one entry per state).
-    h_col_indices.reserve(dim * ops_.size());
-    h_values.reserve(dim * ops_.size());
-
-    std::vector<std::pair<Index, KComplex>> row_entries;
-    row_entries.reserve(ops_.size());
-
-    for (Index alpha = 0; alpha < dim; ++alpha) {
-        h_row_offsets[alpha] = h_col_indices.size();
-        row_entries.clear();
+    for (Index alpha = 0; alpha < dim_; ++alpha) {
         const StateID initial_state = basis_->state(alpha);
 
         for (const auto& term : ops_.terms()) {
             StateID state  = initial_state;
-            Complex amp    = term.coeff;
+            ComplexDouble amp = term.coeff;
             bool    valid  = true;
 
             for (const auto& factor : term.factors) {
-                auto action = site_->apply(
-                    factor.op,
-                    factor.site,
-                    state
-                );
-
-                if (!action.valid) {
-                    valid = false;
-                    break;
-                }
-
+                auto action = site_->apply(factor.op, factor.site, state);
+                if (!action.valid) { valid = false; break; }
                 state = action.new_state;
                 amp  *= action.matrix_element;
             }
 
-            if (!valid)                    continue;
-            if (!basis_->contains(state))  continue;
-
-            const Index beta = basis_->index(state);
-
-            // The source-based iteration gives  H[beta][alpha] = amp.
-            // By Hermiticity:  H[alpha][beta] = conj(amp).
-            // We store (col = beta, value = conj(amp)) in row alpha
-            // so the gather kernel computes:
-            //   y[alpha] = sum_j values[j] * x[cols[j]]
-            // with no atomics (each thread writes only to its own y element).
-            KComplex val(amp.real(), -amp.imag());  // conj(amp)
-
-            row_entries.emplace_back(beta, val);
-        }
-
-        if (!row_entries.empty()) {
-            std::sort(row_entries.begin(), row_entries.end(),
-                [](const auto& a, const auto& b) {
-                    return a.first < b.first;
-                });
-
-            for (size_t k = 0; k < row_entries.size(); ) {
-                Index col = row_entries[k].first;
-                KComplex sum_val = row_entries[k].second;
-                size_t next = k + 1;
-                while (next < row_entries.size() && row_entries[next].first == col) {
-                    sum_val += row_entries[next].second;
-                    ++next;
-                }
-
-                h_col_indices.push_back(col);
-                h_values.push_back(sum_val);
-
-                // Accumulate diagonal
-                if (col == alpha) {
-                    h_diagonal[alpha] = sum_val;
-                }
-                k = next;
+            if (valid && state == initial_state) {
+                h_diagonal[alpha] += KComplex(static_cast<Real>(amp.real()), static_cast<Real>(amp.imag()));
             }
         }
     }
-    h_row_offsets[dim] = h_col_indices.size();
-
-    const Index nnz = h_col_indices.size();
-
-    // ----------------------------------------------------------------
-    // Phase 2: Deep-copy the CSR arrays to device memory.
-    // ----------------------------------------------------------------
 
     using MemSpace = typename ExecSpace::memory_space;
+    diagonal_ = VectorView<ExecSpace>("qkrylov::diagonal", dim_);
 
-    row_offsets_ = Kokkos::View<Index*, MemSpace>("qkrylov::row_offsets", dim + 1);
-    col_indices_ = Kokkos::View<Index*, MemSpace>("qkrylov::col_indices", nnz);
-    values_      = Kokkos::View<KComplex*, MemSpace>("qkrylov::values", nnz);
-    diagonal_    = VectorView<ExecSpace>("qkrylov::diagonal", dim);
+    
+    auto h_dg = Kokkos::View<const KComplex*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>(h_diagonal.data(), dim_);
+    Kokkos::deep_copy(ExecSpace(), diagonal_, h_dg);
 
-    // Wrap host std::vectors as unmanaged Kokkos HostSpace views, then
-    // deep_copy into the device views.
-    {
-        auto h_ro = Kokkos::View<const Index*,
-                                 Kokkos::HostSpace,
-                                 Kokkos::MemoryUnmanaged>(
-            h_row_offsets.data(), dim + 1);
-
-        auto h_ci = Kokkos::View<const Index*,
-                                 Kokkos::HostSpace,
-                                 Kokkos::MemoryUnmanaged>(
-            h_col_indices.data(), nnz);
-
-        auto h_vl = Kokkos::View<const KComplex*,
-                                 Kokkos::HostSpace,
-                                 Kokkos::MemoryUnmanaged>(
-            h_values.data(), nnz);
-
-        auto h_dg = Kokkos::View<const KComplex*,
-                                 Kokkos::HostSpace,
-                                 Kokkos::MemoryUnmanaged>(
-            h_diagonal.data(), dim);
-
-        Kokkos::deep_copy(ExecSpace(), row_offsets_, h_ro);
-        Kokkos::deep_copy(ExecSpace(), col_indices_, h_ci);
-        Kokkos::deep_copy(ExecSpace(), values_,      h_vl);
-        Kokkos::deep_copy(ExecSpace(), diagonal_,    h_dg);
+    // --- NEW: VM Compilation Phase ---
+    std::vector<Instruction> host_insts;
+    for (const auto& term : ops_.terms()) {
+        auto compiled = site_->compile(term);
+        for (auto& inst : compiled) {
+            // Only store OFF-DIAGONAL instructions in the VM to avoid double-counting
+            // the diagonal (which is already fully captured in diagonal_ above).
+            if (inst.flip_mask != 0) {
+                host_insts.push_back(inst);
+            }
+        }
+    }
+    num_instructions_ = host_insts.size();
+    if (num_instructions_ > 0) {
+        instructions_ = Kokkos::View<Instruction*, ExecSpace>("qkrylov::instructions", num_instructions_);
+        auto host_view = Kokkos::View<const Instruction*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>(host_insts.data(), num_instructions_);
+        Kokkos::deep_copy(ExecSpace(), instructions_, host_view);
     }
 }
 
-// ====================================================================
-//  Device-view overload (zero-copy, used by solvers internally)
-// ====================================================================
+
+
+// Safe, fast, portable popcount for Kokkos device code
+KOKKOS_INLINE_FUNCTION int qkrylov_popcount64(uint64_t x) {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+    return __popcll(x);
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_popcountll(x);
+#else
+    x -= (x >> 1) & 0x5555555555555555ULL;
+    x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
+    x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0fULL;
+    return (x * 0x0101010101010101ULL) >> 56;
+#endif
+}
+
 template <typename ExecSpace>
 void MatrixFreeHamiltonian<ExecSpace>::apply(
     const VectorView<ExecSpace>& x,
@@ -169,29 +108,53 @@ void MatrixFreeHamiltonian<ExecSpace>::apply(
 ) const
 {
     const Index dim = dim_;
-    auto rows = row_offsets_;
-    auto cols = col_indices_;
-    auto vals = values_;
+    if (dim == 0) return;
+    Kokkos::deep_copy(ExecSpace(), y, KComplex(0.0, 0.0));
 
-    // Gather-based SpMV:  y[alpha] = sum_j vals[j] * x[cols[j]]
-    // Each thread owns its y[alpha] — no atomics needed.
+    auto* basis_ptr = basis_.get();
+    auto  diag_view = diagonal_;
+    auto  inst_view = instructions_;
+    int   num_inst  = num_instructions_;
+
+    
     Kokkos::parallel_for("qkrylov::H_apply",
         Kokkos::RangePolicy<ExecSpace, Index>(0, dim),
-        KOKKOS_LAMBDA(const Index alpha) {
-            KComplex sum(0.0, 0.0);
-            const Index row_begin = rows(alpha);
-            const Index row_end   = rows(alpha + 1);
-            for (Index j = row_begin; j < row_end; ++j) {
-                sum += vals(j) * x(cols(j));
+        KOKKOS_LAMBDA(const Index beta) {
+            const StateID state_beta = basis_ptr->state(beta);
+            
+            // 1. Diagonal contribution
+            KComplex y_val = diag_view(beta) * x(beta);
+
+            // 2. Off-diagonal VM execution (pull-based, no atomics)
+            for (int i = 0; i < num_inst; ++i) {
+                const auto& inst = inst_view(i);
+                
+                StateID state_alpha = state_beta ^ inst.flip_mask;
+                
+                if ((state_alpha & inst.check_mask) != inst.expected_bits) continue;
+                if (!basis_ptr->contains(state_alpha)) continue;
+                
+                Index alpha = basis_ptr->index(state_alpha);
+                
+                double real_c = inst.coeff.real();
+                double imag_c = inst.coeff.imag();
+                
+                if (inst.sign_mask) {
+                    if (qkrylov_popcount64(state_alpha & inst.sign_mask) % 2 != 0) {
+                        real_c = -real_c;
+                        imag_c = -imag_c;
+                    }
+                }
+                
+                KComplex term_val(static_cast<Real>(real_c), static_cast<Real>(imag_c));
+                y_val += term_val * x(alpha);
             }
-            y(alpha) = sum;
+            y(beta) = y_val;
         }
     );
 }
 
-// ====================================================================
-//  Host-pointer overload (copies data to/from device, for C API / Python)
-// ====================================================================
+
 template <typename ExecSpace>
 void MatrixFreeHamiltonian<ExecSpace>::apply(
     const Complex* x,
@@ -201,33 +164,20 @@ void MatrixFreeHamiltonian<ExecSpace>::apply(
     const Index dim = dim_;
     if (dim == 0) return;
 
-    // Allocate or reuse cached scratch device views
     if (scratch_x_.extent(0) != dim) {
         scratch_x_ = VectorView<ExecSpace>("scratch_x", dim);
         scratch_y_ = VectorView<ExecSpace>("scratch_y", dim);
     }
 
-    // Copy input host → device
-    auto x_host = Kokkos::View<const KComplex*,
-                               Kokkos::HostSpace,
-                               Kokkos::MemoryUnmanaged>(
-        reinterpret_cast<const KComplex*>(x), dim);
+    auto x_host = Kokkos::View<const KComplex*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>(reinterpret_cast<const KComplex*>(x), dim);
     Kokkos::deep_copy(ExecSpace(), scratch_x_, x_host);
 
-    // Run the device kernel
     apply(scratch_x_, scratch_y_);
 
-    // Copy result device → host
-    auto y_host = Kokkos::View<KComplex*,
-                               Kokkos::HostSpace,
-                               Kokkos::MemoryUnmanaged>(
-        reinterpret_cast<KComplex*>(y), dim);
+    auto y_host = Kokkos::View<KComplex*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>(reinterpret_cast<KComplex*>(y), dim);
     Kokkos::deep_copy(ExecSpace(), y_host, scratch_y_);
 }
 
-// ====================================================================
-//  Diagonal (host copy)
-// ====================================================================
 template <typename ExecSpace>
 HostVector MatrixFreeHamiltonian<ExecSpace>::diagonal_host() const
 {
@@ -236,7 +186,6 @@ HostVector MatrixFreeHamiltonian<ExecSpace>::diagonal_host() const
     return result;
 }
 
-// Explicit instantiations
 #ifdef KOKKOS_ENABLE_SERIAL
 template class MatrixFreeHamiltonian<Kokkos::Serial>;
 #endif
@@ -255,8 +204,6 @@ template class MatrixFreeHamiltonian<Kokkos::HIP>;
 #ifdef KOKKOS_ENABLE_SYCL
 template class MatrixFreeHamiltonian<Kokkos::Experimental::SYCL>;
 #endif
-
-
 
 } // namespace QKRYLOV_PRECISION_NAMESPACE
 } // namespace qkrylov

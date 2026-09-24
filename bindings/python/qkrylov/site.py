@@ -39,8 +39,7 @@ class Site:
     _cpp_obj: Any
     dtype: Any
     
-    def __init__(self, dtype: Any = np.float32):
-        suffix = '_FP64' if dtype == np.float64 else '_FP32'
+    def __init__(self, dtype: Any = np.float64):
         self._cpp_obj = None
         self.dtype = dtype
 
@@ -71,10 +70,9 @@ class SpinHalfSite(Site):
     and |↓> = [0,1]^T (m=-1/2). Pauli matrices sigma_i = 2*S_i so that
     Sz = sigma_z/2, Sp = sigma_+, Sm = sigma_-.
     """
-    def __init__(self, dtype: Any = np.float32):
+    def __init__(self, dtype: Any = np.float64):
         super().__init__(dtype=dtype)
-        suffix = '_FP64' if dtype == np.float64 else '_FP32'
-        self._cpp_obj = getattr(_cpp, f'SpinHalfSite{suffix}')()
+        self._cpp_obj = getattr(_cpp, 'SpinHalfSite')()
 
     def __repr__(self) -> str:
         return "SpinHalfSite()"
@@ -118,10 +116,9 @@ class SpinSSite(Site):
     concerns are in the iterative solvers (ghost states, loss of orthogonality),
     not in the site representations.
     """
-    def __init__(self, S: float = 0.5, dtype: Any = np.float32):
+    def __init__(self, S: float = 0.5, dtype: Any = np.float64):
         super().__init__(dtype=dtype)
-        suffix = '_FP64' if dtype == np.float64 else '_FP32'
-        self._cpp_obj = getattr(_cpp, f'SpinSSite{suffix}')(float(S))
+        self._cpp_obj = getattr(_cpp, 'SpinSSite')(float(S))
         self._S = float(S)
         self._dtype = dtype
 
@@ -168,10 +165,9 @@ class FermionSite(Site):
     This is computed via bit-population-count (popcount) on the occupation bitstring,
     which is a single CPU instruction on modern hardware.
     """
-    def __init__(self, dtype: Any = np.float32):
+    def __init__(self, dtype: Any = np.float64):
         super().__init__(dtype=dtype)
-        suffix = '_FP64' if dtype == np.float64 else '_FP32'
-        self._cpp_obj = getattr(_cpp, f'FermionSite{suffix}')()
+        self._cpp_obj = getattr(_cpp, 'FermionSite')()
         
     def __repr__(self) -> str:
         return "FermionSite()"
@@ -199,10 +195,9 @@ class HubbardSite(Site):
     The double-occupancy number operator ``Nupdn`` checks ``(up_bit & dn_bit)``
     at the target site — a single bitwise AND instruction.
     """
-    def __init__(self, dtype: Any = np.float32):
+    def __init__(self, dtype: Any = np.float64):
         super().__init__(dtype=dtype)
-        suffix = '_FP64' if dtype == np.float64 else '_FP32'
-        self._cpp_obj = getattr(_cpp, f'HubbardSite{suffix}')()
+        self._cpp_obj = getattr(_cpp, 'HubbardSite')()
 
     def __repr__(self) -> str:
         return "HubbardSite()"
@@ -231,10 +226,9 @@ class TJSite(Site):
     effective theory. The local Hilbert space dimension drops from 4 (Hubbard)
     to 3 (t-J), reducing the total Hilbert space size by ~(3/4)^L.
     """
-    def __init__(self, dtype: Any = np.float32):
+    def __init__(self, dtype: Any = np.float64):
         super().__init__(dtype=dtype)
-        suffix = '_FP64' if dtype == np.float64 else '_FP32'
-        self._cpp_obj = getattr(_cpp, f'TJSite{suffix}')()
+        self._cpp_obj = getattr(_cpp, 'TJSite')()
 
     def __repr__(self) -> str:
         return "TJSite()"

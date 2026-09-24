@@ -6,7 +6,7 @@
 #include <vector>
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 
 
@@ -21,13 +21,13 @@ struct OperatorFactor
 
 struct OperatorTerm
 {
-    Complex coeff;
+    ComplexDouble coeff;
 
     std::vector<OperatorFactor> factors;
 
     OperatorTerm() = default;
 
-    OperatorTerm(Complex c, std::initializer_list<OperatorFactor> f)
+    OperatorTerm(ComplexDouble c, std::initializer_list<OperatorFactor> f)
         : coeff(c), factors(f) {}
 };
 
@@ -43,15 +43,15 @@ struct LocalOp {
 };
 
 // 1.0 * Sz(i)
-inline OperatorTerm operator*(Complex coeff, const LocalOp& op) {
+inline OperatorTerm operator*(ComplexDouble coeff, const LocalOp& op) {
     OperatorTerm t;
     t.coeff = coeff;
     t.factors.push_back({op.name, op.site});
     return t;
 }
 
-inline OperatorTerm operator*(Real coeff, const LocalOp& op) {
-    return Complex(coeff, 0.0) * op;
+inline OperatorTerm operator*(double coeff, const LocalOp& op) {
+    return ComplexDouble(coeff, 0.0) * op;
 }
 
 // Sz(i) * Sz(i+1) (defaults to coefficient 1.0)
@@ -115,5 +115,5 @@ inline OpSumExpr operator-(OpSumExpr expr, OperatorTerm t) {
 
 
 
-} // namespace QKRYLOV_PRECISION_NAMESPACE
+
 } // namespace qkrylov

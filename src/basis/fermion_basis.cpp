@@ -23,7 +23,7 @@ FermionBasis::FermionBasis(
         );
     }
 
-    if(sector_.use_n)
+    if(!sector_.n.empty())
         build_n_basis();
     else
         build_full_basis();
@@ -41,7 +41,7 @@ StateID FermionBasis::state(Index i) const
 
 Index FermionBasis::index(StateID s) const
 {
-    if (!sector_.use_n) {
+    if (sector_.n.empty()) {
         if (s < static_cast<StateID>(states_.size())) {
             return static_cast<Index>(s);
         }
@@ -57,7 +57,7 @@ Index FermionBasis::index(StateID s) const
 
 bool FermionBasis::contains(StateID s) const
 {
-    if (!sector_.use_n) {
+    if (sector_.n.empty()) {
         return s < static_cast<StateID>(states_.size());
     }
     return std::binary_search(states_.begin(), states_.end(), s);
@@ -84,7 +84,7 @@ void FermionBasis::build_n_basis()
 
     for(StateID s = 0; s < dim; ++s)
     {
-        if(popcount(s) == sector_.n)
+        if(std::find(sector_.n.begin(), sector_.n.end(), popcount(s)) != sector_.n.end())
         {
             states_.push_back(s);
         }

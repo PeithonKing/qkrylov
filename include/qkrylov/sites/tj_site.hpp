@@ -5,12 +5,15 @@
 #include "site.hpp"
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 
 class TJSite : public Site
 {
 public:
+
+    int bits_per_site() const override { return 2; }
+
 
     LocalAction apply(
         const std::string& op,
@@ -30,17 +33,18 @@ private:
         int site
     );
 
-    static Real phase_up(
+    static double phase_up(
         StateID state,
         int site
     );
 
-    static Real phase_dn(
+    static double phase_dn(
         StateID state,
         int site
     );
+
+    std::vector<Instruction> compile(const OperatorTerm& term) const override;
 };
 
 }
 
-}

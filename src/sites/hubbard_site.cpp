@@ -1,3 +1,4 @@
+#include "qkrylov/operators/opsum.hpp"
 #include "qkrylov/core/types.hpp"
 #include "qkrylov/sites/hubbard_site.hpp"
 
@@ -5,7 +6,7 @@
 #include <bit>
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 
 // We'll use a mapping where site i has:
@@ -28,7 +29,7 @@ bool HubbardSite::occupied_dn(
     return (state >> (2 * site + 1)) & 1ULL;
 }
 
-Real HubbardSite::phase_up(
+double HubbardSite::phase_up(
     StateID state,
     int site
 )
@@ -38,7 +39,7 @@ Real HubbardSite::phase_up(
     return (count % 2 == 0) ? 1.0 : -1.0;
 }
 
-Real HubbardSite::phase_dn(
+double HubbardSite::phase_dn(
     StateID state,
     int site
 )
@@ -124,6 +125,91 @@ LocalAction HubbardSite::apply(
     );
 }
 
+std::vector<Instruction> HubbardSite::compile(const OperatorTerm& term) const {
+    std::vector<Instruction> insts;
+    insts.push_back({0, 0, 0, 0, term.coeff});
+
+    for (const auto& factor : term.factors) {
+        std::vector<Instruction> next_insts;
+        for (auto inst : insts) {
+            uint64_t up_bit = 1ULL << (2 * factor.site);
+            uint64_t dn_bit = 1ULL << (2 * factor.site + 1);
+            
+            if (factor.op == "Nup") {
+                if (inst.check_mask & up_bit) {
+                    if (!(inst.expected_bits & up_bit)) continue;
+                }
+                inst.check_mask |= up_bit;
+                inst.expected_bits |= up_bit;
+                next_insts.push_back(inst);
+            }
+            else if (factor.op == "Ndn") {
+                if (inst.check_mask & dn_bit) {
+                    if (!(inst.expected_bits & dn_bit)) continue;
+                }
+                inst.check_mask |= dn_bit;
+                inst.expected_bits |= dn_bit;
+                next_insts.push_back(inst);
+            }
+            else if (factor.op == "Nupdn") {
+                if (inst.check_mask & up_bit) {
+                    if (!(inst.expected_bits & up_bit)) continue;
+                }
+                if (inst.check_mask & dn_bit) {
+                    if (!(inst.expected_bits & dn_bit)) continue;
+                }
+                inst.check_mask |= (up_bit | dn_bit);
+                inst.expected_bits |= (up_bit | dn_bit);
+                next_insts.push_back(inst);
+            }
+            else if (factor.op == "CUp") {
+                if (inst.check_mask & up_bit) {
+                    if (!(inst.expected_bits & up_bit)) continue;
+                }
+                inst.check_mask |= up_bit;
+                inst.expected_bits |= up_bit;
+                inst.flip_mask ^= up_bit;
+                inst.sign_mask ^= (up_bit - 1);
+                next_insts.push_back(inst);
+            }
+            else if (factor.op == "CdagUp") {
+                if (inst.check_mask & up_bit) {
+                    if (inst.expected_bits & up_bit) continue;
+                }
+                inst.check_mask |= up_bit;
+                inst.expected_bits &= ~up_bit;
+                inst.flip_mask ^= up_bit;
+                inst.sign_mask ^= (up_bit - 1);
+                next_insts.push_back(inst);
+            }
+            else if (factor.op == "CDn") {
+                if (inst.check_mask & dn_bit) {
+                    if (!(inst.expected_bits & dn_bit)) continue;
+                }
+                inst.check_mask |= dn_bit;
+                inst.expected_bits |= dn_bit;
+                inst.flip_mask ^= dn_bit;
+                inst.sign_mask ^= (dn_bit - 1);
+                next_insts.push_back(inst);
+            }
+            else if (factor.op == "CdagDn") {
+                if (inst.check_mask & dn_bit) {
+                    if (inst.expected_bits & dn_bit) continue;
+                }
+                inst.check_mask |= dn_bit;
+                inst.expected_bits &= ~dn_bit;
+                inst.flip_mask ^= dn_bit;
+                inst.sign_mask ^= (dn_bit - 1);
+                next_insts.push_back(inst);
+            }
+            else {
+                throw std::runtime_error("Unknown Hubbard operator: " + factor.op);
+            }
+        }
+        insts = std::move(next_insts);
+    }
+    return insts;
 }
 
 }
+

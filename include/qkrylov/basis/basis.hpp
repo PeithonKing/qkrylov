@@ -16,6 +16,7 @@ class Basis
 public:
 
     virtual ~Basis() = default;
+    virtual int bits_per_site() const { return 0; }
 
     /// \brief Total Hilbert space dimension \f$D\f$.
     /// \return Number of basis states in this sector.

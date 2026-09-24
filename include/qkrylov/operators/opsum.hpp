@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 
 class OpSum
@@ -47,5 +47,4 @@ private:
     std::vector<OperatorTerm> terms_;
 };
 
-}
 }

@@ -3,7 +3,7 @@
 #include "qkrylov/core/types.hpp"
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 
 struct LocalAction
@@ -12,8 +12,7 @@ struct LocalAction
 
     StateID new_state = 0;
 
-    Complex matrix_element = 0.0;
+    ComplexDouble matrix_element = 0.0;
 };
 
-}
 }

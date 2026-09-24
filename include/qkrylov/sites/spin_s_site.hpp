@@ -6,11 +6,14 @@
 #include <string>
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 class SpinSSite : public Site
 {
 public:
+
+    int bits_per_site() const override { return -d_; }
+
 
     explicit SpinSSite(double S = 0.5);
 
@@ -29,5 +32,5 @@ private:
     int d_;
 };
 
-} // namespace QKRYLOV_PRECISION_NAMESPACE
+
 } // namespace qkrylov

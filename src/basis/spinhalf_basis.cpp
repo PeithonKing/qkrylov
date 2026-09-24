@@ -7,8 +7,6 @@
 
 namespace qkrylov {
 
-
-
 SpinHalfBasis::SpinHalfBasis(
     int N,
     const Sector& sector
@@ -23,15 +21,15 @@ SpinHalfBasis::SpinHalfBasis(
         );
     }
 
-    if(sector_.use_sz)
-        build_sz_basis();
-    else
+    if(sector_.sz.empty())
         build_full_basis();
+    else
+        build_sz_basis();
 }
 
 Index SpinHalfBasis::size() const
 {
-    if (!sector_.use_sz) {
+    if (sector_.sz.empty()) {
         return Index(1) << N_;
     }
     return states_.size();
@@ -39,7 +37,7 @@ Index SpinHalfBasis::size() const
 
 StateID SpinHalfBasis::state(Index i) const
 {
-    if (!sector_.use_sz) {
+    if (sector_.sz.empty()) {
         const Index dim = Index(1) << N_;
         if (i >= dim) {
             throw std::out_of_range("SpinHalfBasis::state: index out of range");
@@ -51,7 +49,7 @@ StateID SpinHalfBasis::state(Index i) const
 
 Index SpinHalfBasis::index(StateID s) const
 {
-    if (!sector_.use_sz) {
+    if (sector_.sz.empty()) {
         const StateID dim = StateID(1) << N_;
         if (s < dim) {
             return static_cast<Index>(s);
@@ -68,7 +66,7 @@ Index SpinHalfBasis::index(StateID s) const
 
 bool SpinHalfBasis::contains(StateID s) const
 {
-    if (!sector_.use_sz) {
+    if (sector_.sz.empty()) {
         const StateID dim = StateID(1) << N_;
         return s < dim;
     }
@@ -85,33 +83,31 @@ int SpinHalfBasis::compute_sz2(
     int N
 )
 {
-    const int nup =
-        popcount(state);
-
-    const int ndown =
-        N - nup;
-
+    const int nup = std::popcount(state);
+    const int ndown = N - nup;
     return nup - ndown;
 }
 
 void SpinHalfBasis::build_sz_basis()
 {
-    const StateID dim =
-        StateID(1) << N_;
+    const StateID dim = StateID(1) << N_;
 
-    states_.reserve(dim / 2);
+    std::vector<int> target_sz2;
+    for (double val : sector_.sz) {
+        target_sz2.push_back(static_cast<int>(val >= 0 ? val*2.0 + 0.5 : val*2.0 - 0.5));
+    }
+
+    states_.reserve(dim / 2); // heuristic
 
     for(StateID s = 0; s < dim; ++s)
     {
-        if(compute_sz2(s, N_) ==
-           sector_.sz2)
+        int s_sz2 = compute_sz2(s, N_);
+        if (std::find(target_sz2.begin(), target_sz2.end(), s_sz2) != target_sz2.end())
         {
             states_.push_back(s);
         }
     }
     states_.shrink_to_fit();
 }
-
-
 
 } // namespace qkrylov

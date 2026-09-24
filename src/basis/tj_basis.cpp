@@ -82,8 +82,8 @@ void TJBasis::build_basis()
 
         if (double_occupied) continue;
 
-        bool match_up = !sector_.use_nup || (popcount(s & up_mask) == sector_.nup);
-        bool match_dn = !sector_.use_ndn || (popcount(s & dn_mask) == sector_.ndn);
+        bool match_up = sector_.nup.empty() || (std::find(sector_.nup.begin(), sector_.nup.end(), popcount(s & up_mask)) != sector_.nup.end());
+        bool match_dn = sector_.ndn.empty() || (std::find(sector_.ndn.begin(), sector_.ndn.end(), popcount(s & dn_mask)) != sector_.ndn.end());
 
         if(match_up && match_dn)
         {

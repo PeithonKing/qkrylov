@@ -232,53 +232,6 @@ static void bind_backend(nb::module_& m, const std::string& suffix, const std::s
 }
 
 static void bind_impl(nb::module_& m, const std::string& type_suffix) {
-    nb::class_<OperatorFactor>(m, ("OperatorFactor" + type_suffix).c_str())
-        .def(nb::init<std::string, int>(), "op"_a, "site"_a)
-        .def_rw("op", &OperatorFactor::op)
-        .def_rw("site", &OperatorFactor::site);
-
-    nb::class_<OperatorTerm>(m, ("OperatorTerm" + type_suffix).c_str())
-        .def(nb::init<>())
-        .def_rw("coeff", &OperatorTerm::coeff)
-        .def_rw("factors", &OperatorTerm::factors);
-
-    nb::class_<OpSum>(m, ("OpSum" + type_suffix).c_str())
-        .def(nb::init<>())
-        .def("add_term", &OpSum::add_term)
-        .def("__iadd__", [](OpSum& os, nb::tuple tuple) {
-            if (tuple.size() < 3 || tuple.size() % 2 == 0) {
-                throw std::invalid_argument("OpSum += requires (coeff, op1, site1, [op2, site2, ...]) with odd tuple length >= 3");
-            }
-            OperatorTerm term;
-            term.coeff = nb::cast<Complex>(tuple[0]);
-            for (size_t i = 1; i < tuple.size(); i += 2) {
-                term.factors.push_back({nb::cast<std::string>(tuple[i]), nb::cast<int>(tuple[i+1])});
-            }
-            os.add_term(term);
-            return &os;
-        })
-        .def("clear", &OpSum::clear)
-        .def("size", &OpSum::size)
-        .def("terms", &OpSum::terms);
-
-    nb::class_<Site>(m, ("Site" + type_suffix).c_str());
-
-    nb::class_<SpinHalfSite, Site>(m, ("SpinHalfSite" + type_suffix).c_str())
-        .def(nb::init<>());
-
-    nb::class_<SpinSSite, Site>(m, ("SpinSSite" + type_suffix).c_str())
-        .def(nb::init<double>(), "S"_a = 0.5)
-        .def_prop_ro("spin", &SpinSSite::spin)
-        .def_prop_ro("dimension_per_site", &SpinSSite::dimension_per_site);
-
-    nb::class_<FermionSite, Site>(m, ("FermionSite" + type_suffix).c_str())
-        .def(nb::init<>());
-
-    nb::class_<HubbardSite, Site>(m, ("HubbardSite" + type_suffix).c_str())
-        .def(nb::init<>());
-
-    nb::class_<TJSite, Site>(m, ("TJSite" + type_suffix).c_str())
-        .def(nb::init<>());
 
     nb::class_<CorrectionVectorResult>(m, ("CorrectionVectorResult" + type_suffix).c_str())
         .def(nb::init<>())

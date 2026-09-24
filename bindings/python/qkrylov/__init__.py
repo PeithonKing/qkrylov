@@ -183,6 +183,7 @@ __all__ = [
     "site",
     "basis",
     "hamiltonian",
+    "models",
     "solvers",
 
     # Hamiltonian
@@ -226,3 +227,4 @@ __all__ = [
     "find_gpu",
     "gpu_count",
 ]
+from . import models

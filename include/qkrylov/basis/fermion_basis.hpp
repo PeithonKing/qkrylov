@@ -14,20 +14,12 @@ class FermionBasis : public Basis
 {
 public:
 
+    int bits_per_site() const override { return 1; }
+
     FermionBasis(
         int N,
         const Sector& sector = Sector{}
     );
-
-    FermionBasis(
-        int N,
-        const sector::Particles& p
-    ) : FermionBasis(N, Sector(p)) {}
-
-    FermionBasis(
-        int N,
-        const sector::Unconstrained& u
-    ) : FermionBasis(N, Sector(u)) {}
 
     ~FermionBasis() override = default;
 
@@ -70,7 +62,7 @@ using qkrylov::FermionBasis;
 
 namespace basis {
     using Fermion = qkrylov::FermionBasis;
-    namespace sector = qkrylov::sector;
+    
 }
 
 } // namespace qkrylov

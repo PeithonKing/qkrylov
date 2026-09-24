@@ -6,7 +6,7 @@
 #include <algorithm>
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 SpinSSite::SpinSSite(double S)
     : S_(S),
@@ -39,7 +39,7 @@ LocalAction SpinSSite::apply(
     if (op == "Sz") {
         a.valid = true;
         a.new_state = state;
-        a.matrix_element = static_cast<Real>(mz);
+        a.matrix_element = static_cast<double>(mz);
         return a;
     }
 
@@ -49,7 +49,7 @@ LocalAction SpinSSite::apply(
         }
         a.valid = true;
         a.new_state = state + d_pow;
-        a.matrix_element = static_cast<Real>(std::sqrt(std::max(0.0, S_ * (S_ + 1.0) - mz * (mz + 1.0))));
+        a.matrix_element = static_cast<double>(std::sqrt(std::max(0.0, S_ * (S_ + 1.0) - mz * (mz + 1.0))));
         return a;
     }
 
@@ -59,7 +59,7 @@ LocalAction SpinSSite::apply(
         }
         a.valid = true;
         a.new_state = state - d_pow;
-        a.matrix_element = static_cast<Real>(std::sqrt(std::max(0.0, S_ * (S_ + 1.0) - mz * (mz - 1.0))));
+        a.matrix_element = static_cast<double>(std::sqrt(std::max(0.0, S_ * (S_ + 1.0) - mz * (mz - 1.0))));
         return a;
     }
 
@@ -74,5 +74,5 @@ LocalAction SpinSSite::apply(
     throw std::runtime_error("Unknown spin operator for SpinSSite: " + op);
 }
 
-} // namespace QKRYLOV_PRECISION_NAMESPACE
+
 } // namespace qkrylov

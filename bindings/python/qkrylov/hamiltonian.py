@@ -92,7 +92,7 @@ class MatrixFreeHamiltonian:
             elif hasattr(basis, "_cpp_obj") and basis._cpp_obj is not None and "FP64" in type(basis._cpp_obj).__name__:
                 dtype = np.float64
             else:
-                dtype = np.float32
+                dtype = np.float64
 
         actual_site: Site
         actual_ops: OpSum

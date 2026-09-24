@@ -1,16 +1,13 @@
 #pragma once
-
 #include "qkrylov/core/types.hpp"
-
 #include "site.hpp"
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
-
 
 class SpinHalfSite : public Site
 {
 public:
+    int bits_per_site() const override { return 1; }
 
     LocalAction apply(
         const std::string& op,
@@ -18,13 +15,10 @@ public:
         StateID state
     ) const override;
 
-private:
+    std::vector<Instruction> compile(const OperatorTerm& term) const override;
 
-    static bool spin_up(
-        StateID state,
-        int site
-    );
+private:
+    static bool spin_up(StateID state, int site);
 };
 
-}
-}
+} // namespace qkrylov

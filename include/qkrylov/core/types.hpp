@@ -21,6 +21,7 @@ using StateID = uint64_t;
 
 /// \brief Standard size and indexing integer type.
 using Index   = std::size_t;
+using ComplexDouble = std::complex<double>;
 
 /// \brief Count the number of set bits (population count) in a 64-bit word.
 ///

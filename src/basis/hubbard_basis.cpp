@@ -23,7 +23,7 @@ HubbardBasis::HubbardBasis(
         );
     }
 
-    if(sector_.use_nup || sector_.use_ndn)
+    if((!sector_.nup.empty()) || (!sector_.ndn.empty()))
         build_nup_ndn_basis();
     else
         build_full_basis();
@@ -41,7 +41,7 @@ StateID HubbardBasis::state(Index i) const
 
 Index HubbardBasis::index(StateID s) const
 {
-    if (!sector_.use_nup && !sector_.use_ndn) {
+    if (sector_.nup.empty() && sector_.ndn.empty()) {
         if (s < static_cast<StateID>(states_.size())) {
             return static_cast<Index>(s);
         }
@@ -57,7 +57,7 @@ Index HubbardBasis::index(StateID s) const
 
 bool HubbardBasis::contains(StateID s) const
 {
-    if (!sector_.use_nup && !sector_.use_ndn) {
+    if (sector_.nup.empty() && sector_.ndn.empty()) {
         return s < static_cast<StateID>(states_.size());
     }
     return std::binary_search(states_.begin(), states_.end(), s);
@@ -92,8 +92,8 @@ void HubbardBasis::build_nup_ndn_basis()
 
     for(StateID s = 0; s < dim; ++s)
     {
-        bool match_up = !sector_.use_nup || (popcount(s & up_mask) == sector_.nup);
-        bool match_dn = !sector_.use_ndn || (popcount(s & dn_mask) == sector_.ndn);
+        bool match_up = sector_.nup.empty() || (popcount(s & up_mask) == sector_.nup[0]);
+        bool match_dn = sector_.ndn.empty() || (popcount(s & dn_mask) == sector_.ndn[0]);
 
         if(match_up && match_dn)
         {

@@ -5,12 +5,15 @@
 #include "site.hpp"
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 
 class FermionSite : public Site
 {
 public:
+
+    int bits_per_site() const override { return 1; }
+
 
     LocalAction apply(
         const std::string& op,
@@ -25,12 +28,13 @@ private:
         int site
     );
 
-    static Real phase(
+    static double phase(
         StateID state,
         int site
     );
+
+    std::vector<Instruction> compile(const OperatorTerm& term) const override;
 };
 
 }
 
-}

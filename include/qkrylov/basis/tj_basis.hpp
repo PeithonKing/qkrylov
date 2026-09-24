@@ -14,20 +14,12 @@ class TJBasis : public Basis
 {
 public:
 
+    int bits_per_site() const override { return 2; }
+
     TJBasis(
         int N,
         const Sector& sector = Sector{}
     );
-
-    TJBasis(
-        int N,
-        const sector::Hubbard& h
-    ) : TJBasis(N, Sector(h)) {}
-
-    TJBasis(
-        int N,
-        const sector::Unconstrained& u
-    ) : TJBasis(N, Sector(u)) {}
 
     ~TJBasis() override = default;
 
@@ -68,7 +60,7 @@ using qkrylov::TJBasis;
 
 namespace basis {
     using TJ = qkrylov::TJBasis;
-    namespace sector = qkrylov::sector;
+    
 }
 
 } // namespace qkrylov

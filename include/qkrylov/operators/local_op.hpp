@@ -5,7 +5,7 @@
 #include "operator_term.hpp"
 
 namespace qkrylov {
-namespace QKRYLOV_PRECISION_NAMESPACE {
+
 
 
 // Helper functions for common operators to enable algebraic syntax
@@ -30,4 +30,3 @@ inline LocalOp N(int i) { return {"N", i}; }
 
 }
 
-}

@@ -14,20 +14,12 @@ class HubbardBasis : public Basis
 {
 public:
 
+    int bits_per_site() const override { return 2; }
+
     HubbardBasis(
         int N,
         const Sector& sector = Sector{}
     );
-
-    HubbardBasis(
-        int N,
-        const sector::Hubbard& h
-    ) : HubbardBasis(N, Sector(h)) {}
-
-    HubbardBasis(
-        int N,
-        const sector::Unconstrained& u
-    ) : HubbardBasis(N, Sector(u)) {}
 
     ~HubbardBasis() override = default;
 
@@ -70,7 +62,7 @@ using qkrylov::HubbardBasis;
 
 namespace basis {
     using Hubbard = qkrylov::HubbardBasis;
-    namespace sector = qkrylov::sector;
+    
 }
 
 } // namespace qkrylov

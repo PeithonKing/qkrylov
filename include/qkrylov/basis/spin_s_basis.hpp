@@ -15,23 +15,13 @@ class SpinSBasis : public Basis
 {
 public:
 
+    int bits_per_site() const override { return -d_; }
+
     SpinSBasis(
         int N,
         double S = 0.5,
         const Sector& sector = Sector{}
     );
-
-    SpinSBasis(int N, double S, const sector::Sz& sz)
-        : SpinSBasis(N, S, Sector(sz)) {}
-
-    SpinSBasis(int N, double S, const sector::Unconstrained& u)
-        : SpinSBasis(N, S, Sector(u)) {}
-
-    SpinSBasis(int N, const sector::Sz& sz)
-        : SpinSBasis(N, 0.5, Sector(sz)) {}
-
-    SpinSBasis(int N, const sector::Unconstrained& u)
-        : SpinSBasis(N, 0.5, Sector(u)) {}
 
     ~SpinSBasis() override = default;
 
@@ -73,7 +63,7 @@ using qkrylov::SpinSBasis;
 
 namespace basis {
     using SpinS = qkrylov::SpinSBasis;
-    namespace sector = qkrylov::sector;
+    
 }
 
 } // namespace qkrylov

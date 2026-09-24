@@ -21,7 +21,7 @@ SpinSBasis::SpinSBasis(
         throw std::runtime_error("SpinSBasis: N must be > 0.");
     }
 
-    if (sector_.use_sz) {
+    if ((!sector_.sz.empty())) {
         build_sz_basis();
     } else {
         build_full_basis();
@@ -40,7 +40,7 @@ StateID SpinSBasis::state(Index i) const
 
 Index SpinSBasis::index(StateID s) const
 {
-    if (!sector_.use_sz) {
+    if (!(!sector_.sz.empty())) {
         if (s < static_cast<StateID>(states_.size())) {
             return static_cast<Index>(s);
         }
@@ -56,7 +56,7 @@ Index SpinSBasis::index(StateID s) const
 
 bool SpinSBasis::contains(StateID s) const
 {
-    if (!sector_.use_sz) {
+    if (!(!sector_.sz.empty())) {
         return s < static_cast<StateID>(states_.size());
     }
     return std::binary_search(states_.begin(), states_.end(), s);
@@ -97,7 +97,7 @@ void SpinSBasis::build_sz_basis()
     states_.reserve(total_dim / 2); // heuristic reservation
 
     for (StateID s = 0; s < total_dim; ++s) {
-        if (compute_sz2(s) == sector_.sz2) {
+        if (compute_sz2(s) == (int(sector_.sz[0] * 2.0))) {
             states_.push_back(s);
         }
     }
