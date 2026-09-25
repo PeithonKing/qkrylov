@@ -1,5 +1,4 @@
 import pytest
-pytestmark = pytest.mark.skip(reason="Spin-S Bitmask VM execution pending Phase 3")
 import numpy as np
 import math
 
@@ -78,7 +77,7 @@ def test_spin_s_site_default_arguments():
 ])
 def test_spin_s_basis_full_dimensions(N, S, expected_dim, dtype):
     """Test unconstrained SpinSBasis dimension equals (2S+1)^N."""
-    basis = SpinSBasis(N=N, S=S, conserve_sz=False, dtype=dtype)
+    basis = SpinSBasis(N=N, S=S, dtype=dtype)
     assert basis.nsites == N
     assert math.isclose(basis.spin, S, abs_tol=1e-6)
     expected_local_d = int(round(2.0 * S + 1.0))
@@ -116,8 +115,8 @@ def test_spin_s_basis_sz_sectors(N, S, sz, expected_dim, dtype):
 @pytest.mark.parametrize("N", [2, 4, 6])
 def test_spin_s_basis_equivalence_with_spinhalf_full(N, dtype):
     """Test SpinSBasis(S=0.5) dimensions match SpinHalfBasis exactly for full space."""
-    s_basis = SpinSBasis(N=N, S=0.5, conserve_sz=False, dtype=dtype)
-    sh_basis = SpinHalfBasis(N=N, conserve_sz=False, dtype=dtype)
+    s_basis = SpinSBasis(N=N, S=0.5, dtype=dtype)
+    sh_basis = SpinHalfBasis(N=N, dtype=dtype)
     assert s_basis.size == sh_basis.size
     assert s_basis.nsites == sh_basis.nsites
 

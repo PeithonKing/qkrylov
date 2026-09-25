@@ -48,7 +48,8 @@ private:
     Index dim_ = 0;
     
     Kokkos::View<qkrylov::Instruction*, ExecSpace> instructions_;
-    int num_instructions_ = 0;
+        int num_instructions_ = 0;
+    Kokkos::View<StateID*, ExecSpace> basis_states_;
 
     
     VectorView<ExecSpace> diagonal_;

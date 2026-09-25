@@ -7,6 +7,22 @@
 namespace qkrylov {
 namespace QKRYLOV_PRECISION_NAMESPACE {
 
+// Safe, fast, portable popcount for Kokkos device code
+KOKKOS_INLINE_FUNCTION int qkrylov_popcount64(uint64_t x) {
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+    return __popcll(x);
+#elif defined(__GNUC__) || defined(__clang__)
+    return __builtin_popcountll(x);
+#else
+    x -= (x >> 1) & 0x5555555555555555ULL;
+    x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
+    x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0fULL;
+    return (x * 0x0101010101010101ULL) >> 56;
+#endif
+}
+
+// Applies a single Instruction to a state, returning the new state.
+
 template <typename ExecSpace>
 MatrixFreeHamiltonian<ExecSpace>::MatrixFreeHamiltonian(
     std::shared_ptr<Basis> basis,
@@ -35,70 +51,92 @@ MatrixFreeHamiltonian<ExecSpace>::MatrixFreeHamiltonian(
     dim_ = basis_->size();
     if (dim_ == 0) return;
 
-    std::vector<KComplex> h_diagonal(dim_, KComplex(0.0, 0.0));
+    // 1. Upload basis states to device to prevent virtual vtable segfaults
+    Kokkos::View<StateID*, Kokkos::HostSpace> host_states("host_states", dim_);
+    for(Index i=0; i<dim_; ++i) host_states(i) = basis_->state(i);
+    basis_states_ = Kokkos::View<StateID*, ExecSpace>("basis_states", dim_);
+    Kokkos::deep_copy(ExecSpace(), basis_states_, host_states);
 
-    for (Index alpha = 0; alpha < dim_; ++alpha) {
-        const StateID initial_state = basis_->state(alpha);
-
-        for (const auto& term : ops_.terms()) {
-            StateID state  = initial_state;
-            ComplexDouble amp = term.coeff;
-            bool    valid  = true;
-
-            for (const auto& factor : term.factors) {
-                auto action = site_->apply(factor.op, factor.site, state);
-                if (!action.valid) { valid = false; break; }
-                state = action.new_state;
-                amp  *= action.matrix_element;
-            }
-
-            if (valid && state == initial_state) {
-                h_diagonal[alpha] += KComplex(static_cast<Real>(amp.real()), static_cast<Real>(amp.imag()));
-            }
-        }
-    }
-
-    using MemSpace = typename ExecSpace::memory_space;
-    diagonal_ = VectorView<ExecSpace>("qkrylov::diagonal", dim_);
-
-    
-    auto h_dg = Kokkos::View<const KComplex*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>(h_diagonal.data(), dim_);
-    Kokkos::deep_copy(ExecSpace(), diagonal_, h_dg);
-
-    // --- NEW: VM Compilation Phase ---
-    std::vector<Instruction> host_insts;
+    // 2. Compile VM instructions on host and split diag/offdiag
+    std::vector<Instruction> diag_insts;
+    std::vector<Instruction> offdiag_insts;
     for (const auto& term : ops_.terms()) {
         auto compiled = site_->compile(term);
-        for (auto& inst : compiled) {
-            // Only store OFF-DIAGONAL instructions in the VM to avoid double-counting
-            // the diagonal (which is already fully captured in diagonal_ above).
-            if (inst.flip_mask != 0) {
-                host_insts.push_back(inst);
+        for (const auto& inst : compiled) {
+            bool is_diagonal;
+            if (inst.based.d == 0) {
+                is_diagonal = (inst.bin.flip_mask == 0);
+            } else {
+                is_diagonal = true;
+                for(int k=0; k<inst.based.num_sites; ++k) {
+                    if (inst.based.src_sigma[k] != inst.based.tgt_sigma[k]) { is_diagonal = false; break; }
+                }
+            }
+            if (is_diagonal) {
+                diag_insts.push_back(inst);
+            } else {
+                offdiag_insts.push_back(inst);
             }
         }
     }
-    num_instructions_ = host_insts.size();
+
+    // 3. Setup and execute Diagonal VM on device
+    int num_diag = diag_insts.size();
+    Kokkos::View<Instruction*, ExecSpace> d_diag_inst("diag_inst", num_diag);
+    if (num_diag > 0) {
+        auto h_diag_inst = Kokkos::View<const Instruction*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>(diag_insts.data(), num_diag);
+        Kokkos::deep_copy(ExecSpace(), d_diag_inst, h_diag_inst);
+    }
+    
+    diagonal_ = VectorView<ExecSpace>("qkrylov::diagonal", dim_);
+    auto diag_view = diagonal_;
+    auto states_view = basis_states_;
+
+    Kokkos::parallel_for("qkrylov::init_diagonal",
+        Kokkos::RangePolicy<ExecSpace, Index>(0, dim_),
+        KOKKOS_LAMBDA(const Index alpha) {
+            StateID state = states_view(alpha);
+            double diag_r = 0.0;
+            double diag_i = 0.0;
+            for (int i = 0; i < num_diag; ++i) {
+                const auto& inst = d_diag_inst(i);
+                // Binary: bitmask check. Base-d: modular residue check.
+                if (inst.based.d == 0) {
+                    if ((state & inst.check_mask) != inst.expected_bits) continue;
+                } else {
+                    uint64_t d = inst.based.d;
+                    bool valid = true;
+                    for(int k=0; k<inst.based.num_sites; ++k) {
+                        uint64_t d_pow = 1; for(int p=0; p<inst.based.site[k]; ++p) d_pow *= d;
+                        uint64_t local = (state / d_pow) % d;
+                        if (local != inst.based.tgt_sigma[k]) { valid = false; break; }
+                    }
+                    if (!valid) continue;
+                }
+
+                double real_c = reinterpret_cast<const double*>(&inst.coeff)[0];
+                double imag_c = reinterpret_cast<const double*>(&inst.coeff)[1];
+                
+                if (inst.sign_mask) {
+                    if (qkrylov_popcount64(state & inst.sign_mask) % 2 != 0) {
+                        real_c = -real_c;
+                        imag_c = -imag_c;
+                    }
+                }
+                diag_r += real_c;
+                diag_i += imag_c;
+            }
+            diag_view(alpha) = KComplex(static_cast<Real>(diag_r), static_cast<Real>(diag_i));
+        }
+    );
+
+    // 4. Store off-diagonal VM instructions
+    num_instructions_ = offdiag_insts.size();
     if (num_instructions_ > 0) {
         instructions_ = Kokkos::View<Instruction*, ExecSpace>("qkrylov::instructions", num_instructions_);
-        auto host_view = Kokkos::View<const Instruction*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>(host_insts.data(), num_instructions_);
+        auto host_view = Kokkos::View<const Instruction*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged>(offdiag_insts.data(), num_instructions_);
         Kokkos::deep_copy(ExecSpace(), instructions_, host_view);
     }
-}
-
-
-
-// Safe, fast, portable popcount for Kokkos device code
-KOKKOS_INLINE_FUNCTION int qkrylov_popcount64(uint64_t x) {
-#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
-    return __popcll(x);
-#elif defined(__GNUC__) || defined(__clang__)
-    return __builtin_popcountll(x);
-#else
-    x -= (x >> 1) & 0x5555555555555555ULL;
-    x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
-    x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0fULL;
-    return (x * 0x0101010101010101ULL) >> 56;
-#endif
 }
 
 template <typename ExecSpace>
@@ -111,33 +149,58 @@ void MatrixFreeHamiltonian<ExecSpace>::apply(
     if (dim == 0) return;
     Kokkos::deep_copy(ExecSpace(), y, KComplex(0.0, 0.0));
 
-    auto* basis_ptr = basis_.get();
     auto  diag_view = diagonal_;
     auto  inst_view = instructions_;
     int   num_inst  = num_instructions_;
-
+    auto  states_view = basis_states_;
     
     Kokkos::parallel_for("qkrylov::H_apply",
         Kokkos::RangePolicy<ExecSpace, Index>(0, dim),
         KOKKOS_LAMBDA(const Index beta) {
-            const StateID state_beta = basis_ptr->state(beta);
+            const StateID state_beta = states_view(beta);
             
             // 1. Diagonal contribution
             KComplex y_val = diag_view(beta) * x(beta);
 
-            // 2. Off-diagonal VM execution (pull-based, no atomics)
+            // 2. Off-diagonal VM execution
             for (int i = 0; i < num_inst; ++i) {
                 const auto& inst = inst_view(i);
                 
-                StateID state_alpha = state_beta ^ inst.flip_mask;
+                StateID state_alpha;
+                if (inst.based.d == 0) {
+                    // Binary site: reverse XOR to find source state alpha
+                    state_alpha = state_beta ^ inst.bin.flip_mask;
+                    if ((state_alpha & inst.check_mask) != inst.expected_bits) continue;
+                } else {
+                    // Explicit base-d loop:
+                    uint64_t d = inst.based.d;
+                    bool valid = true;
+                    state_alpha = state_beta;
+                    for(int k=0; k<inst.based.num_sites; ++k) {
+                        uint64_t d_pow = 1; for(int p=0; p<inst.based.site[k]; ++p) d_pow *= d;
+                        uint64_t local = (state_beta / d_pow) % d;
+                        // For off-diagonal, state_beta has tgt_sigma. For diagonal, src==tgt.
+                        if (local != inst.based.tgt_sigma[k]) { valid = false; break; }
+                        state_alpha = state_alpha - inst.based.tgt_sigma[k] * d_pow + inst.based.src_sigma[k] * d_pow;
+                    }
+                    if (!valid) continue;
+                }
                 
-                if ((state_alpha & inst.check_mask) != inst.expected_bits) continue;
-                if (!basis_ptr->contains(state_alpha)) continue;
+                // Device-safe Binary Search for alpha in sorted basis_states
+                Index L = 0, R = dim - 1;
+                bool found = false;
+                Index alpha = 0;
+                while(L <= R) {
+                    Index m = L + (R - L) / 2;
+                    StateID sm = states_view(m);
+                    if (sm == state_alpha) { found = true; alpha = m; break; }
+                    if (sm < state_alpha) L = m + 1;
+                    else { if (m == 0) break; R = m - 1; }
+                }
+                if (!found) continue;
                 
-                Index alpha = basis_ptr->index(state_alpha);
-                
-                double real_c = inst.coeff.real();
-                double imag_c = inst.coeff.imag();
+                double real_c = reinterpret_cast<const double*>(&inst.coeff)[0];
+                double imag_c = reinterpret_cast<const double*>(&inst.coeff)[1];
                 
                 if (inst.sign_mask) {
                     if (qkrylov_popcount64(state_alpha & inst.sign_mask) % 2 != 0) {
@@ -153,7 +216,6 @@ void MatrixFreeHamiltonian<ExecSpace>::apply(
         }
     );
 }
-
 
 template <typename ExecSpace>
 void MatrixFreeHamiltonian<ExecSpace>::apply(

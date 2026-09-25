@@ -1,9 +1,11 @@
 #pragma once
 
 #include "qkrylov/core/types.hpp"
+#include "qkrylov/core/instruction.hpp"
 #include "qkrylov/sites/site.hpp"
 
 #include <string>
+#include <vector>
 
 namespace qkrylov {
 
@@ -22,6 +24,8 @@ public:
         int site,
         StateID state
     ) const override;
+
+    std::vector<Instruction> compile(const OperatorTerm& term) const override;
 
     double spin() const noexcept { return S_; }
     int dimension_per_site() const noexcept { return d_; }

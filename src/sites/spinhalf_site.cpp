@@ -124,7 +124,7 @@ LocalAction SpinHalfSite::apply(
 
 std::vector<Instruction> SpinHalfSite::compile(const OperatorTerm& term) const {
     std::vector<Instruction> insts;
-    insts.push_back({0, 0, 0, 0, term.coeff});
+    Instruction init_inst = {}; init_inst.coeff = term.coeff; insts.push_back(init_inst);
 
     for (const auto& factor : term.factors) {
         std::vector<Instruction> next_insts;
@@ -137,7 +137,7 @@ std::vector<Instruction> SpinHalfSite::compile(const OperatorTerm& term) const {
                 }
                 inst.check_mask |= bit;
                 inst.expected_bits &= ~bit; // must be 0
-                inst.flip_mask ^= bit;
+                inst.bin.flip_mask ^= bit;
                 next_insts.push_back(inst);
             }
             else if (factor.op == "Sm") {
@@ -146,7 +146,7 @@ std::vector<Instruction> SpinHalfSite::compile(const OperatorTerm& term) const {
                 }
                 inst.check_mask |= bit;
                 inst.expected_bits |= bit; // must be 1
-                inst.flip_mask ^= bit;
+                inst.bin.flip_mask ^= bit;
                 next_insts.push_back(inst);
             }
             else if (factor.op == "Sz") {
@@ -166,7 +166,7 @@ std::vector<Instruction> SpinHalfSite::compile(const OperatorTerm& term) const {
                 }
             }
             else if (factor.op == "Sx") {
-                inst.flip_mask ^= bit;
+                inst.bin.flip_mask ^= bit;
                 inst.coeff *= 0.5;
                 next_insts.push_back(inst);
             }
@@ -175,7 +175,7 @@ std::vector<Instruction> SpinHalfSite::compile(const OperatorTerm& term) const {
                     Instruction up = inst;
                     up.check_mask |= bit;
                     up.expected_bits |= bit;
-                    up.flip_mask ^= bit;
+                    up.bin.flip_mask ^= bit;
                     up.coeff *= ComplexDouble(0.0, -0.5);
                     next_insts.push_back(up);
                 }
@@ -183,7 +183,7 @@ std::vector<Instruction> SpinHalfSite::compile(const OperatorTerm& term) const {
                     Instruction dn = inst;
                     dn.check_mask |= bit;
                     dn.expected_bits &= ~bit;
-                    dn.flip_mask ^= bit;
+                    dn.bin.flip_mask ^= bit;
                     dn.coeff *= ComplexDouble(0.0, 0.5);
                     next_insts.push_back(dn);
                 }

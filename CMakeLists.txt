@@ -209,3 +209,13 @@ if(QKRYLOV_BUILD_PYTHON)
             PATTERN "py.typed"
     )
 endif()
+
+
+# Safely attempt to find and link OpenMP without breaking CI
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(qkrylov_common PUBLIC OpenMP::OpenMP_CXX)
+    target_link_libraries(qkrylov_fp32 PUBLIC OpenMP::OpenMP_CXX)
+    target_link_libraries(qkrylov_fp64 PUBLIC OpenMP::OpenMP_CXX)
+    target_link_libraries(qkrylov PUBLIC OpenMP::OpenMP_CXX)
+endif()

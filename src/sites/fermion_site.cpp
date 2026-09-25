@@ -86,7 +86,7 @@ LocalAction FermionSite::apply(
 
 std::vector<Instruction> FermionSite::compile(const OperatorTerm& term) const {
     std::vector<Instruction> insts;
-    insts.push_back({0, 0, 0, 0, term.coeff});
+    Instruction init_inst = {}; init_inst.coeff = term.coeff; insts.push_back(init_inst);
 
     for (const auto& factor : term.factors) {
         std::vector<Instruction> next_insts;
@@ -110,7 +110,7 @@ std::vector<Instruction> FermionSite::compile(const OperatorTerm& term) const {
                 }
                 inst.check_mask |= bit;
                 inst.expected_bits |= bit;
-                inst.flip_mask ^= bit;
+                inst.bin.flip_mask ^= bit;
                 inst.sign_mask ^= ((1ULL << factor.site) - 1);
                 next_insts.push_back(inst);
             }
@@ -120,7 +120,7 @@ std::vector<Instruction> FermionSite::compile(const OperatorTerm& term) const {
                 }
                 inst.check_mask |= bit;
                 inst.expected_bits &= ~bit;
-                inst.flip_mask ^= bit;
+                inst.bin.flip_mask ^= bit;
                 inst.sign_mask ^= ((1ULL << factor.site) - 1);
                 next_insts.push_back(inst);
             }

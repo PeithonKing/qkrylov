@@ -127,7 +127,7 @@ LocalAction HubbardSite::apply(
 
 std::vector<Instruction> HubbardSite::compile(const OperatorTerm& term) const {
     std::vector<Instruction> insts;
-    insts.push_back({0, 0, 0, 0, term.coeff});
+    Instruction init_inst = {}; init_inst.coeff = term.coeff; insts.push_back(init_inst);
 
     for (const auto& factor : term.factors) {
         std::vector<Instruction> next_insts;
@@ -168,7 +168,7 @@ std::vector<Instruction> HubbardSite::compile(const OperatorTerm& term) const {
                 }
                 inst.check_mask |= up_bit;
                 inst.expected_bits |= up_bit;
-                inst.flip_mask ^= up_bit;
+                inst.bin.flip_mask ^= up_bit;
                 inst.sign_mask ^= (up_bit - 1);
                 next_insts.push_back(inst);
             }
@@ -178,7 +178,7 @@ std::vector<Instruction> HubbardSite::compile(const OperatorTerm& term) const {
                 }
                 inst.check_mask |= up_bit;
                 inst.expected_bits &= ~up_bit;
-                inst.flip_mask ^= up_bit;
+                inst.bin.flip_mask ^= up_bit;
                 inst.sign_mask ^= (up_bit - 1);
                 next_insts.push_back(inst);
             }
@@ -188,7 +188,7 @@ std::vector<Instruction> HubbardSite::compile(const OperatorTerm& term) const {
                 }
                 inst.check_mask |= dn_bit;
                 inst.expected_bits |= dn_bit;
-                inst.flip_mask ^= dn_bit;
+                inst.bin.flip_mask ^= dn_bit;
                 inst.sign_mask ^= (dn_bit - 1);
                 next_insts.push_back(inst);
             }
@@ -198,7 +198,7 @@ std::vector<Instruction> HubbardSite::compile(const OperatorTerm& term) const {
                 }
                 inst.check_mask |= dn_bit;
                 inst.expected_bits &= ~dn_bit;
-                inst.flip_mask ^= dn_bit;
+                inst.bin.flip_mask ^= dn_bit;
                 inst.sign_mask ^= (dn_bit - 1);
                 next_insts.push_back(inst);
             }
