@@ -19,9 +19,10 @@ set(QKRYLOV_TESTS
     test_lanczos_policies
     test_ftlm_sweep
     test_state_index
-    test_fixed_popcount_basis
     test_lanczos_early_stopping
+    test_fixed_popcount_basis
     test_host_space
+    test_spin1_correction_vector
 )
 
 # Tests rely on assert(); keep it active even in Release builds (which define NDEBUG).

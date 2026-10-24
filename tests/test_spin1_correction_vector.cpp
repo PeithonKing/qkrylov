@@ -22,8 +22,7 @@ int main() {
 
     // Sz = 0 sector (dim = 19)
     Sector sector;
-    sector.use_sz = true;
-    sector.sz2 = 0; // Total Sz = 0
+    sector.sz = {0.0}; // Total Sz = 0
 
     auto basis = std::make_shared<SpinSBasis>(N, S, sector);
     std::cout << "Spin-1 (N=" << N << ", Sz=0) basis dimension: " << basis->size() << std::endl;
