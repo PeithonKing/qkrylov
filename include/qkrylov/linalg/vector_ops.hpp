@@ -96,6 +96,13 @@ inline void normalize(
     scal(KComplex(1.0 / n, 0.0), x);
 }
 
+/// <x|v> accumulated in double (real: x*v; complex: conj(x)*v).
+KOKKOS_INLINE_FUNCTION double dot_term(Real x, Real v) { return static_cast<double>(x) * v; }
+KOKKOS_INLINE_FUNCTION Kokkos::complex<double> dot_term(KComplex x, KComplex v) {
+    const KComplex p = Kokkos::conj(x) * v;
+    return Kokkos::complex<double>(p.real(), p.imag());
+}
+
 /// Fill a device vector with zeros.
 template <typename ViewType>
 inline void zero_fill(ViewType& x) {

@@ -18,7 +18,8 @@ struct Instruction {
     union {
         struct {
             uint64_t flip_mask;
-            uint64_t reserved[2]; // always zero for binary instructions
+            uint64_t reserved;    // always zero for binary instructions (holds based.d)
+            uint64_t alt_xor;     // merged pair: also valid if masked state == expected_bits ^ alt_xor
         } bin;
         struct {
             uint64_t reserved;    // overlaps bin.flip_mask; never written for base-d instructions
@@ -36,6 +37,8 @@ struct Instruction {
 static_assert(sizeof(Instruction) == 64, "Instruction must stay one 64-byte cache line");
 static_assert(offsetof(Instruction, based.d) >= offsetof(Instruction, bin.flip_mask) + sizeof(uint64_t),
               "based.d must not overlap bin.flip_mask (binary instructions would take the base-d path)");
+static_assert(offsetof(Instruction, based.d) + sizeof(uint16_t) <= offsetof(Instruction, bin.alt_xor),
+              "based.d must not overlap bin.alt_xor");
 static_assert(offsetof(Instruction, based.tgt_sigma) + 4 <= offsetof(Instruction, sign_mask),
               "based fields must fit inside the union");
 
