@@ -20,10 +20,14 @@ set(QKRYLOV_TESTS
     test_ftlm_sweep
 )
 
+# Tests rely on assert(); keep it active even in Release builds (which define NDEBUG).
+set(QKRYLOV_TEST_KEEP_ASSERTS $<IF:$<CXX_COMPILER_ID:MSVC>,/UNDEBUG,-UNDEBUG>)
+
 foreach(test_name IN LISTS QKRYLOV_TESTS)
     add_executable(${test_name} ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE qkrylov::qkrylov)
     target_compile_definitions(${test_name} PRIVATE QKRYLOV_DOUBLE_PRECISION)
+    target_compile_options(${test_name} PRIVATE ${QKRYLOV_TEST_KEEP_ASSERTS})
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
 
@@ -43,6 +47,7 @@ foreach(test_name IN LISTS QKRYLOV_FP32_TESTS)
     add_executable(${target_name} ${test_name}.cpp)
     target_link_libraries(${target_name} PRIVATE qkrylov::qkrylov)
     target_compile_definitions(${target_name} PRIVATE QKRYLOV_SINGLE_PRECISION)
+    target_compile_options(${target_name} PRIVATE ${QKRYLOV_TEST_KEEP_ASSERTS})
     add_test(NAME ${target_name} COMMAND ${target_name})
 endforeach()
 

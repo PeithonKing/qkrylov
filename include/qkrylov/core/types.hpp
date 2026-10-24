@@ -37,6 +37,15 @@ inline int popcount(uint64_t x) noexcept {
 #endif
 }
 
+/// \brief Clamp an iteration/eigenvalue count to the Hilbert-space dimension.
+///
+/// Never narrows `dim` to int, so it stays correct for dimensions above INT_MAX
+/// (e.g. the Sz=0 sector of 34 spins has 2.3e9 states).
+inline int clamp_to_dim(int count, Index dim) noexcept {
+    if (count <= 0) return count;
+    return static_cast<Index>(count) < dim ? count : static_cast<int>(dim);
+}
+
 #ifdef QKRYLOV_DOUBLE_PRECISION
 #define QKRYLOV_PRECISION_NAMESPACE fp64
 #else

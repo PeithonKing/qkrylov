@@ -96,7 +96,7 @@ DavidsonResult davidson_lowest(
     const Index dim = H.dimension();
     if (dim == 0) return {};
 
-    n_eig = std::min<int>(n_eig, dim);
+    n_eig = clamp_to_dim(n_eig, dim);
     max_subspace = std::max(max_subspace, 2 * n_eig);
 
     auto diag_dev = H.diagonal();

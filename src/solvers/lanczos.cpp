@@ -37,7 +37,7 @@ QKRYLOV_PRECISION_NAMESPACE::LanczosResult lanczos(
     }
 
     const int target_n_eig = Traits::supports_multistate
-        ? std::clamp(config.n_eig, 1, static_cast<int>(dim))
+        ? std::max(1, clamp_to_dim(config.n_eig, dim))
         : 1;
 
     // 2. Working Triad (Strictly O(N))
@@ -94,7 +94,7 @@ QKRYLOV_PRECISION_NAMESPACE::LanczosResult lanczos(
         : mach_eps;
 
     // 4. Phase 1: Search Loop
-    const int max_steps = std::min<int>(config.maxiter, static_cast<int>(dim));
+    const int max_steps = clamp_to_dim(config.maxiter, dim);
     for (int iter = 0; iter < max_steps; ++iter) {
         actual_iters = iter + 1;
 
@@ -128,7 +128,7 @@ QKRYLOV_PRECISION_NAMESPACE::LanczosResult lanczos(
             converged = true;
             break;
         }
-        if (iter + 1 == static_cast<int>(dim)) {
+        if (static_cast<Index>(iter + 1) == dim) {
             converged = true;
             break;
         }
