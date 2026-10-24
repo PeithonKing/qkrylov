@@ -53,29 +53,46 @@ MatrixFreeHamiltonian<ExecSpace>::MatrixFreeHamiltonian(
 
     // 1. State list -> device, plus the state->index lookup (no virtual calls in kernels).
     //    Identity bases (full spin-1/2 space) store nothing: state == index.
-    const std::vector<StateID>* list = basis_->state_list();
-    std::vector<StateID> owned;
     identity_basis_ = basis_->is_identity();
-    if (!identity_basis_ && !list) {
-        owned.resize(dim_);
-        for (Index i = 0; i < dim_; ++i) owned[i] = basis_->state(i);
-        list = &owned;
+    int fp_nbits = 0, fp_k = 0;
+    bool generated = false;
+    if (!identity_basis_ && basis_->fixed_popcount_sector(fp_nbits, fp_k)) {
+        // A single fixed-popcount sector: lookup tables come from binomial formulas and the
+        // state list is written in parallel on this Hamiltonian's device -- the basis never
+        // builds (or sorts, or uploads) an O(dim) list.
+        generated = build_fixed_popcount_index<ExecSpace>(fp_nbits, fp_k, index_, basis_states_);
     }
-    if (!identity_basis_) {
-        identity_basis_ = true;
-        for (Index i = 0; i < dim_; ++i) {
-            if ((*list)[i] != static_cast<StateID>(i)) { identity_basis_ = false; break; }
+    if (!generated) {
+        const std::vector<StateID>* list = basis_->state_list();
+        std::vector<StateID> owned;
+        if (!identity_basis_ && !list) {
+            owned.resize(dim_);
+            for (Index i = 0; i < dim_; ++i) owned[i] = basis_->state(i);
+            list = &owned;
         }
-    }
-    if (identity_basis_) {
-        basis_states_ = Kokkos::View<StateID*, ExecSpace>();
-        index_ = make_identity_index<ExecSpace>(dim_);
-    } else {
-        basis_states_ = Kokkos::View<StateID*, ExecSpace>(
-            Kokkos::view_alloc("qkrylov::basis_states", Kokkos::WithoutInitializing), dim_);
-        Kokkos::View<const StateID*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> h(list->data(), dim_);
-        Kokkos::deep_copy(basis_states_, h);
-        index_ = build_state_index<ExecSpace>(*list, basis_->conserved_masks(), basis_states_);
+        if (!identity_basis_) {
+            identity_basis_ = true;
+            for (Index i = 0; i < dim_; ++i) {
+                if ((*list)[i] != static_cast<StateID>(i)) { identity_basis_ = false; break; }
+            }
+        }
+        if (identity_basis_) {
+            basis_states_ = Kokkos::View<StateID*, ExecSpace>();
+            index_ = make_identity_index<ExecSpace>(dim_);
+        } else {
+            if (std::is_same_v<typename ExecSpace::memory_space, Kokkos::HostSpace> && list != &owned) {
+                // Host execution: alias the basis' own state vector instead of copying it
+                // (saves 8 bytes per state; H keeps the basis alive via basis_).
+                basis_states_ = Kokkos::View<StateID*, ExecSpace, Kokkos::MemoryUnmanaged>(
+                    const_cast<StateID*>(list->data()), dim_);
+            } else {
+                basis_states_ = Kokkos::View<StateID*, ExecSpace>(
+                    Kokkos::view_alloc("qkrylov::basis_states", Kokkos::WithoutInitializing), dim_);
+                Kokkos::View<const StateID*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> h(list->data(), dim_);
+                Kokkos::deep_copy(basis_states_, h);
+            }
+            index_ = build_state_index<ExecSpace>(*list, basis_->conserved_masks(), basis_states_);
+        }
     }
 
     // 2. Compile VM instructions on host and split diag/offdiag

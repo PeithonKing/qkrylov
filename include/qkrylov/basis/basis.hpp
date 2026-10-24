@@ -40,6 +40,11 @@ public:
     /// \brief True if state(i) == i for every i (full space with implicit indexing).
     virtual bool is_identity() const { return false; }
 
+    /// \brief True if the basis is exactly "all nbits-wide integers with k bits set", in ascending
+    /// order, and is still described by formulas (no state list built). The Hamiltonian then
+    /// generates states and lookup tables itself, in parallel on its device.
+    virtual bool fixed_popcount_sector(int& /*nbits*/, int& /*k*/) const { return false; }
+
     /// \brief The sorted state list, if the basis stores one (nullptr otherwise).
     virtual const std::vector<StateID>* state_list() const { return nullptr; }
 

@@ -32,6 +32,9 @@ Index SpinHalfBasis::size() const
     if (sector_.sz.empty()) {
         return Index(1) << N_;
     }
+    if (fixed_k_ >= 0) {
+        return static_cast<Index>(comb::binomial(N_, fixed_k_));
+    }
     return states_.size();
 }
 
@@ -44,6 +47,12 @@ StateID SpinHalfBasis::state(Index i) const
         }
         return static_cast<StateID>(i);
     }
+    if (fixed_k_ >= 0) {
+        if (i >= size()) {
+            throw std::out_of_range("SpinHalfBasis::state: index out of range");
+        }
+        return comb::unrank(i, N_, fixed_k_);
+    }
     return states_.at(i);
 }
 
@@ -55,6 +64,12 @@ Index SpinHalfBasis::index(StateID s) const
             return static_cast<Index>(s);
         }
         throw std::runtime_error("State not present in basis");
+    }
+    if (fixed_k_ >= 0) {
+        if (!contains(s)) {
+            throw std::runtime_error("State not present in basis");
+        }
+        return static_cast<Index>(comb::rank(s));
     }
 
     auto it = std::lower_bound(states_.begin(), states_.end(), s);
@@ -70,7 +85,49 @@ bool SpinHalfBasis::contains(StateID s) const
         const StateID dim = StateID(1) << N_;
         return s < dim;
     }
+    if (fixed_k_ >= 0) {
+        return (s >> N_) == 0 && std::popcount(s) == fixed_k_;
+    }
     return std::binary_search(states_.begin(), states_.end(), s);
+}
+
+const std::vector<StateID>* SpinHalfBasis::state_list() const
+{
+    if (sector_.sz.empty()) return nullptr;
+    if (fixed_k_ >= 0) materialize();
+    return &states_;
+}
+
+bool SpinHalfBasis::fixed_popcount_sector(int& nbits, int& k) const
+{
+    if (sector_.sz.empty() || fixed_k_ < 0 || materialized_) return false;
+    nbits = N_;
+    k = fixed_k_;
+    return true;
+}
+
+void SpinHalfBasis::materialize() const
+{
+    if (fixed_k_ < 0 || materialized_) return;
+    const int k = fixed_k_;
+    states_.clear();
+    states_.reserve(static_cast<size_t>(comb::binomial(N_, k)));
+    if (k == 0) {
+        states_.push_back(0);
+    } else if (k == N_) {
+        states_.push_back((StateID(1) << N_) - 1);
+    } else {
+        // Gosper's hack: next integer with the same popcount
+        StateID s = (StateID(1) << k) - 1;
+        const StateID limit = StateID(1) << N_;
+        while (s < limit) {
+            states_.push_back(s);
+            const StateID c = s & -s;
+            const StateID r = s + c;
+            s = (((r ^ s) >> 2) / c) | r;
+        }
+    }
+    materialized_ = true;
 }
 
 void SpinHalfBasis::build_full_basis()
@@ -90,23 +147,42 @@ int SpinHalfBasis::compute_sz2(
 
 void SpinHalfBasis::build_sz_basis()
 {
-    const StateID dim = StateID(1) << N_;
-
-    std::vector<int> target_sz2;
+    std::vector<int> target_nup;
     for (double val : sector_.sz) {
-        target_sz2.push_back(static_cast<int>(val >= 0 ? val*2.0 + 0.5 : val*2.0 - 0.5));
-    }
-
-    states_.reserve(dim / 2); // heuristic
-
-    for(StateID s = 0; s < dim; ++s)
-    {
-        int s_sz2 = compute_sz2(s, N_);
-        if (std::find(target_sz2.begin(), target_sz2.end(), s_sz2) != target_sz2.end())
-        {
-            states_.push_back(s);
+        int sz2 = static_cast<int>(val >= 0 ? val*2.0 + 0.5 : val*2.0 - 0.5);
+        // 2*Sz = nup - ndown = 2*nup - N
+        int twice_nup = sz2 + N_;
+        if (twice_nup >= 0 && twice_nup % 2 == 0 && (twice_nup / 2) <= N_) {
+            target_nup.push_back(twice_nup / 2);
         }
     }
+    std::sort(target_nup.begin(), target_nup.end());
+    target_nup.erase(std::unique(target_nup.begin(), target_nup.end()), target_nup.end());
+
+    if (target_nup.size() == 1) {
+        // One sector: keep it as a formula; states are generated on demand / by the Hamiltonian.
+        fixed_k_ = target_nup[0];
+        return;
+    }
+
+    // Several sectors (or none valid): explicit sorted list.
+    for (int k : target_nup) {
+        if (k == 0) {
+            states_.push_back(0);
+        } else if (k == N_) {
+            states_.push_back((StateID(1) << N_) - 1);
+        } else {
+            StateID s = (StateID(1) << k) - 1;
+            const StateID limit = StateID(1) << N_;
+            while (s < limit) {
+                states_.push_back(s);
+                const StateID c = s & -s;
+                const StateID r = s + c;
+                s = (((r ^ s) >> 2) / c) | r;
+            }
+        }
+    }
+    std::sort(states_.begin(), states_.end());
     states_.shrink_to_fit();
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "qkrylov/core/types.hpp"
+#include "qkrylov/basis/combinatorics.hpp"
 
 #include <Kokkos_Core.hpp>
 
@@ -10,6 +11,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <string>
 #include <cstdint>
 #include <vector>
 
@@ -224,6 +226,90 @@ StateIndex<ExecSpace> build_state_index(
     idx.hi_off = state_index_detail::upload<Index, MemSpace>(hi_off, "qkrylov::bisect_hi_off");
     idx.states = device_states;
     return idx;
+}
+
+/// Build the Lin lookup tables AND the sorted state list for the basis "all nbits-wide integers
+/// with k bits set" directly from the combinatorial formulas -- no host state list, no sort, no
+/// verification pass. The tables have only ~2^(nbits/2) entries; the O(dim) work is one parallel
+/// kernel on ExecSpace that writes `states` (group by group). Returns false (outputs untouched)
+/// when the halves would be too wide for the tables; the caller then uses the list-based path.
+template <typename ExecSpace>
+bool build_fixed_popcount_index(
+    int nbits, int k,
+    StateIndex<ExecSpace>& idx,
+    Kokkos::View<StateID*, ExecSpace>& states)
+{
+    using MemSpace = typename ExecSpace::memory_space;
+    if (nbits < 1 || nbits > 62 || k < 0 || k > nbits) return false;
+    const int lb = nbits / 2;
+    const int hb = nbits - lb;
+    if (lb > 24 || hb > 24) return false;
+    const uint64_t n_lo = 1ULL << lb, n_hi = 1ULL << hb, lmask = n_lo - 1;
+    const Index dim = static_cast<Index>(comb::binomial(nbits, k));
+
+    // Low-part classes: popcount c is used iff some high part supplies the other k - c bits.
+    const int c_min = std::max(0, k - hb), c_max = std::min(lb, k);
+    std::vector<int32_t> lo_class(n_lo, -1), class_off(lb + 2, 0);
+    std::vector<uint32_t> lo_rank(n_lo, 0);
+    std::vector<StateID> lo_sorted;
+    for (int c = 0; c <= lb; ++c) {
+        const bool used = (c >= c_min && c <= c_max);
+        class_off[c + 1] = class_off[c] + static_cast<int32_t>(used ? comb::binomial(lb, c) : 0);
+    }
+    lo_sorted.assign(static_cast<size_t>(class_off[lb + 1]), 0);
+    for (uint64_t l = 0; l < n_lo; ++l) {
+        const int c = std::popcount(l);
+        if (c < c_min || c > c_max) continue;
+        const uint64_t r = comb::rank(l);
+        lo_class[l] = c;
+        lo_rank[l] = static_cast<uint32_t>(r);
+        lo_sorted[static_cast<size_t>(class_off[c]) + r] = l;
+    }
+
+    // High parts: group h holds all lows of class k - popcount(h), in ascending order.
+    std::vector<Index> hi_off(n_hi + 1, 0);
+    std::vector<int32_t> hi_class(n_hi, -2);
+    for (uint64_t h = 0; h < n_hi; ++h) {
+        const int c = k - std::popcount(h);
+        uint64_t cnt = 0;
+        if (c >= 0 && c <= lb) { hi_class[h] = c; cnt = comb::binomial(lb, c); }
+        hi_off[h + 1] = hi_off[h] + static_cast<Index>(cnt);
+    }
+    if (hi_off[n_hi] != dim) return false;   // would indicate a bug in the formulas
+
+    auto h_states = Kokkos::View<StateID*, ExecSpace>(
+        Kokkos::view_alloc(std::string("qkrylov::basis_states"), Kokkos::WithoutInitializing), dim);
+    auto d_hi_off = state_index_detail::upload<Index, MemSpace>(hi_off, "qkrylov::fp_hi_off");
+    auto d_hi_class = state_index_detail::upload<int32_t, MemSpace>(hi_class, "qkrylov::fp_hi_class");
+    auto d_lo_sorted = state_index_detail::upload<StateID, MemSpace>(lo_sorted, "qkrylov::fp_lo_sorted");
+    auto d_class_off = state_index_detail::upload<int32_t, MemSpace>(class_off, "qkrylov::fp_class_off");
+
+    // One thread per high part writes its group of states.
+    Kokkos::parallel_for("qkrylov::generate_states",
+        Kokkos::RangePolicy<ExecSpace, Index>(0, n_hi),
+        KOKKOS_LAMBDA(const Index h) {
+            const int32_t c = d_hi_class(h);
+            if (c < 0) return;
+            const Index off = d_hi_off(h);
+            const Index cnt = d_hi_off(h + 1) - off;
+            const StateID high = static_cast<StateID>(h) << lb;
+            const StateID* lows = &d_lo_sorted(static_cast<size_t>(d_class_off(c)));
+            for (Index r = 0; r < cnt; ++r) h_states(off + r) = high | lows[r];
+        });
+
+    idx = StateIndex<ExecSpace>{};
+    idx.mode = StateIndex<ExecSpace>::Lin;
+    idx.low_bits = lb;
+    idx.low_mask = lmask;
+    idx.n_hi = n_hi;
+    idx.dim = dim;
+    idx.complete = true;
+    idx.hi_off = d_hi_off;
+    idx.hi_class = d_hi_class;
+    idx.lo_rank = state_index_detail::upload<uint32_t, MemSpace>(lo_rank, "qkrylov::fp_lo_rank");
+    idx.lo_class = state_index_detail::upload<int32_t, MemSpace>(lo_class, "qkrylov::fp_lo_class");
+    states = h_states;
+    return true;
 }
 
 } // namespace QKRYLOV_PRECISION_NAMESPACE
