@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from typing import Union, Optional, Any, cast
 from . import _qkrylov_cpp as _cpp
@@ -33,7 +35,8 @@ class MatrixFreeHamiltonian:
     device : str, default="cpu"
         Target execution device ("cpu", "cuda", "hip", "sycl").
     dtype : Any, default=None
-        Precision (np.float32 or np.float64, inferred from basis if None).
+        Precision (np.float32 or np.float64). The Hamiltonian is the only object that owns
+        the precision; defaults to np.float64.
 
     Attributes
     ----------
@@ -85,14 +88,7 @@ class MatrixFreeHamiltonian:
         dtype: Any = None
     ):
         if dtype is None:
-            if hasattr(basis, "dtype") and basis.dtype is not None:
-                dtype = basis.dtype
-            elif hasattr(basis, "_dtype") and basis._dtype is not None:
-                dtype = basis._dtype
-            elif hasattr(basis, "_cpp_obj") and basis._cpp_obj is not None and "FP64" in type(basis._cpp_obj).__name__:
-                dtype = np.float64
-            else:
-                dtype = np.float64
+            dtype = np.float64
 
         actual_site: Site
         actual_ops: OpSum
@@ -105,17 +101,26 @@ class MatrixFreeHamiltonian:
             from .basis import SpinHalfBasis, SpinSBasis, FermionBasis, HubbardBasis, TJBasis
             from .site import SpinHalfSite, SpinSSite, FermionSite, HubbardSite, TJSite
             if isinstance(basis, SpinHalfBasis):
-                actual_site = SpinHalfSite(dtype=dtype)
+                actual_site = SpinHalfSite()
             elif isinstance(basis, SpinSBasis):
-                actual_site = SpinSSite(S=basis.spin, dtype=dtype)
+                actual_site = SpinSSite(S=basis.spin)
             elif isinstance(basis, FermionBasis):
-                actual_site = FermionSite(dtype=dtype)
+                actual_site = FermionSite()
             elif isinstance(basis, HubbardBasis):
-                actual_site = HubbardSite(dtype=dtype)
+                actual_site = HubbardSite()
             elif isinstance(basis, TJBasis):
-                actual_site = TJSite(dtype=dtype)
+                actual_site = TJSite()
             else:
-                actual_site = SpinHalfSite(dtype=dtype)
+                raise TypeError(
+                    f"Cannot infer a Site for {type(basis).__name__}; pass one explicitly: "
+                    "MatrixFreeHamiltonian(basis, site, ops)"
+                )
+            warnings.warn(
+                f"No Site provided. Defaulting to {type(actual_site).__name__} based on "
+                f"{type(basis).__name__.removesuffix('Basis')} Basis.",
+                UserWarning,
+                stacklevel=2,
+            )
         else:
             if isinstance(site_or_ops, Site):
                 actual_site = site_or_ops
@@ -131,27 +136,6 @@ class MatrixFreeHamiltonian:
         s_dtype = "_FP64" if dtype == np.float64 else "_FP32"
         site: Site = self.site
         ops_val: OpSum = self.ops
-
-        # Ensure site matches precision
-        if getattr(site, "dtype", None) is not None and site.dtype != dtype:
-            if hasattr(site, "spin"):
-                from .site import SpinSSite
-                self.site = SpinSSite(S=getattr(site, "spin"), dtype=dtype)
-            else:
-                site_cls: Any = site.__class__
-                self.site = site_cls(dtype=dtype)
-            site = self.site
-
-        # Ensure ops matches precision
-        if getattr(ops_val, "dtype", None) is not None and ops_val.dtype != dtype:
-            converted_ops = OpSum(dtype=dtype)
-            for t in ops_val._cpp_obj.terms():
-                items = [t.coeff]
-                for f in t.factors:
-                    items.extend([f.op, f.site])
-                converted_ops._cpp_obj.__iadd__(tuple(items))
-            self.ops = converted_ops
-            ops_val = self.ops
 
         dev_obj = getattr(_cpp, f"Device{s_dtype}")(device)
         d_lower = device.lower()
@@ -201,6 +185,20 @@ class MatrixFreeHamiltonian:
     def dimension(self) -> int:
         """The total dimension of this Hamiltonian (size of the basis)."""
         return self._cpp_obj.dimension()
+
+    @property
+    def is_real(self) -> bool:
+        """True if every coefficient is real, i.e. H is a real symmetric matrix in this basis.
+
+        Real Hamiltonians run the Krylov solvers in real arithmetic (half the memory) and
+        return real eigenvectors and real sparse matrices.
+        """
+        return bool(self._cpp_obj.has_real_coefficients())
+
+    @property
+    def real_dtype(self) -> Any:
+        """Real floating type matching ``dtype`` (np.float64 or np.float32)."""
+        return np.float64 if self.dtype == np.float64 else np.float32
 
     def apply(self, x: np.ndarray) -> np.ndarray:
         """Apply the Hamiltonian to a state vector.
@@ -292,7 +290,8 @@ class MatrixFreeHamiltonian:
         Returns
         -------
         scipy.sparse.csr_matrix
-            The Hamiltonian as a full SciPy sparse matrix.
+            The Hamiltonian as a full SciPy sparse matrix; real (float32/float64) if
+            :attr:`is_real`, complex otherwise.
         """
         try:
             import scipy.sparse as sp
@@ -301,19 +300,22 @@ class MatrixFreeHamiltonian:
             
         dim = self.dimension
         rows, cols, data = [], [], []
-        
+        cdtype = np.complex128 if self.dtype == np.float64 else np.complex64
+        out_dtype = self.real_dtype if self.is_real else cdtype
+
         for i in range(dim):
-            x = np.zeros(dim, dtype=np.complex128 if self.dtype == np.float64 else np.complex64)
+            x = np.zeros(dim, dtype=cdtype)
             x[i] = 1.0
             y = self.apply(x)
-            
+
             non_zeros = np.nonzero(y)[0]
             if len(non_zeros) > 0:
                 rows.extend(non_zeros)
                 cols.extend([i] * len(non_zeros))
-                data.extend(y[non_zeros])
-                
-        return sp.csr_matrix((data, (rows, cols)), shape=(dim, dim), dtype=np.complex128 if self.dtype == np.float64 else np.complex64)
+                vals = y[non_zeros]
+                data.extend(vals.real if self.is_real else vals)
+
+        return sp.csr_matrix((data, (rows, cols)), shape=(dim, dim), dtype=out_dtype)
 
 
 # Alias conforming to API blueprint

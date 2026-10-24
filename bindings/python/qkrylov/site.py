@@ -39,9 +39,8 @@ class Site:
     _cpp_obj: Any
     dtype: Any
     
-    def __init__(self, dtype: Any = np.float64):
+    def __init__(self):
         self._cpp_obj = None
-        self.dtype = dtype
 
 class SpinHalfSite(Site):
     """Local site physics for Spin-1/2 quantum degrees of freedom.
@@ -70,8 +69,8 @@ class SpinHalfSite(Site):
     and |↓> = [0,1]^T (m=-1/2). Pauli matrices sigma_i = 2*S_i so that
     Sz = sigma_z/2, Sp = sigma_+, Sm = sigma_-.
     """
-    def __init__(self, dtype: Any = np.float64):
-        super().__init__(dtype=dtype)
+    def __init__(self):
+        super().__init__()
         self._cpp_obj = getattr(_cpp, 'SpinHalfSite')()
 
     def __repr__(self) -> str:
@@ -116,11 +115,10 @@ class SpinSSite(Site):
     concerns are in the iterative solvers (ghost states, loss of orthogonality),
     not in the site representations.
     """
-    def __init__(self, S: float = 0.5, dtype: Any = np.float64):
-        super().__init__(dtype=dtype)
+    def __init__(self, S: float = 0.5):
+        super().__init__()
         self._cpp_obj = getattr(_cpp, 'SpinSSite')(float(S))
         self._S = float(S)
-        self._dtype = dtype
 
     @property
     def spin(self) -> float:
@@ -165,8 +163,8 @@ class FermionSite(Site):
     This is computed via bit-population-count (popcount) on the occupation bitstring,
     which is a single CPU instruction on modern hardware.
     """
-    def __init__(self, dtype: Any = np.float64):
-        super().__init__(dtype=dtype)
+    def __init__(self):
+        super().__init__()
         self._cpp_obj = getattr(_cpp, 'FermionSite')()
         
     def __repr__(self) -> str:
@@ -195,8 +193,8 @@ class HubbardSite(Site):
     The double-occupancy number operator ``Nupdn`` checks ``(up_bit & dn_bit)``
     at the target site — a single bitwise AND instruction.
     """
-    def __init__(self, dtype: Any = np.float64):
-        super().__init__(dtype=dtype)
+    def __init__(self):
+        super().__init__()
         self._cpp_obj = getattr(_cpp, 'HubbardSite')()
 
     def __repr__(self) -> str:
@@ -226,8 +224,8 @@ class TJSite(Site):
     effective theory. The local Hilbert space dimension drops from 4 (Hubbard)
     to 3 (t-J), reducing the total Hilbert space size by ~(3/4)^L.
     """
-    def __init__(self, dtype: Any = np.float64):
-        super().__init__(dtype=dtype)
+    def __init__(self):
+        super().__init__()
         self._cpp_obj = getattr(_cpp, 'TJSite')()
 
     def __repr__(self) -> str:

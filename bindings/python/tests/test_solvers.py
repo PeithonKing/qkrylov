@@ -21,8 +21,8 @@ from qkrylov.solvers import (
 
 
 def _build_heisenberg_model(N=4, dtype=np.float64):
-    basis = qk.basis.SpinHalf(N=N, sz=0, dtype=dtype)
-    site = qk.site.SpinHalf(dtype=dtype)
+    basis = qk.basis.SpinHalf(N=N, sz=0)
+    site = qk.site.SpinHalf()
     os = qk.OpSum()
     for i in range(N - 1):
         os += 1.0 * qk.Sz(i) * qk.Sz(i + 1) + 0.5 * (qk.Sp(i) * qk.Sm(i + 1) + qk.Sm(i) * qk.Sp(i + 1))
@@ -346,8 +346,8 @@ def test_ftlm_streamed_workflow():
 
 def test_real_time_dynamics():
     # 2-site Heisenberg model: H = Sz0*Sz1 + 0.5*(Sp0*Sm1 + Sm0*Sp1)
-    basis = qk.SpinHalfBasis(N=2, dtype=np.float64)
-    site = qk.SpinHalfSite(dtype=np.float64)
+    basis = qk.SpinHalfBasis(N=2)
+    site = qk.SpinHalfSite()
     opsum = qk.OpSum()
     opsum += (1.0, "Sz", 0, "Sz", 1)
     opsum += (0.5, "Sp", 0, "Sm", 1)
@@ -388,8 +388,8 @@ def test_real_time_dynamics():
 
 
 def test_ftlm_dynamics():
-    basis = qk.SpinHalfBasis(N=2, dtype=np.float64)
-    site = qk.SpinHalfSite(dtype=np.float64)
+    basis = qk.SpinHalfBasis(N=2)
+    site = qk.SpinHalfSite()
     opsum = qk.OpSum()
     opsum += (1.0, "Sz", 0, "Sz", 1)
     opsum += (0.5, "Sp", 0, "Sm", 1)

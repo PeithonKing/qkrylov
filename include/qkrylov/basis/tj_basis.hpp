@@ -31,6 +31,7 @@ public:
 
     bool contains(StateID s) const override;
     const std::vector<StateID>* state_list() const override { return &states_; }
+    // bit 2i = (i, up), bit 2i+1 = (i, dn): N_up and N_dn are conserved separately
     std::vector<uint64_t> conserved_masks() const override { return {0x5555555555555555ULL, 0xAAAAAAAAAAAAAAAAULL}; }
 
     int nsites() const noexcept

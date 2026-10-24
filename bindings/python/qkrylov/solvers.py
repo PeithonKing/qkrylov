@@ -5,6 +5,14 @@ from dataclasses import dataclass
 from . import _qkrylov_cpp as _cpp
 from .hamiltonian import MatrixFreeHamiltonian
 
+def _real_if_real(H: MatrixFreeHamiltonian, vec: np.ndarray) -> np.ndarray:
+    """Real Hamiltonians have real ground states. The C++ side already returns a real array
+    for them (no staging copy); this only converts if a complex one arrives."""
+    if H.is_real and np.iscomplexobj(vec):
+        return np.ascontiguousarray(vec.real, dtype=H.real_dtype)
+    return vec
+
+
 class LanczosResult:
     """Container holding the converged ground state energy and eigenvector.
 
@@ -111,6 +119,12 @@ class Lanczos(Solver):
         Convergence tolerance on the lowest Ritz value residual norm.
     max_iter : Optional[int], default=None
         Alias for maxiter (for SciPy-style compatibility).
+    early_stopping : bool, default=True
+        Stop once converged. ``False`` runs exactly ``maxiter`` iterations (fixed work, for
+        benchmarking and profiling); only an exhausted Krylov space ends it sooner.
+    return_state : bool, default=True
+        ``False`` computes the energy only (``eigenvector`` is ``None``): one pass, three vectors
+        in memory, and no end-of-run vector copy -- the fastest and smallest option.
 
     Examples
     --------
@@ -126,11 +140,14 @@ class Lanczos(Solver):
     -7.1420...
     """
 
-    def __init__(self, maxiter: int = 200, tol: float = 1e-12, max_iter: Optional[int] = None):
+    def __init__(self, maxiter: int = 200, tol: float = 1e-12, max_iter: Optional[int] = None,
+                 early_stopping: bool = True, return_state: bool = True):
         if max_iter is not None:
             maxiter = max_iter
         self.maxiter = int(maxiter)
         self.tol = float(tol)
+        self.early_stopping = bool(early_stopping)
+        self.return_state = bool(return_state)
 
     @property
     def max_iter(self) -> int:
@@ -143,8 +160,9 @@ class Lanczos(Solver):
     def solve(self, H: MatrixFreeHamiltonian) -> LanczosResult:
         s_dtype = "_FP64" if getattr(H, "dtype", np.float32) == np.float64 else "_FP32"
         fn = getattr(_cpp, f"lanczos_ground_state_{H._backend_suffix}{s_dtype}")
-        energy, eigenvector = fn(H._cpp_obj, self.maxiter, self.tol)
-        return LanczosResult(energy=energy, eigenvector=eigenvector)
+        energy, eigenvector, iterations, converged = fn(H._cpp_obj, self.maxiter, self.tol, self.early_stopping, self.return_state)
+        eigenvector = None if eigenvector is None else _real_if_real(H, eigenvector)
+        return LanczosResult(energy=energy, eigenvector=eigenvector, iterations=iterations, converged=converged)
 
 
 class LanczosTwoPass(Solver):
@@ -183,6 +201,12 @@ class LanczosTwoPass(Solver):
         Eigenvalue convergence tolerance.
     max_iter : Optional[int], default=None
         Alias for maxiter.
+    early_stopping : bool, default=True
+        Stop once converged. ``False`` runs exactly ``maxiter`` iterations (fixed work, for
+        benchmarking and profiling); only an exhausted Krylov space ends it sooner.
+    return_state : bool, default=True
+        ``False`` computes the energy only (``eigenvector`` is ``None``): one pass, three vectors
+        in memory, and no end-of-run vector copy -- the fastest and smallest option.
 
     Examples
     --------
@@ -199,11 +223,14 @@ class LanczosTwoPass(Solver):
     -10.7...
     """
 
-    def __init__(self, maxiter: int = 200, tol: float = 1e-12, max_iter: Optional[int] = None):
+    def __init__(self, maxiter: int = 200, tol: float = 1e-12, max_iter: Optional[int] = None,
+                 early_stopping: bool = True, return_state: bool = True):
         if max_iter is not None:
             maxiter = max_iter
         self.maxiter = int(maxiter)
         self.tol = float(tol)
+        self.early_stopping = bool(early_stopping)
+        self.return_state = bool(return_state)
 
     @property
     def max_iter(self) -> int:
@@ -216,14 +243,17 @@ class LanczosTwoPass(Solver):
     def solve(self, H: MatrixFreeHamiltonian) -> LanczosResult:
         s_dtype = "_FP64" if getattr(H, "dtype", np.float32) == np.float64 else "_FP32"
         fn = getattr(_cpp, f"lanczos_two_pass_{H._backend_suffix}{s_dtype}")
-        energy, eigenvector = fn(H._cpp_obj, self.maxiter, self.tol)
-        return LanczosResult(energy=energy, eigenvector=eigenvector)
+        energy, eigenvector, iterations, converged = fn(H._cpp_obj, self.maxiter, self.tol, self.early_stopping, self.return_state)
+        eigenvector = None if eigenvector is None else _real_if_real(H, eigenvector)
+        return LanczosResult(energy=energy, eigenvector=eigenvector, iterations=iterations, converged=converged)
 
 
 def lanczos_ground_state(
-    H: MatrixFreeHamiltonian, 
-    maxiter: int = 200, 
-    tol: float = 1e-12
+    H: MatrixFreeHamiltonian,
+    maxiter: int = 200,
+    tol: float = 1e-12,
+    early_stopping: bool = True,
+    return_state: bool = True
 ) -> LanczosResult:
     """Find the ground state of a Hamiltonian using the single-pass Lanczos algorithm.
 
@@ -239,6 +269,9 @@ def lanczos_ground_state(
         Maximum number of Lanczos iterations.
     tol : float, default=1e-12
         Convergence tolerance on the residual norm.
+    early_stopping : bool, default=True
+        Stop once converged. False runs exactly ``maxiter`` iterations (fixed work, for
+        benchmarking and profiling); only an exhausted Krylov space ends it sooner.
 
     Returns
     -------
@@ -255,13 +288,15 @@ def lanczos_ground_state(
     >>> result = qk.solvers.lanczos_ground_state(H, maxiter=300)
     >>> energy, psi0 = result   # unpack like a tuple
     """
-    return Lanczos(maxiter=maxiter, tol=tol).solve(H)
+    return Lanczos(maxiter=maxiter, tol=tol, early_stopping=early_stopping, return_state=return_state).solve(H)
 
 
 def lanczos_two_pass(
-    H: MatrixFreeHamiltonian, 
-    maxiter: int = 200, 
-    tol: float = 1e-12
+    H: MatrixFreeHamiltonian,
+    maxiter: int = 200,
+    tol: float = 1e-12,
+    early_stopping: bool = True,
+    return_state: bool = True
 ) -> LanczosResult:
     """Find the ground state using the memory-efficient Two-Pass Lanczos algorithm.
 
@@ -276,6 +311,10 @@ def lanczos_two_pass(
         Maximum number of Lanczos iterations.
     tol : float, default=1e-12
         Convergence tolerance.
+    early_stopping : bool, default=True
+        Stop once converged. False runs exactly ``maxiter`` iterations.
+    return_state : bool, default=True
+        False returns the energy only (``eigenvector`` is None).
 
     Returns
     -------
@@ -287,7 +326,7 @@ def lanczos_two_pass(
     lanczos_ground_state : Single-pass variant.
     LanczosTwoPass : OOP interface.
     """
-    return LanczosTwoPass(maxiter=maxiter, tol=tol).solve(H)
+    return LanczosTwoPass(maxiter=maxiter, tol=tol, early_stopping=early_stopping, return_state=return_state).solve(H)
 
 
 class DavidsonResult:
