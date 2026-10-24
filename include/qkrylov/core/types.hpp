@@ -46,6 +46,12 @@ inline int clamp_to_dim(int count, Index dim) noexcept {
     return static_cast<Index>(count) < dim ? count : static_cast<int>(dim);
 }
 
+// Precision is chosen at compile time: define QKRYLOV_SINGLE_PRECISION for float32. With nothing defined
+// the default is double precision (float64), the same default as the Python and C interfaces.
+#if !defined(QKRYLOV_SINGLE_PRECISION) && !defined(QKRYLOV_DOUBLE_PRECISION)
+#define QKRYLOV_DOUBLE_PRECISION
+#endif
+
 #ifdef QKRYLOV_DOUBLE_PRECISION
 #define QKRYLOV_PRECISION_NAMESPACE fp64
 #else

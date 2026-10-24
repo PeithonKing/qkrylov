@@ -23,16 +23,18 @@ set(QKRYLOV_COMMON_SOURCES
     src/basis/fermion_basis.cpp
     src/basis/hubbard_basis.cpp
     src/basis/tj_basis.cpp
-)
-
-set(QKRYLOV_SOURCES
-    src/hamiltonian/matrix_free_hamiltonian.cpp
+    # Precision-independent, so compiled once: building them into both the fp32 and fp64
+    # object sets defines every symbol twice, which breaks a shared libqkrylov (Julia needs it).
     src/operators/opsum.cpp
     src/sites/spinhalf_site.cpp
     src/sites/spin_s_site.cpp
     src/sites/fermion_site.cpp
     src/sites/hubbard_site.cpp
     src/sites/tj_site.cpp
+)
+
+set(QKRYLOV_SOURCES
+    src/hamiltonian/matrix_free_hamiltonian.cpp
     src/solvers/lanczos.cpp
     src/solvers/davidson.cpp
     src/solvers/dynamics.cpp
@@ -218,4 +220,35 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(qkrylov_fp32 PUBLIC OpenMP::OpenMP_CXX)
     target_link_libraries(qkrylov_fp64 PUBLIC OpenMP::OpenMP_CXX)
     target_link_libraries(qkrylov PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+# Tune for the build machine (e.g. NEON/AVX2 variants). OFF by default: binaries built
+# with it only run on CPUs like the build host, so release wheels must leave it off.
+option(QKRYLOV_NATIVE_ARCH "Compile with -march=native (local benchmarking only)" OFF)
+if(QKRYLOV_NATIVE_ARCH AND NOT MSVC)
+    foreach(t qkrylov_common qkrylov_fp32 qkrylov_fp64 qkrylov_c_api_fp32 qkrylov_c_api_fp64 qkrylov)
+        target_compile_options(${t} PUBLIC -march=native)
+    endforeach()
+endif()
+
+option(QKRYLOV_BUILD_BENCH "Build the custom_bench C++ benchmark executables" OFF)
+if(QKRYLOV_BUILD_BENCH)
+    foreach(prec fp64 fp32)
+        add_executable(bench_${prec} custom_bench/bench.cpp)
+        target_link_libraries(bench_${prec} PUBLIC qkrylov_${prec} qkrylov_common)
+    endforeach()
+    target_compile_definitions(bench_fp64 PUBLIC QKRYLOV_DOUBLE_PRECISION)
+    target_compile_definitions(bench_fp32 PUBLIC QKRYLOV_SINGLE_PRECISION)
+    # C++ side of benchmarks/xlang (same problem as bench.py / bench.jl)
+    foreach(prec fp64 fp32)
+        add_executable(xlang_${prec} benchmarks/xlang/bench.cpp)
+        target_link_libraries(xlang_${prec} PUBLIC qkrylov_${prec} qkrylov_common)
+    endforeach()
+    target_compile_definitions(xlang_fp64 PUBLIC QKRYLOV_DOUBLE_PRECISION)
+    target_compile_definitions(xlang_fp32 PUBLIC QKRYLOV_SINGLE_PRECISION)
+endif()
+
+if(QKRYLOV_BUILD_EXAMPLES)
+    add_executable(quickstart examples/quickstart.cpp)
+    target_link_libraries(quickstart PUBLIC qkrylov_fp64 qkrylov_common)
 endif()
