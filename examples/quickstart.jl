@@ -3,7 +3,7 @@
 #
 #     julia --project=bindings/julia examples/quickstart.jl [L] [device]     e.g.  ... 20 cpu
 #
-# For a GPU build use device = "gpu" (or "cuda"); pass precision=Float32 to MatrixFreeHamiltonian for single precision.
+# For a GPU build use device = "gpu" (or "cuda"); pass dtype=Float32 to MatrixFreeHamiltonian for single precision.
 using QuantumKrylov, Printf, LinearAlgebra
 
 L = length(ARGS) > 0 ? parse(Int, ARGS[1]) : 20

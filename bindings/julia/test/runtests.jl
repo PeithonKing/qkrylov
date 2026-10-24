@@ -555,9 +555,9 @@ using QuantumKrylov
             for i in 0:(Nd-1)
                 od += 1.0 * Sz(i) * Sz(mod(i + 1, Nd)) + 0.5 * (Sp(i) * Sm(mod(i + 1, Nd)) + Sm(i) * Sp(mod(i + 1, Nd)))
             end
-            # explicit precision: the keyword default is Float32 for GPU devices and Float64 for the CPU
-            e_cpu = lanczos_ground_state(MatrixFreeHamiltonian(bd, od; device="cpu", precision=Float64); maxiter=60, tol=1e-12).energy
-            e_gpu = lanczos_ground_state(MatrixFreeHamiltonian(bd, od; device="gpu", precision=Float64); maxiter=60, tol=1e-12).energy
+            # explicit dtype (the default is Float64 on every device)
+            e_cpu = lanczos_ground_state(MatrixFreeHamiltonian(bd, od; device="cpu", dtype=Float64); maxiter=60, tol=1e-12).energy
+            e_gpu = lanczos_ground_state(MatrixFreeHamiltonian(bd, od; device="gpu", dtype=Float64); maxiter=60, tol=1e-12).energy
             @test abs(e_cpu - e_gpu) < 1e-9
         else
             @test active_device(MatrixFreeHamiltonian(basis, op)) == "cpu"
@@ -627,8 +627,8 @@ using QuantumKrylov
         @test eltype(res64.state) === Float64      # real Hamiltonian -> real eigenvector
 
         # 2. FP32 Explicit
-        H32 = MatrixFreeHamiltonian(basis, op; precision=Float32)
-        @test H32.precision === Float32
+        H32 = MatrixFreeHamiltonian(basis, op; dtype=Float32)
+        @test H32.dtype === Float32
         @test dimension(H32) == 6
 
         d32 = diagonal(H32)
@@ -654,6 +654,29 @@ using QuantumKrylov
         dav32 = davidson_lowest(H32, n_eig=2, max_subspace=10, tol=1e-5)
         @test eltype(dav32.eigenvalues) === Float32
         @test isapprox(dav32.eigenvalues[1], res32.energy, atol=1e-4)
+    end
+
+    @testset "dtype keyword (precision= is a kept alias)" begin
+        basis = SpinHalfBasis(4; sz=0)
+        op = OpSum()
+        for i in 0:2
+            op += 1.0 * Sz(i) * Sz(i+1) + 0.5 * (Sp(i)*Sm(i+1) + Sm(i)*Sp(i+1))
+        end
+        Ha = MatrixFreeHamiltonian(basis, op; dtype=Float32)
+        Hb = MatrixFreeHamiltonian(basis, op; precision=Float32)
+        Hc = MatrixFreeHamiltonian(basis, op)
+        @test Ha.dtype === Float32 && Hb.dtype === Float32 && Hc.dtype === Float64
+        @test Ha.precision === Float32               # historical field name still works
+        @test :dtype in propertynames(Ha)
+        # giving both is fine when they agree and an error when they do not
+        @test MatrixFreeHamiltonian(basis, op; dtype=Float32, precision=Float32).dtype === Float32
+        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; dtype=Float32, precision=Float64)
+        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; dtype=Int)
+        # same keywords on the 3-argument form and on DeviceVector
+        @test MatrixFreeHamiltonian(basis, SpinHalfSite(), op; dtype=Float32).dtype === Float32
+        @test DeviceVector(8; dtype=Float32).dtype === Float32
+        @test DeviceVector(8; precision=Float32).dtype === Float32
+        @test DeviceVector(8).dtype === Float64
     end
 
     @testset "Lanczos options: early_stopping, return_state, real vs complex states" begin

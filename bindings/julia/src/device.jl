@@ -101,8 +101,23 @@ function initialize_device!(device::AbstractString="cpu")
 end
 
 """
+    resolve_dtype(dtype, precision) -> Type
+
+Pick the floating-point element type from the `dtype` keyword (the documented name, same as in the Python
+API) or its alias `precision`. Defaults to `Float64`. Giving both with different values is an error.
+"""
+function resolve_dtype(dtype, precision)
+    if dtype !== nothing && precision !== nothing && dtype !== precision
+        throw(ArgumentError("dtype=$dtype and precision=$precision disagree; pass dtype only (precision is a deprecated alias)"))
+    end
+    T = dtype !== nothing ? dtype : (precision !== nothing ? precision : Float64)
+    (T === Float32 || T === Float64) || throw(ArgumentError("dtype must be Float32 or Float64, got $T"))
+    return T
+end
+
+"""
     DeviceVector{T}(dim::Integer) where {T<:Union{Float32, Float64}}
-    DeviceVector(dim::Integer; precision::Type{T}=Float64)
+    DeviceVector(dim::Integer; dtype=Float64)
     DeviceVector(src::AbstractVector)
 
 Opaque handle to hardware-accelerated device-resident memory (GPU VRAM or host Kokkos View).
@@ -139,7 +154,11 @@ mutable struct DeviceVector{T<:Union{Float32, Float64}}
     end
 end
 
-DeviceVector(dim::Integer; precision::Type{T}=Float64) where {T<:Union{Float32, Float64}} = DeviceVector{precision}(dim)
+DeviceVector(dim::Integer; dtype=nothing, precision=nothing) = DeviceVector{resolve_dtype(dtype, precision)}(dim)
+
+# `v.dtype` mirrors the Python attribute; the stored field keeps its historical name `precision`.
+Base.getproperty(v::DeviceVector, s::Symbol) = s === :dtype ? getfield(v, :precision) : getfield(v, s)
+Base.propertynames(v::DeviceVector, private::Bool=false) = (fieldnames(DeviceVector)..., :dtype)
 
 Base.length(v::DeviceVector) = v.dim
 Base.size(v::DeviceVector) = (v.dim,)

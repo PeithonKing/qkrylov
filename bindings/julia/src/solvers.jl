@@ -1063,6 +1063,9 @@ mutable struct FTLMSamples{T<:Union{Float32, Float64}}
     end
 end
 
+Base.getproperty(x::FTLMSamples, s::Symbol) = s === :dtype ? getfield(x, :precision) : getfield(x, s)
+Base.propertynames(x::FTLMSamples, private::Bool=false) = (fieldnames(FTLMSamples)..., :dtype)
+
 Base.unsafe_convert(::Type{Ptr{Cvoid}}, s::FTLMSamples) = s.ptr
 Base.show(io::IO, s::FTLMSamples{T}) where {T} = print(io, "FTLMSamples{$T}(ptr = $(s.ptr))")
 
