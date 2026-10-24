@@ -51,11 +51,32 @@ MatrixFreeHamiltonian<ExecSpace>::MatrixFreeHamiltonian(
     dim_ = basis_->size();
     if (dim_ == 0) return;
 
-    // 1. Upload basis states to device to prevent virtual vtable segfaults
-    Kokkos::View<StateID*, Kokkos::HostSpace> host_states("host_states", dim_);
-    for(Index i=0; i<dim_; ++i) host_states(i) = basis_->state(i);
-    basis_states_ = Kokkos::View<StateID*, ExecSpace>("basis_states", dim_);
-    Kokkos::deep_copy(ExecSpace(), basis_states_, host_states);
+    // 1. State list -> device, plus the state->index lookup (no virtual calls in kernels).
+    //    Identity bases (full spin-1/2 space) store nothing: state == index.
+    const std::vector<StateID>* list = basis_->state_list();
+    std::vector<StateID> owned;
+    identity_basis_ = basis_->is_identity();
+    if (!identity_basis_ && !list) {
+        owned.resize(dim_);
+        for (Index i = 0; i < dim_; ++i) owned[i] = basis_->state(i);
+        list = &owned;
+    }
+    if (!identity_basis_) {
+        identity_basis_ = true;
+        for (Index i = 0; i < dim_; ++i) {
+            if ((*list)[i] != static_cast<StateID>(i)) { identity_basis_ = false; break; }
+        }
+    }
+    if (identity_basis_) {
+        basis_states_ = Kokkos::View<StateID*, ExecSpace>();
+        index_ = make_identity_index<ExecSpace>(dim_);
+    } else {
+        basis_states_ = Kokkos::View<StateID*, ExecSpace>(
+            Kokkos::view_alloc("qkrylov::basis_states", Kokkos::WithoutInitializing), dim_);
+        Kokkos::View<const StateID*, Kokkos::HostSpace, Kokkos::MemoryUnmanaged> h(list->data(), dim_);
+        Kokkos::deep_copy(basis_states_, h);
+        index_ = build_state_index<ExecSpace>(*list, basis_->conserved_masks(), basis_states_);
+    }
 
     // 2. Compile VM instructions on host and split diag/offdiag
     std::vector<Instruction> diag_insts;
@@ -91,11 +112,12 @@ MatrixFreeHamiltonian<ExecSpace>::MatrixFreeHamiltonian(
     diagonal_ = VectorView<ExecSpace>("qkrylov::diagonal", dim_);
     auto diag_view = diagonal_;
     auto states_view = basis_states_;
+    const bool identity = identity_basis_;
 
     Kokkos::parallel_for("qkrylov::init_diagonal",
         Kokkos::RangePolicy<ExecSpace, Index>(0, dim_),
         KOKKOS_LAMBDA(const Index alpha) {
-            StateID state = states_view(alpha);
+            const StateID state = identity ? static_cast<StateID>(alpha) : states_view(alpha);
             double diag_r = 0.0;
             double diag_i = 0.0;
             for (int i = 0; i < num_diag; ++i) {
@@ -153,11 +175,13 @@ void MatrixFreeHamiltonian<ExecSpace>::apply(
     auto  inst_view = instructions_;
     int   num_inst  = num_instructions_;
     auto  states_view = basis_states_;
-    
+    auto  index = index_;
+    const bool identity = identity_basis_;
+
     Kokkos::parallel_for("qkrylov::H_apply",
         Kokkos::RangePolicy<ExecSpace, Index>(0, dim),
         KOKKOS_LAMBDA(const Index beta) {
-            const StateID state_beta = states_view(beta);
+            const StateID state_beta = identity ? static_cast<StateID>(beta) : states_view(beta);
             
             // 1. Diagonal contribution
             KComplex y_val = diag_view(beta) * x(beta);
@@ -186,18 +210,8 @@ void MatrixFreeHamiltonian<ExecSpace>::apply(
                     if (!valid) continue;
                 }
                 
-                // Device-safe Binary Search for alpha in sorted basis_states
-                Index L = 0, R = dim - 1;
-                bool found = false;
-                Index alpha = 0;
-                while(L <= R) {
-                    Index m = L + (R - L) / 2;
-                    StateID sm = states_view(m);
-                    if (sm == state_alpha) { found = true; alpha = m; break; }
-                    if (sm < state_alpha) L = m + 1;
-                    else { if (m == 0) break; R = m - 1; }
-                }
-                if (!found) continue;
+                Index alpha;
+                if (!index.find(state_alpha, alpha)) continue;
                 
                 double real_c = reinterpret_cast<const double*>(&inst.coeff)[0];
                 double imag_c = reinterpret_cast<const double*>(&inst.coeff)[1];

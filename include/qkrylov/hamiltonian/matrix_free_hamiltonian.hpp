@@ -8,6 +8,7 @@
 #include "qkrylov/core/kokkos_types.hpp"
 #include "qkrylov/core/device.hpp"
 #include "qkrylov/core/traits.hpp"
+#include "qkrylov/hamiltonian/state_index.hpp"
 
 #include <memory>
 #include <vector>
@@ -48,10 +49,11 @@ private:
     Index dim_ = 0;
     
     Kokkos::View<qkrylov::Instruction*, ExecSpace> instructions_;
-        int num_instructions_ = 0;
-    Kokkos::View<StateID*, ExecSpace> basis_states_;
+    int num_instructions_ = 0;
+    bool identity_basis_ = false;                     ///< state(i) == i: no state array stored
+    Kokkos::View<StateID*, ExecSpace> basis_states_;  ///< empty for identity bases
+    StateIndex<ExecSpace> index_;                     ///< state -> index lookup (Lin / bisect / identity)
 
-    
     VectorView<ExecSpace> diagonal_;
     mutable VectorView<ExecSpace> scratch_x_;
     mutable VectorView<ExecSpace> scratch_y_;

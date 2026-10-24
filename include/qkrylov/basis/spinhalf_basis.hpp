@@ -30,6 +30,8 @@ public:
     Index index(StateID s) const override;
 
     bool contains(StateID s) const override;
+    bool is_identity() const override { return sector_.sz.empty(); }
+    const std::vector<StateID>* state_list() const override { return sector_.sz.empty() ? nullptr : &states_; }
 
     int nsites() const noexcept
     {

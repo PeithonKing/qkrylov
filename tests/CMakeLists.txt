@@ -18,6 +18,7 @@ set(QKRYLOV_TESTS
     test_lanczos_lowest
     test_lanczos_policies
     test_ftlm_sweep
+    test_state_index
 )
 
 # Tests rely on assert(); keep it active even in Release builds (which define NDEBUG).

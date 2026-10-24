@@ -30,6 +30,8 @@ public:
     Index index(StateID s) const override;
 
     bool contains(StateID s) const override;
+    const std::vector<StateID>* state_list() const override { return &states_; }
+    std::vector<uint64_t> conserved_masks() const override { return {0x5555555555555555ULL, 0xAAAAAAAAAAAAAAAAULL}; }
 
     int nsites() const noexcept
     {
