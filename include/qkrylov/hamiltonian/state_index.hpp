@@ -188,17 +188,22 @@ StateIndex<ExecSpace> build_state_index(
                 for (size_t k = 0; k < nm; ++k) t[k] = a[k] + b[k];
                 realised.insert(t);
             }
-            unsigned __int128 total = 0;
+            // `total` counts N-bit states, each at most once (a state has exactly one popcount tuple),
+            // so total <= 2^N <= 2^64 because StateID is 64-bit. Plain uint64_t is therefore enough:
+            // the only value that wraps is 2^64 (the unconstrained full space), which becomes 0 and
+            // still differs from dim, i.e. the correct answer "not complete".
+            static_assert(sizeof(StateID) == 8, "completeness count assumes at most 64 state bits");
+            uint64_t total = 0;
             for (const auto& t : realised) {
                 for (const auto& [a, na] : hi_hist) {
                     Tuple b{}; bool valid = true;
                     for (size_t k = 0; k < nm; ++k) { b[k] = t[k] - a[k]; if (b[k] < 0) valid = false; }
                     if (!valid) continue;
                     auto it = lo_hist.find(b);
-                    if (it != lo_hist.end()) total += static_cast<unsigned __int128>(na) * it->second;
+                    if (it != lo_hist.end()) total += na * it->second;
                 }
             }
-            idx.complete = (total == static_cast<unsigned __int128>(dim));
+            idx.complete = (total == static_cast<uint64_t>(dim));
             idx.mode = StateIndex<ExecSpace>::Lin;
             idx.low_bits = lb;
             idx.low_mask = lmask;
