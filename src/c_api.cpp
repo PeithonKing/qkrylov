@@ -4,6 +4,7 @@
 
 #include "qkrylov/c_api.h"
 #include "c_api_internal.hpp"
+#include "c_api_space.hpp"
 
 #include "qkrylov/symmetry/sector.hpp"
 #include "qkrylov/basis/basis.hpp"
@@ -1071,6 +1072,46 @@ int qkrylov_hamiltonian_diagonal(qkrylov_hamiltonian_h h, double* diag_out) {
 int qkrylov_hamiltonian_diagonal_device(qkrylov_hamiltonian_h h,
                                         qkrylov_device_vector_h diag_out) {
     return qkrylov_hamiltonian_diagonal_device_fp64(h, diag_out);
+}
+
+void qkrylov_lanczos_config_default(qkrylov_lanczos_config_t* config) {
+    if (!config) return;
+    config->maxiter = 200;
+    config->tol = 1e-12;
+    config->early_stopping = 1;
+    config->policy = QKRYLOV_LANCZOS_TWO_PASS;
+    config->real_output = 1;
+}
+
+const char* qkrylov_hamiltonian_device(qkrylov_hamiltonian_h h) {
+    if (!h) {
+        set_last_error("qkrylov_hamiltonian_device: hamiltonian handle is null");
+        return nullptr;
+    }
+    if (qk_on_default_space(h) && Device::is_gpu_build()) {
+        static const std::string backend = [] {
+            std::string b = Device::backend_name();
+            std::transform(b.begin(), b.end(), b.begin(), [](unsigned char c) { return std::tolower(c); });
+            return b;
+        }();
+        return backend.c_str();
+    }
+    return "cpu";
+}
+
+int qkrylov_hamiltonian_is_real(qkrylov_hamiltonian_h h) {
+    if (!h) {
+        set_last_error("qkrylov_hamiltonian_is_real: hamiltonian handle is null");
+        return -1;
+    }
+    return h->precision == 0 ? qkrylov_hamiltonian_is_real_fp32(h) : qkrylov_hamiltonian_is_real_fp64(h);
+}
+
+int qkrylov_lanczos_solve(qkrylov_hamiltonian_h h,
+                          const qkrylov_lanczos_config_t* config,
+                          qkrylov_lanczos_result_c_t* result,
+                          double* eigenvector_out) {
+    return qkrylov_lanczos_solve_fp64(h, config, result, eigenvector_out);
 }
 
 int qkrylov_lanczos_ground_state(qkrylov_hamiltonian_h h,

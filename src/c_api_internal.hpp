@@ -56,6 +56,7 @@ struct qkrylov_opsum_t {
 
 struct qkrylov_hamiltonian_t {
     int precision = 1; // 0 = FP32, 1 = FP64
+    int space = 0;     // 0 = the build's default device, 1 = host CPU (see c_api_space.hpp)
     uint64_t dim = 0;
     std::shared_ptr<void> impl;
 };

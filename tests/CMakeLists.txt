@@ -58,3 +58,9 @@ foreach(test_name IN LISTS QKRYLOV_FP32_TESTS)
     add_test(NAME ${target_name} COMMAND ${target_name})
 endforeach()
 
+
+# C API test: pure C interface, both precisions are exercised inside the test itself.
+add_executable(test_c_api test_c_api.cpp)
+target_link_libraries(test_c_api PRIVATE qkrylov::qkrylov)
+target_compile_options(test_c_api PRIVATE ${QKRYLOV_TEST_KEEP_ASSERTS})
+add_test(NAME test_c_api COMMAND test_c_api)

@@ -301,8 +301,8 @@ is_conv = res.converged  # true (false if maxiter was hit without meeting tol)
 
 # 2. Compute Ground State Wavefunction (|psi_0>)
 res = lanczos_ground_state(H, return_state=true)
-println(res)            # Outputs: LanczosResult(energy = -2.0, iterations = 14, converged = true, state = Vector{ComplexF64}(dim=6))
-psi0 = res.state         # Vector{ComplexF64} of length dimension(H)
+println(res)            # Outputs: LanczosResult(energy = -2.0, iterations = 14, converged = true, state = Vector{Float64}(dim=6))
+psi0 = res.state         # Vector{Float64} (real Hamiltonian) or Vector{ComplexF64} (complex terms), length dimension(H)
 psi0_vec = res.eigenvector # Alternative alias for wavefunction
 
 # 3. Memory-Frugal Two-Pass Lanczos (saves only 3 working vectors in RAM)
@@ -310,6 +310,15 @@ res_tp = lanczos_ground_state(H, return_state=true, two_pass=true)
 
 # 4. Tuple Destructuring Support
 E0, psi0 = lanczos_ground_state(H, return_state=true)
+
+# 5. Fixed work for benchmarking: exactly 100 iterations, no early exit
+res_fixed = lanczos_ground_state(H, maxiter=100, early_stopping=false)
+
+# 6. SciML-style, with the algorithm object
+sol = solve(GroundStateProblem(H), Lanczos(variation=TwoPass(), maxiter=300, tol=1e-10, return_state=true))
+
+# isreal(H) tells you whether you get real or complex states back
+isreal(H)
 ```
 
 #### `lanczos_ground_state` Parameters & Result API
@@ -320,10 +329,11 @@ E0, psi0 = lanczos_ground_state(H, return_state=true)
 | `tol` | `Real` | `1e-12` | Energy convergence tolerance. |
 | `return_state` | `Bool` | `false` | When `true`, computes and stores ground state wavefunction. |
 | `two_pass` | `Bool` | `false` | When `true`, uses a memory-frugal two-pass Lanczos algorithm that requires only 3 working vectors in RAM, reconstructing the Ritz eigenvector on-the-fly in a second pass. |
+| `early_stopping` | `Bool` | `true` | When `false`, runs exactly `maxiter` iterations (only an exhausted Krylov space ends it sooner). With `return_state=false` the solve is energy-only: one pass, three vectors, no eigenvector copy. |
 | `res.energy` | `Float64` | - | Ground state energy eigenvalue. |
 | `res.iterations` | `Int` | - | Total number of Lanczos iterations executed. |
 | `res.converged` | `Bool` | - | `true` if tolerance `tol` was achieved, `false` if `maxiter` was hit. |
-| `res.state` / `res.eigenvector` | `Vector{ComplexF64}` | - | Ground state eigenvector (raises Error if `return_state=false`). |
+| `res.state` / `res.eigenvector` | `Vector{Float64}` if `isreal(H)`, else `Vector{ComplexF64}` (`Float32` / `ComplexF32` for single precision) | - | Ground state eigenvector (raises Error if `return_state=false`). |
 
 ---
 

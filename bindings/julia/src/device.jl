@@ -64,10 +64,10 @@ or `nothing` if built for CPU only. (Matches Python API `qkrylov.find_gpu()`).
 <TODO-LLM: Explain hardware GPU runtime discovery here>
 """
 function find_gpu()::Union{String, Nothing}
-    if !is_gpu_build() || !_has_symbol(:qkrylov_backend_name)
+    if !is_gpu_build() || !_has_symbol(:qkrylov_find_gpu)
         return nothing
     end
-    c_str = ccall((:qkrylov_backend_name, libqkrylov), Cstring, ())
+    c_str = ccall((:qkrylov_find_gpu, libqkrylov), Cstring, ())
     return c_str == C_NULL ? nothing : unsafe_string(c_str)
 end
 

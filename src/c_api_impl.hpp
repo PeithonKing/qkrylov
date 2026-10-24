@@ -2,6 +2,7 @@
 
 #include "qkrylov/c_api.h"
 #include "c_api_internal.hpp"
+#include "c_api_space.hpp"
 
 #include "qkrylov/symmetry/sector.hpp"
 #include "qkrylov/operators/operator_term.hpp"
@@ -247,7 +248,7 @@ qkrylov_hamiltonian_h SUFFIX(qkrylov_hamiltonian_create)(
     qkrylov_site_h site,
     qkrylov_opsum_h opsum)
 {
-    return SUFFIX(qkrylov_hamiltonian_create_device)(basis, site, opsum, "cpu");
+    return SUFFIX(qkrylov_hamiltonian_create_device)(basis, site, opsum, "auto");
 }
 
 qkrylov_hamiltonian_h SUFFIX(qkrylov_hamiltonian_create_device)(
@@ -261,7 +262,11 @@ qkrylov_hamiltonian_h SUFFIX(qkrylov_hamiltonian_create_device)(
         return nullptr;
     }
     try {
-        std::string dev_str = device_str ? device_str : "cpu";
+        const QkDeviceChoice choice = qk_parse_device(device_str);
+        if (!choice.ok) {
+            set_last_error("qkrylov_hamiltonian_create_device: " + choice.error);
+            return nullptr;
+        }
         auto b_ptr = get_or_create_basis(*basis);
         auto s_ptr = get_or_create_site(*site);
         auto ops = make_opsum_from_descriptor(*opsum);
@@ -271,14 +276,16 @@ qkrylov_hamiltonian_h SUFFIX(qkrylov_hamiltonian_create_device)(
             return nullptr;
         }
 
-        auto H = std::make_shared<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>>(
-            b_ptr, s_ptr, ops, Device(dev_str)
-        );
-
         auto handle = std::make_unique<qkrylov_hamiltonian_t>();
         handle->precision = PREC_ID;
-        handle->dim = H->dimension();
-        handle->impl = H;
+        handle->space = choice.space;
+        qk_dispatch(choice.space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto H = std::make_shared<MatrixFreeHamiltonian<Space>>(b_ptr, s_ptr, ops, Device(choice.device));
+            handle->dim = H->dimension();
+            handle->impl = H;
+            return QKRYLOV_SUCCESS;
+        });
         return handle.release();
     } catch (const std::exception& e) {
         set_last_error(e.what());
@@ -307,24 +314,27 @@ int SUFFIX(qkrylov_hamiltonian_apply)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        const uint64_t dim = h->dim;
-        std::vector<Complex> x(dim);
-        std::vector<Complex> y(dim);
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            const uint64_t dim = h->dim;
+            std::vector<Complex> x(dim);
+            std::vector<Complex> y(dim);
 
-        for (uint64_t i = 0; i < dim; ++i) {
-            Scalar imag = x_imag ? x_imag[i] : Scalar(0.0);
-            x[i] = Complex(static_cast<Real>(x_real[i]), static_cast<Real>(imag));
-        }
+            for (uint64_t i = 0; i < dim; ++i) {
+                Scalar imag = x_imag ? x_imag[i] : Scalar(0.0);
+                x[i] = Complex(static_cast<Real>(x_real[i]), static_cast<Real>(imag));
+            }
 
-        H->apply(x.data(), y.data());
+            H->apply(x.data(), y.data());
 
-        for (uint64_t i = 0; i < dim; ++i) {
-            y_real[i] = static_cast<Scalar>(y[i].real());
-            if (y_imag) y_imag[i] = static_cast<Scalar>(y[i].imag());
-        }
+            for (uint64_t i = 0; i < dim; ++i) {
+                y_real[i] = static_cast<Scalar>(y[i].real());
+                if (y_imag) y_imag[i] = static_cast<Scalar>(y[i].imag());
+            }
 
-        return QKRYLOV_SUCCESS;
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -352,11 +362,14 @@ int SUFFIX(qkrylov_hamiltonian_apply_complex)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        const auto* x_c = reinterpret_cast<const Complex*>(x_complex);
-        auto* y_c = reinterpret_cast<Complex*>(y_complex);
-        H->apply(x_c, y_c);
-        return QKRYLOV_SUCCESS;
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            const auto* x_c = reinterpret_cast<const Complex*>(x_complex);
+            auto* y_c = reinterpret_cast<Complex*>(y_complex);
+            H->apply(x_c, y_c);
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -383,13 +396,16 @@ int SUFFIX(qkrylov_hamiltonian_diagonal)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        auto diag = H->diagonal_host();
-        const uint64_t dim = h->dim;
-        for (uint64_t i = 0; i < dim && i < diag.size(); ++i) {
-            diag_out[i] = static_cast<Scalar>(diag[i].real());
-        }
-        return QKRYLOV_SUCCESS;
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            auto diag = H->diagonal_host();
+            const uint64_t dim = h->dim;
+            for (uint64_t i = 0; i < dim && i < diag.size(); ++i) {
+                diag_out[i] = static_cast<Scalar>(diag[i].real());
+            }
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -430,6 +446,10 @@ int SUFFIX(qkrylov_hamiltonian_apply_device)(
     }
 
     try {
+        if (!qk_on_default_space(h)) {
+            set_last_error("qkrylov_hamiltonian_apply_device: this Hamiltonian runs on the CPU, but device-resident vectors live on the build's default (GPU) device");
+            return QKRYLOV_ERROR_INVALID_ARG;
+        }
         auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
         const auto* x_v = static_cast<const DevVector*>(x_dev->impl.get());
         auto* y_v = static_cast<DevVector*>(y_dev->impl.get());
@@ -475,6 +495,10 @@ int SUFFIX(qkrylov_hamiltonian_diagonal_device)(
     }
 
     try {
+        if (!qk_on_default_space(h)) {
+            set_last_error("qkrylov_hamiltonian_diagonal_device: this Hamiltonian runs on the CPU, but device-resident vectors live on the build's default (GPU) device");
+            return QKRYLOV_ERROR_INVALID_ARG;
+        }
         auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
         auto* d_v = static_cast<DevVector*>(diag_out->impl.get());
 
@@ -522,28 +546,130 @@ int SUFFIX(qkrylov_lanczos_ground_state_complex)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        LanczosConfig cfg;
-        cfg.maxiter = maxiter;
-        cfg.tol = static_cast<Real>(tol);
-        auto res = eigenvector_complex
-            ? solvers::lanczos<solvers::policy::OnePass_DKGS>(*H, cfg)
-            : solvers::lanczos<solvers::policy::OnePass>(*H, cfg);
-        result->energy     = static_cast<Scalar>(res.energy);
-        result->iterations = res.iterations;
-        result->converged  = res.converged ? 1 : 0;
-        if (eigenvector_complex && !res.eigenvector.empty()) {
-            for (size_t i = 0; i < res.eigenvector.size(); ++i) {
-                eigenvector_complex[2 * i]     = static_cast<Scalar>(res.eigenvector[i].real());
-                eigenvector_complex[2 * i + 1] = static_cast<Scalar>(res.eigenvector[i].imag());
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            LanczosConfig cfg;
+            cfg.maxiter = maxiter;
+            cfg.tol = static_cast<Real>(tol);
+            auto res = eigenvector_complex
+                ? solvers::lanczos<solvers::policy::OnePass_DKGS>(*H, cfg)
+                : solvers::lanczos<solvers::policy::OnePass>(*H, cfg);
+            result->energy     = static_cast<Scalar>(res.energy);
+            result->iterations = res.iterations;
+            result->converged  = res.converged ? 1 : 0;
+            if (eigenvector_complex && !res.eigenvector.empty()) {
+                for (size_t i = 0; i < res.eigenvector.size(); ++i) {
+                    eigenvector_complex[2 * i]     = static_cast<Scalar>(res.eigenvector[i].real());
+                    eigenvector_complex[2 * i + 1] = static_cast<Scalar>(res.eigenvector[i].imag());
+                }
             }
-        }
-        return QKRYLOV_SUCCESS;
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
     } catch (...) {
         set_last_error("Unknown exception in qkrylov_lanczos_ground_state_complex");
+        return QKRYLOV_ERROR_EXCEPTION;
+    }
+}
+
+int SUFFIX(qkrylov_hamiltonian_is_real)(qkrylov_hamiltonian_h h)
+{
+    if (!h || !h->impl) {
+        set_last_error("qkrylov_hamiltonian_is_real: null or uninitialized hamiltonian handle");
+        return -1;
+    }
+    if (h->precision != PREC_ID) {
+        set_last_error("qkrylov_hamiltonian_is_real: precision mismatch");
+        return -1;
+    }
+    int real = 0;
+    qk_dispatch(h->space, [&](auto sp) -> int {
+        using Space = typename decltype(sp)::type;
+        real = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get())->has_real_coefficients() ? 1 : 0;
+        return QKRYLOV_SUCCESS;
+    });
+    return real;
+}
+
+int SUFFIX(qkrylov_lanczos_solve)(
+    qkrylov_hamiltonian_h h,
+    const qkrylov_lanczos_config_t* config,
+    LanczosResT* result,
+    Scalar* eigenvector_out)
+{
+    if (!h) {
+        set_last_error("qkrylov_lanczos_solve: hamiltonian handle is null");
+        return QKRYLOV_ERROR_INVALID_ARG;
+    }
+    if (h->precision != PREC_ID) {
+        set_last_error("qkrylov_lanczos_solve: precision mismatch");
+        return QKRYLOV_ERROR_INVALID_ARG;
+    }
+    if (!h->impl || !result || !config) {
+        set_last_error("qkrylov_lanczos_solve: null config/result pointer or uninitialized hamiltonian");
+        return QKRYLOV_ERROR_INVALID_ARG;
+    }
+    if (config->maxiter <= 0) {
+        set_last_error("qkrylov_lanczos_solve: maxiter must be positive");
+        return QKRYLOV_ERROR_INVALID_ARG;
+    }
+    if (config->policy < QKRYLOV_LANCZOS_ENERGY_ONLY || config->policy > QKRYLOV_LANCZOS_TWO_PASS) {
+        set_last_error("qkrylov_lanczos_solve: unknown policy");
+        return QKRYLOV_ERROR_INVALID_ARG;
+    }
+    try {
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            LanczosConfig cfg;
+            cfg.maxiter = config->maxiter;
+            cfg.tol = static_cast<Real>(config->tol);
+            cfg.early_stopping = config->early_stopping != 0;
+            const bool want_vector = eigenvector_out != nullptr && config->policy != QKRYLOV_LANCZOS_ENERGY_ONLY;
+            const bool is_real_h = H->has_real_coefficients();
+            cfg.real_output = want_vector && config->real_output != 0 && is_real_h;
+            // Zero-staging paths: the core writes the vector straight into the caller's buffer.
+            if (want_vector && cfg.real_output) {
+                cfg.eigenvector_real_out = reinterpret_cast<Real*>(eigenvector_out);
+            } else if (want_vector && !is_real_h) {
+                cfg.eigenvector_complex_out = reinterpret_cast<Complex*>(eigenvector_out);
+            }
+
+            LanczosResult res;
+            if (!want_vector) {
+                res = solvers::lanczos<solvers::policy::OnePass>(*H, cfg);
+            } else if (config->policy == QKRYLOV_LANCZOS_ONE_PASS) {
+                res = solvers::lanczos<solvers::policy::OnePass_full>(*H, cfg);
+            } else {
+                res = solvers::lanczos<solvers::policy::TwoPass>(*H, cfg);
+            }
+            result->energy     = static_cast<Scalar>(res.energy);
+            result->iterations = res.iterations;
+            result->converged  = res.converged ? 1 : 0;
+            if (want_vector) {
+                if (cfg.eigenvector_real_out || cfg.eigenvector_complex_out) {
+                    // already written into eigenvector_out by the solver
+                } else if (!res.eigenvector_real.empty()) {
+                    for (size_t i = 0; i < res.eigenvector_real.size(); ++i) {
+                        eigenvector_out[i] = static_cast<Scalar>(res.eigenvector_real[i]);
+                    }
+                } else {
+                    for (size_t i = 0; i < res.eigenvector.size(); ++i) {
+                        eigenvector_out[2 * i]     = static_cast<Scalar>(res.eigenvector[i].real());
+                        eigenvector_out[2 * i + 1] = static_cast<Scalar>(res.eigenvector[i].imag());
+                    }
+                }
+            }
+            return QKRYLOV_SUCCESS;
+        });
+    } catch (const std::exception& e) {
+        set_last_error(e.what());
+        return QKRYLOV_ERROR_EXCEPTION;
+    } catch (...) {
+        set_last_error("Unknown exception in qkrylov_lanczos_solve");
         return QKRYLOV_ERROR_EXCEPTION;
     }
 }
@@ -581,21 +707,24 @@ int SUFFIX(qkrylov_lanczos_two_pass_ground_state_complex)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        LanczosConfig cfg;
-        cfg.maxiter = maxiter;
-        cfg.tol = static_cast<Real>(tol);
-        auto res = solvers::lanczos<solvers::policy::TwoPass>(*H, cfg);
-        result->energy     = static_cast<Scalar>(res.energy);
-        result->iterations = res.iterations;
-        result->converged  = res.converged ? 1 : 0;
-        if (eigenvector_complex && !res.eigenvector.empty()) {
-            for (size_t i = 0; i < res.eigenvector.size(); ++i) {
-                eigenvector_complex[2 * i]     = static_cast<Scalar>(res.eigenvector[i].real());
-                eigenvector_complex[2 * i + 1] = static_cast<Scalar>(res.eigenvector[i].imag());
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            LanczosConfig cfg;
+            cfg.maxiter = maxiter;
+            cfg.tol = static_cast<Real>(tol);
+            auto res = solvers::lanczos<solvers::policy::TwoPass>(*H, cfg);
+            result->energy     = static_cast<Scalar>(res.energy);
+            result->iterations = res.iterations;
+            result->converged  = res.converged ? 1 : 0;
+            if (eigenvector_complex && !res.eigenvector.empty()) {
+                for (size_t i = 0; i < res.eigenvector.size(); ++i) {
+                    eigenvector_complex[2 * i]     = static_cast<Scalar>(res.eigenvector[i].real());
+                    eigenvector_complex[2 * i + 1] = static_cast<Scalar>(res.eigenvector[i].imag());
+                }
             }
-        }
-        return QKRYLOV_SUCCESS;
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -636,45 +765,48 @@ int SUFFIX(qkrylov_lanczos_lowest_complex)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        bool compute_evecs = (eigenvectors_complex_out != nullptr);
-        HostVector init_v;
-        if (initial_vector_complex) {
-            init_v.resize(h->dim);
-            for (uint64_t i = 0; i < h->dim; ++i) {
-                init_v[i] = Complex(static_cast<Real>(initial_vector_complex[2 * i]),
-                                    static_cast<Real>(initial_vector_complex[2 * i + 1]));
-            }
-        }
-        LanczosConfig cfg;
-        cfg.n_eig = n_eig;
-        cfg.maxiter = maxiter;
-        cfg.tol = static_cast<Real>(tol);
-        cfg.compute_eigenvectors = compute_evecs;
-        cfg.initial_vector = std::move(init_v);
-        auto res = solvers::lanczos_lowest(*H, cfg);
-        const size_t k = std::min(static_cast<size_t>(n_eig), res.eigenvalues.size());
-        for (size_t i = 0; i < k; ++i) {
-            eigenvalues_out[i] = static_cast<Scalar>(res.eigenvalues[i]);
-        }
-
-        if (result_info) {
-            result_info->iterations = res.iterations;
-            result_info->converged  = res.converged ? 1 : 0;
-        }
-
-        if (compute_evecs) {
-            const uint64_t dim = h->dim;
-            for (size_t idx = 0; idx < k && idx < res.eigenvectors.size(); ++idx) {
-                const auto& vec = res.eigenvectors[idx];
-                Scalar* dst = eigenvectors_complex_out + (idx * 2 * dim);
-                for (size_t i = 0; i < dim && i < vec.size(); ++i) {
-                    dst[2 * i]     = static_cast<Scalar>(vec[i].real());
-                    dst[2 * i + 1] = static_cast<Scalar>(vec[i].imag());
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            bool compute_evecs = (eigenvectors_complex_out != nullptr);
+            HostVector init_v;
+            if (initial_vector_complex) {
+                init_v.resize(h->dim);
+                for (uint64_t i = 0; i < h->dim; ++i) {
+                    init_v[i] = Complex(static_cast<Real>(initial_vector_complex[2 * i]),
+                                        static_cast<Real>(initial_vector_complex[2 * i + 1]));
                 }
             }
-        }
-        return QKRYLOV_SUCCESS;
+            LanczosConfig cfg;
+            cfg.n_eig = n_eig;
+            cfg.maxiter = maxiter;
+            cfg.tol = static_cast<Real>(tol);
+            cfg.compute_eigenvectors = compute_evecs;
+            cfg.initial_vector = std::move(init_v);
+            auto res = solvers::lanczos_lowest(*H, cfg);
+            const size_t k = std::min(static_cast<size_t>(n_eig), res.eigenvalues.size());
+            for (size_t i = 0; i < k; ++i) {
+                eigenvalues_out[i] = static_cast<Scalar>(res.eigenvalues[i]);
+            }
+
+            if (result_info) {
+                result_info->iterations = res.iterations;
+                result_info->converged  = res.converged ? 1 : 0;
+            }
+
+            if (compute_evecs) {
+                const uint64_t dim = h->dim;
+                for (size_t idx = 0; idx < k && idx < res.eigenvectors.size(); ++idx) {
+                    const auto& vec = res.eigenvectors[idx];
+                    Scalar* dst = eigenvectors_complex_out + (idx * 2 * dim);
+                    for (size_t i = 0; i < dim && i < vec.size(); ++i) {
+                        dst[2 * i]     = static_cast<Scalar>(vec[i].real());
+                        dst[2 * i + 1] = static_cast<Scalar>(vec[i].imag());
+                    }
+                }
+            }
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -714,30 +846,33 @@ int SUFFIX(qkrylov_davidson_lowest_complex)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        auto res = davidson_lowest(*H, n_eig, max_subspace, static_cast<Real>(tol));
-        const size_t k = std::min(static_cast<size_t>(n_eig), res.eigenvalues.size());
-        for (size_t i = 0; i < k; ++i) {
-            eigenvalues_out[i] = static_cast<Scalar>(res.eigenvalues[i]);
-        }
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            auto res = davidson_lowest(*H, n_eig, max_subspace, static_cast<Real>(tol));
+            const size_t k = std::min(static_cast<size_t>(n_eig), res.eigenvalues.size());
+            for (size_t i = 0; i < k; ++i) {
+                eigenvalues_out[i] = static_cast<Scalar>(res.eigenvalues[i]);
+            }
 
-        if (result_info) {
-            result_info->iterations = res.iterations;
-            result_info->converged  = res.converged ? 1 : 0;
-        }
+            if (result_info) {
+                result_info->iterations = res.iterations;
+                result_info->converged  = res.converged ? 1 : 0;
+            }
 
-        if (eigenvectors_complex_out) {
-            const uint64_t dim = h->dim;
-            for (size_t idx = 0; idx < k && idx < res.eigenvectors.size(); ++idx) {
-                const auto& vec = res.eigenvectors[idx];
-                Scalar* dst = eigenvectors_complex_out + (idx * 2 * dim);
-                for (size_t i = 0; i < dim && i < vec.size(); ++i) {
-                    dst[2 * i]     = static_cast<Scalar>(vec[i].real());
-                    dst[2 * i + 1] = static_cast<Scalar>(vec[i].imag());
+            if (eigenvectors_complex_out) {
+                const uint64_t dim = h->dim;
+                for (size_t idx = 0; idx < k && idx < res.eigenvectors.size(); ++idx) {
+                    const auto& vec = res.eigenvectors[idx];
+                    Scalar* dst = eigenvectors_complex_out + (idx * 2 * dim);
+                    for (size_t i = 0; i < dim && i < vec.size(); ++i) {
+                        dst[2 * i]     = static_cast<Scalar>(vec[i].real());
+                        dst[2 * i + 1] = static_cast<Scalar>(vec[i].imag());
+                    }
                 }
             }
-        }
-        return QKRYLOV_SUCCESS;
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -773,31 +908,34 @@ int SUFFIX(qkrylov_continued_fraction_coeffs_complex)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        const uint64_t dim = h->dim;
-        HostVector phi0(dim);
-        for (uint64_t i = 0; i < dim; ++i) {
-            phi0[i] = Complex(static_cast<Real>(phi0_complex[2 * i]), static_cast<Real>(phi0_complex[2 * i + 1]));
-        }
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            const uint64_t dim = h->dim;
+            HostVector phi0(dim);
+            for (uint64_t i = 0; i < dim; ++i) {
+                phi0[i] = Complex(static_cast<Real>(phi0_complex[2 * i]), static_cast<Real>(phi0_complex[2 * i + 1]));
+            }
 
-        auto res = continued_fraction_coeffs(*H, phi0, n_iter);
-        *norm_phi0_out = static_cast<Scalar>(res.norm_phi0);
+            auto res = continued_fraction_coeffs(*H, phi0, n_iter);
+            *norm_phi0_out = static_cast<Scalar>(res.norm_phi0);
 
-        const size_t n_alpha = res.alphas.size();
-        const size_t n_beta  = res.betas.size();
+            const size_t n_alpha = res.alphas.size();
+            const size_t n_beta  = res.betas.size();
 
-        for (size_t i = 0; i < n_alpha && i < static_cast<size_t>(n_iter); ++i) {
-            alphas_out[i] = static_cast<Scalar>(res.alphas[i]);
-        }
-        for (size_t i = 0; i < n_beta && i < static_cast<size_t>(n_iter); ++i) {
-            betas_out[i] = static_cast<Scalar>(res.betas[i]);
-        }
+            for (size_t i = 0; i < n_alpha && i < static_cast<size_t>(n_iter); ++i) {
+                alphas_out[i] = static_cast<Scalar>(res.alphas[i]);
+            }
+            for (size_t i = 0; i < n_beta && i < static_cast<size_t>(n_iter); ++i) {
+                betas_out[i] = static_cast<Scalar>(res.betas[i]);
+            }
 
-        if (num_coeffs_out) {
-            *num_coeffs_out = static_cast<int>(n_alpha);
-        }
+            if (num_coeffs_out) {
+                *num_coeffs_out = static_cast<int>(n_alpha);
+            }
 
-        return QKRYLOV_SUCCESS;
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -869,13 +1007,16 @@ int SUFFIX(qkrylov_ftlm)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        auto res = ftlm(*H, static_cast<Real>(beta), n_random, n_steps);
-        result->beta               = static_cast<Scalar>(res.beta);
-        result->partition_function = static_cast<Scalar>(res.partition_function);
-        result->internal_energy    = static_cast<Scalar>(res.internal_energy);
-        result->specific_heat      = static_cast<Scalar>(res.specific_heat);
-        return QKRYLOV_SUCCESS;
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            auto res = ftlm(*H, static_cast<Real>(beta), n_random, n_steps);
+            result->beta               = static_cast<Scalar>(res.beta);
+            result->partition_function = static_cast<Scalar>(res.partition_function);
+            result->internal_energy    = static_cast<Scalar>(res.internal_energy);
+            result->specific_heat      = static_cast<Scalar>(res.specific_heat);
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -968,26 +1109,29 @@ int SUFFIX(qkrylov_ftlm_sample)(
     }
 
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
 
-        std::vector<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>> obs_vec;
-        obs_vec.reserve(num_observables);
-        for (int i = 0; i < num_observables; ++i) {
-            if (!observables[i] || observables[i]->precision != PREC_ID || !observables[i]->impl) {
-                set_last_error("qkrylov_ftlm_sample: invalid observable handle");
-                return QKRYLOV_ERROR_INVALID_ARG;
+            std::vector<MatrixFreeHamiltonian<Space>> obs_vec;
+            obs_vec.reserve(num_observables);
+            for (int i = 0; i < num_observables; ++i) {
+                if (!observables[i] || observables[i]->precision != PREC_ID || observables[i]->space != h->space || !observables[i]->impl) {
+                    set_last_error("qkrylov_ftlm_sample: invalid observable handle");
+                    return QKRYLOV_ERROR_INVALID_ARG;
+                }
+                obs_vec.push_back(*static_cast<MatrixFreeHamiltonian<Space>*>(observables[i]->impl.get()));
             }
-            obs_vec.push_back(*static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(observables[i]->impl.get()));
-        }
 
-        auto samples = ftlm_sample<Kokkos::DefaultExecutionSpace>(*H, obs_vec, n_random, n_steps, seed);
+            auto samples = ftlm_sample<Space>(*H, obs_vec, n_random, n_steps, seed);
 
-        auto handle = new qkrylov_ftlm_samples_t();
-        handle->precision = PREC_ID;
-        handle->impl = std::make_shared<std::vector<FTLMKrylovSample>>(std::move(samples));
-        *out_samples = handle;
+            auto handle = new qkrylov_ftlm_samples_t();
+            handle->precision = PREC_ID;
+            handle->impl = std::make_shared<std::vector<FTLMKrylovSample>>(std::move(samples));
+            *out_samples = handle;
 
-        return QKRYLOV_SUCCESS;
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -1068,25 +1212,28 @@ int SUFFIX(qkrylov_ftlm_sweep)(
     }
 
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        std::vector<Real> betas(num_betas);
-        for (int i = 0; i < num_betas; ++i) betas[i] = static_cast<Real>(beta_grid[i]);
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            std::vector<Real> betas(num_betas);
+            for (int i = 0; i < num_betas; ++i) betas[i] = static_cast<Real>(beta_grid[i]);
 
-        std::vector<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>> obs_vec;
-        obs_vec.reserve(num_observables);
-        for (int i = 0; i < num_observables; ++i) {
-            if (!observables[i] || observables[i]->precision != PREC_ID || !observables[i]->impl) {
-                set_last_error("qkrylov_ftlm_sweep: invalid observable handle");
-                return QKRYLOV_ERROR_INVALID_ARG;
+            std::vector<MatrixFreeHamiltonian<Space>> obs_vec;
+            obs_vec.reserve(num_observables);
+            for (int i = 0; i < num_observables; ++i) {
+                if (!observables[i] || observables[i]->precision != PREC_ID || observables[i]->space != h->space || !observables[i]->impl) {
+                    set_last_error("qkrylov_ftlm_sweep: invalid observable handle");
+                    return QKRYLOV_ERROR_INVALID_ARG;
+                }
+                obs_vec.push_back(*static_cast<MatrixFreeHamiltonian<Space>*>(observables[i]->impl.get()));
             }
-            obs_vec.push_back(*static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(observables[i]->impl.get()));
-        }
 
-        auto sweep = ftlm_sweep<Kokkos::DefaultExecutionSpace>(*H, betas, obs_vec, n_random, n_steps, seed);
+            auto sweep = ftlm_sweep<Space>(*H, betas, obs_vec, n_random, n_steps, seed);
 
-        copy_ftlm_sweep_result(sweep, num_betas, num_observables, result);
+            copy_ftlm_sweep_result(sweep, num_betas, num_observables, result);
 
-        return QKRYLOV_SUCCESS;
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -1157,25 +1304,28 @@ int SUFFIX(qkrylov_ftlm_sweep_streamed)(
     }
 
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        std::vector<Real> betas(num_betas);
-        for (int i = 0; i < num_betas; ++i) betas[i] = static_cast<Real>(beta_grid[i]);
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            std::vector<Real> betas(num_betas);
+            for (int i = 0; i < num_betas; ++i) betas[i] = static_cast<Real>(beta_grid[i]);
 
-        std::vector<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>> obs_vec;
-        obs_vec.reserve(num_observables);
-        for (int i = 0; i < num_observables; ++i) {
-            if (!observables[i] || observables[i]->precision != PREC_ID || !observables[i]->impl) {
-                set_last_error("qkrylov_ftlm_sweep_streamed: invalid observable handle");
-                return QKRYLOV_ERROR_INVALID_ARG;
+            std::vector<MatrixFreeHamiltonian<Space>> obs_vec;
+            obs_vec.reserve(num_observables);
+            for (int i = 0; i < num_observables; ++i) {
+                if (!observables[i] || observables[i]->precision != PREC_ID || observables[i]->space != h->space || !observables[i]->impl) {
+                    set_last_error("qkrylov_ftlm_sweep_streamed: invalid observable handle");
+                    return QKRYLOV_ERROR_INVALID_ARG;
+                }
+                obs_vec.push_back(*static_cast<MatrixFreeHamiltonian<Space>*>(observables[i]->impl.get()));
             }
-            obs_vec.push_back(*static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(observables[i]->impl.get()));
-        }
 
-        auto sweep = ftlm_sweep_streamed<Kokkos::DefaultExecutionSpace>(*H, betas, obs_vec, n_random, n_steps, seed);
+            auto sweep = ftlm_sweep_streamed<Space>(*H, betas, obs_vec, n_random, n_steps, seed);
 
-        copy_ftlm_sweep_result(sweep, num_betas, num_observables, result);
+            copy_ftlm_sweep_result(sweep, num_betas, num_observables, result);
 
-        return QKRYLOV_SUCCESS;
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -1213,61 +1363,64 @@ int SUFFIX(qkrylov_time_evolve)(
     }
 
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        const Index dim = H->dimension();
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            const Index dim = H->dimension();
 
-        HostVector psi0_host(dim);
-        for (Index i = 0; i < dim; ++i) {
-            psi0_host[i] = Complex(psi0_complex[2 * i], psi0_complex[2 * i + 1]);
-        }
-
-        std::vector<Real> t_grid(num_times);
-        for (int i = 0; i < num_times; ++i) t_grid[i] = static_cast<Real>(time_grid[i]);
-
-        std::vector<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>> obs_vec;
-        obs_vec.reserve(num_observables);
-        for (int i = 0; i < num_observables; ++i) {
-            if (!observables[i] || observables[i]->precision != PREC_ID || !observables[i]->impl) {
-                set_last_error("qkrylov_time_evolve: invalid observable");
-                return QKRYLOV_ERROR_INVALID_ARG;
+            HostVector psi0_host(dim);
+            for (Index i = 0; i < dim; ++i) {
+                psi0_host[i] = Complex(psi0_complex[2 * i], psi0_complex[2 * i + 1]);
             }
-            obs_vec.push_back(*static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(observables[i]->impl.get()));
-        }
 
-        auto rt_res = time_evolve<Kokkos::DefaultExecutionSpace>(*H, psi0_host, t_grid, obs_vec, n_steps);
+            std::vector<Real> t_grid(num_times);
+            for (int i = 0; i < num_times; ++i) t_grid[i] = static_cast<Real>(time_grid[i]);
 
-        result->num_times = num_times;
-        result->num_observables = num_observables;
-
-        auto* out_times = new Scalar[num_times];
-        auto* out_surv_re = new Scalar[num_times];
-        auto* out_surv_im = new Scalar[num_times];
-        for (int ti = 0; ti < num_times; ++ti) {
-            out_times[ti] = static_cast<Scalar>(rt_res.time_grid[ti]);
-            out_surv_re[ti] = static_cast<Scalar>(rt_res.survival_probabilities[ti].real());
-            out_surv_im[ti] = static_cast<Scalar>(rt_res.survival_probabilities[ti].imag());
-        }
-        result->time_grid = out_times;
-        result->survival_probabilities_re = out_surv_re;
-        result->survival_probabilities_im = out_surv_im;
-
-        if (num_observables > 0) {
-            auto* out_obs_re = new Scalar[num_observables * num_times];
-            auto* out_obs_im = new Scalar[num_observables * num_times];
-            for (int oi = 0; oi < num_observables; ++oi) {
-                for (int ti = 0; ti < num_times; ++ti) {
-                    out_obs_re[oi * num_times + ti] = static_cast<Scalar>(rt_res.observable_expectations[oi][ti].real());
-                    out_obs_im[oi * num_times + ti] = static_cast<Scalar>(rt_res.observable_expectations[oi][ti].imag());
+            std::vector<MatrixFreeHamiltonian<Space>> obs_vec;
+            obs_vec.reserve(num_observables);
+            for (int i = 0; i < num_observables; ++i) {
+                if (!observables[i] || observables[i]->precision != PREC_ID || observables[i]->space != h->space || !observables[i]->impl) {
+                    set_last_error("qkrylov_time_evolve: invalid observable");
+                    return QKRYLOV_ERROR_INVALID_ARG;
                 }
+                obs_vec.push_back(*static_cast<MatrixFreeHamiltonian<Space>*>(observables[i]->impl.get()));
             }
-            result->observable_expectations_re = out_obs_re;
-            result->observable_expectations_im = out_obs_im;
-        } else {
-            result->observable_expectations_re = nullptr;
-            result->observable_expectations_im = nullptr;
-        }
 
-        return QKRYLOV_SUCCESS;
+            auto rt_res = time_evolve<Space>(*H, psi0_host, t_grid, obs_vec, n_steps);
+
+            result->num_times = num_times;
+            result->num_observables = num_observables;
+
+            auto* out_times = new Scalar[num_times];
+            auto* out_surv_re = new Scalar[num_times];
+            auto* out_surv_im = new Scalar[num_times];
+            for (int ti = 0; ti < num_times; ++ti) {
+                out_times[ti] = static_cast<Scalar>(rt_res.time_grid[ti]);
+                out_surv_re[ti] = static_cast<Scalar>(rt_res.survival_probabilities[ti].real());
+                out_surv_im[ti] = static_cast<Scalar>(rt_res.survival_probabilities[ti].imag());
+            }
+            result->time_grid = out_times;
+            result->survival_probabilities_re = out_surv_re;
+            result->survival_probabilities_im = out_surv_im;
+
+            if (num_observables > 0) {
+                auto* out_obs_re = new Scalar[num_observables * num_times];
+                auto* out_obs_im = new Scalar[num_observables * num_times];
+                for (int oi = 0; oi < num_observables; ++oi) {
+                    for (int ti = 0; ti < num_times; ++ti) {
+                        out_obs_re[oi * num_times + ti] = static_cast<Scalar>(rt_res.observable_expectations[oi][ti].real());
+                        out_obs_im[oi * num_times + ti] = static_cast<Scalar>(rt_res.observable_expectations[oi][ti].imag());
+                    }
+                }
+                result->observable_expectations_re = out_obs_re;
+                result->observable_expectations_im = out_obs_im;
+            } else {
+                result->observable_expectations_re = nullptr;
+                result->observable_expectations_im = nullptr;
+            }
+
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -1313,42 +1466,49 @@ int SUFFIX(qkrylov_ftlm_dynamics)(
         set_last_error("qkrylov_ftlm_dynamics: precision mismatch");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
+    if (a->space != h->space || b->space != h->space) {
+        set_last_error("qkrylov_ftlm_dynamics: the Hamiltonian and both observables must run on the same device");
+        return QKRYLOV_ERROR_INVALID_ARG;
+    }
     if (n_random <= 0 || n_steps <= 0) {
         set_last_error("qkrylov_ftlm_dynamics: n_random and n_steps must be positive");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
 
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        auto* A = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(a->impl.get());
-        auto* B = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(b->impl.get());
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            auto* A = static_cast<MatrixFreeHamiltonian<Space>*>(a->impl.get());
+            auto* B = static_cast<MatrixFreeHamiltonian<Space>*>(b->impl.get());
 
-        std::vector<Real> t_grid(num_times);
-        for (int i = 0; i < num_times; ++i) t_grid[i] = static_cast<Real>(time_grid[i]);
+            std::vector<Real> t_grid(num_times);
+            for (int i = 0; i < num_times; ++i) t_grid[i] = static_cast<Real>(time_grid[i]);
 
-        auto dyn_res = ftlm_dynamics<Kokkos::DefaultExecutionSpace>(*H, static_cast<Real>(beta), *A, *B, t_grid, n_random, n_steps, seed);
+            auto dyn_res = ftlm_dynamics<Space>(*H, static_cast<Real>(beta), *A, *B, t_grid, n_random, n_steps, seed);
 
-        result->beta = static_cast<Scalar>(dyn_res.beta);
-        result->num_times = num_times;
+            result->beta = static_cast<Scalar>(dyn_res.beta);
+            result->num_times = num_times;
 
-        auto* out_times = new Scalar[num_times];
-        auto* out_corr_re = new Scalar[num_times];
-        auto* out_corr_im = new Scalar[num_times];
-        auto* out_err = new Scalar[num_times];
+            auto* out_times = new Scalar[num_times];
+            auto* out_corr_re = new Scalar[num_times];
+            auto* out_corr_im = new Scalar[num_times];
+            auto* out_err = new Scalar[num_times];
 
-        for (int ti = 0; ti < num_times; ++ti) {
-            out_times[ti] = static_cast<Scalar>(dyn_res.time_grid[ti]);
-            out_corr_re[ti] = static_cast<Scalar>(dyn_res.correlations[ti].real());
-            out_corr_im[ti] = static_cast<Scalar>(dyn_res.correlations[ti].imag());
-            out_err[ti] = static_cast<Scalar>(dyn_res.correlation_errors[ti]);
-        }
+            for (int ti = 0; ti < num_times; ++ti) {
+                out_times[ti] = static_cast<Scalar>(dyn_res.time_grid[ti]);
+                out_corr_re[ti] = static_cast<Scalar>(dyn_res.correlations[ti].real());
+                out_corr_im[ti] = static_cast<Scalar>(dyn_res.correlations[ti].imag());
+                out_err[ti] = static_cast<Scalar>(dyn_res.correlation_errors[ti]);
+            }
 
-        result->time_grid = out_times;
-        result->correlations_re = out_corr_re;
-        result->correlations_im = out_corr_im;
-        result->correlation_errors = out_err;
+            result->time_grid = out_times;
+            result->correlations_re = out_corr_re;
+            result->correlations_im = out_corr_im;
+            result->correlation_errors = out_err;
 
-        return QKRYLOV_SUCCESS;
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
@@ -1399,36 +1559,39 @@ int SUFFIX(qkrylov_solver_correction_vector)(
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
-        auto* H = static_cast<MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace>*>(h->impl.get());
-        const uint64_t dim = h->dim;
-        HostVector op_psi0(dim);
-        for (uint64_t i = 0; i < dim; ++i) {
-            op_psi0[i] = Complex(static_cast<Real>(op_psi0_complex[2 * i]),
-                                 static_cast<Real>(op_psi0_complex[2 * i + 1]));
-        }
-
-        auto cv_res = correction_vector_spectral(
-            *H,
-            op_psi0,
-            static_cast<Real>(e0),
-            static_cast<Real>(omega),
-            static_cast<Real>(eta),
-            max_iter,
-            static_cast<Real>(tol)
-        );
-
-        result->spectral_function = static_cast<Scalar>(cv_res.spectral_function);
-        result->iterations        = cv_res.iterations;
-        result->converged         = cv_res.converged ? 1 : 0;
-
-        if (correction_vector_out_complex) {
-            for (uint64_t i = 0; i < dim && i < cv_res.correction_vector.size(); ++i) {
-                correction_vector_out_complex[2 * i]     = static_cast<Scalar>(cv_res.correction_vector[i].real());
-                correction_vector_out_complex[2 * i + 1] = static_cast<Scalar>(cv_res.correction_vector[i].imag());
+        return qk_dispatch(h->space, [&](auto sp) -> int {
+            using Space = typename decltype(sp)::type;
+            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
+            const uint64_t dim = h->dim;
+            HostVector op_psi0(dim);
+            for (uint64_t i = 0; i < dim; ++i) {
+                op_psi0[i] = Complex(static_cast<Real>(op_psi0_complex[2 * i]),
+                                     static_cast<Real>(op_psi0_complex[2 * i + 1]));
             }
-        }
 
-        return QKRYLOV_SUCCESS;
+            auto cv_res = correction_vector_spectral(
+                *H,
+                op_psi0,
+                static_cast<Real>(e0),
+                static_cast<Real>(omega),
+                static_cast<Real>(eta),
+                max_iter,
+                static_cast<Real>(tol)
+            );
+
+            result->spectral_function = static_cast<Scalar>(cv_res.spectral_function);
+            result->iterations        = cv_res.iterations;
+            result->converged         = cv_res.converged ? 1 : 0;
+
+            if (correction_vector_out_complex) {
+                for (uint64_t i = 0; i < dim && i < cv_res.correction_vector.size(); ++i) {
+                    correction_vector_out_complex[2 * i]     = static_cast<Scalar>(cv_res.correction_vector[i].real());
+                    correction_vector_out_complex[2 * i + 1] = static_cast<Scalar>(cv_res.correction_vector[i].imag());
+                }
+            }
+
+            return QKRYLOV_SUCCESS;
+        });
     } catch (const std::exception& e) {
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;

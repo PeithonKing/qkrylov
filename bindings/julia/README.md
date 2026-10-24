@@ -120,7 +120,7 @@ println("Diagonal elements: ", diag_H)
 # 6. Compute ground state energy & wavefunction via Lanczos solver
 res = lanczos_ground_state(H, maxiter=50, tol=1e-12, return_state=true)
 println("Ground State Energy: ", res.energy) # Outputs -2.0
-psi = res.state # Vector{ComplexF64} wavefunction
+psi = res.state # Vector{Float64} for a real Hamiltonian (Vector{ComplexF64} if H has complex terms)
 
 # Destructuring syntax is also supported:
 E0, psi_gs = lanczos_ground_state(H, return_state=true)
@@ -234,7 +234,7 @@ op += -1.0 * (CdagUp(0) * CUp(1) + CdagDn(0) * CDn(1)) + 4.0 * Nupdn(0)
   Constructs a matrix-free Hamiltonian. Holds reference guards to `basis`, `site`, and `opsum` to guarantee GC safety.
 - **`MatrixFreeHamiltonian(basis, opsum; device="cpu")`**:
   Convenience constructor that automatically infers the default `Site` model from `basis`.
-- **`device` Keyword**: Specifies execution target (`"cpu"`, `"cuda:0"`, `"hip"`, etc.). Throws an `ArgumentError` if GPU acceleration is requested on a CPU-only build.
+- **`device` Keyword**: Specifies the execution target for *this* Hamiltonian: `"cpu"` (always the host CPU), `"gpu"` (whatever GPU backend this build has), or a specific backend such as `"cuda:0"`, `"hip"`, `"sycl"`. A GPU-enabled install contains both the CPU and the GPU backend, so you can create CPU and GPU Hamiltonians side by side in one session. Throws an `ArgumentError` if a GPU is requested on a CPU-only build, or if the backend does not match the one the build was made for (e.g. `"hip"` in a CUDA build). `active_device(H)` tells you where `H` really runs.
 
 #### `dimension(H::MatrixFreeHamiltonian)::UInt64`
 - **Description**: Returns the dimension of the Hamiltonian matrix.
@@ -257,7 +257,8 @@ lanczos_ground_state(
     maxiter::Integer=100,
     tol::Real=1e-12,
     return_state::Bool=false,
-    two_pass::Bool=false
+    two_pass::Bool=false,
+    early_stopping::Bool=true
 )::LanczosResult
 ```
 
@@ -267,9 +268,11 @@ lanczos_ground_state(
   - `tol`: Convergence tolerance for residual norm (default: `1e-12`).
   - `return_state`: If `true`, computes and stores the ground-state wavefunction (default: `false`).
   - `two_pass`: If `true`, uses a memory-frugal two-pass Lanczos algorithm that requires only 3 working vectors during the iteration, reconstructing the Ritz eigenvector in a second pass (default: `false`).
+  - `early_stopping`: If `false`, runs exactly `maxiter` iterations instead of stopping when converged (fixed work, for benchmarking; default: `true`).
+  - With `return_state=false` the solver computes the energy only: one pass, three vectors, no eigenvector copy (fastest and smallest).
 - **Return**: `LanczosResult` struct:
   - `.energy`: Ground state energy (`Float64`).
-  - `.state` or `.eigenvector`: Wavefunction vector (`Vector{ComplexF64}`). *Note*: Raises an explicit `ErrorException` if accessed when `return_state=false`.
+  - `.state` or `.eigenvector`: Wavefunction vector: `Vector{Float64}` (or `Float32`) when `isreal(H)`, `Vector{ComplexF64}` otherwise. *Note*: Raises an explicit `ErrorException` if accessed when `return_state=false`.
 - **Destructuring**: Supports direct tuple assignment `energy, psi = lanczos_ground_state(H; return_state=true)`.
 
 ---
@@ -452,6 +455,12 @@ count = gpu_count()      # Returns Int
 
 # Explicitly initialize device runtime (e.g. "cpu", "cuda:0")
 initialize_device!("cpu")
+
+# Where does a given Hamiltonian really run? ("cpu", "cuda", "hip", "sycl")
+H_cpu = MatrixFreeHamiltonian(basis, op; device="cpu")
+active_device(H_cpu)     # "cpu", even in a GPU build
+H_gpu = MatrixFreeHamiltonian(basis, op; device="gpu")   # needs a GPU build
+active_device(H_gpu)     # e.g. "cuda"
 ```
 
 ---

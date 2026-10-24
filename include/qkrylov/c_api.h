@@ -288,6 +288,60 @@ typedef struct {
 
 typedef qkrylov_lanczos_result_fp64_t qkrylov_lanczos_result_c_t;
 
+/* -----------------------------------------------------------------------------
+ * Unified Lanczos entry point
+ *
+ *   qkrylov_lanczos_config_t cfg;
+ *   qkrylov_lanczos_config_default(&cfg);      // always start from the defaults
+ *   cfg.policy = QKRYLOV_LANCZOS_TWO_PASS;     // set what you need
+ *   qkrylov_lanczos_solve_fp64(h, &cfg, &res, psi);   // psi may be NULL (energy only)
+ *
+ * The config struct only ever grows at its end, and qkrylov_lanczos_config_default fills
+ * every field, so code compiled against an older header keeps working.
+ * ----------------------------------------------------------------------------- */
+typedef enum {
+    QKRYLOV_LANCZOS_ENERGY_ONLY = 0, /* one pass, 3 vectors, no eigenvector (fastest, smallest) */
+    QKRYLOV_LANCZOS_ONE_PASS    = 1, /* stores every Krylov vector (m x N memory), eigenvector out */
+    QKRYLOV_LANCZOS_TWO_PASS    = 2  /* 3 vectors + a replay pass for the eigenvector */
+} qkrylov_lanczos_policy_t;
+
+typedef struct {
+    int    maxiter;         /* maximum Krylov steps (default 200) */
+    double tol;             /* convergence tolerance, floored at what the precision can resolve (default 1e-12) */
+    int    early_stopping;  /* nonzero (default): stop once converged; 0: run exactly maxiter steps */
+    int    policy;          /* qkrylov_lanczos_policy_t (default QKRYLOV_LANCZOS_TWO_PASS) */
+    int    real_output;     /* nonzero (default): for a real Hamiltonian write N reals instead of 2N interleaved
+                               complex numbers; query qkrylov_hamiltonian_is_real() to know which you get */
+} qkrylov_lanczos_config_t;
+
+QKRYLOV_API void qkrylov_lanczos_config_default(qkrylov_lanczos_config_t* config);
+
+/* 1 if every coefficient of H is real (real symmetric matrix), 0 if not, -1 on error. */
+QKRYLOV_API int  qkrylov_hamiltonian_is_real(qkrylov_hamiltonian_h h);
+/* Device this Hamiltonian actually runs on: "cpu", or the build's GPU backend ("cuda", "hip", "sycl").
+   The returned string is static; NULL on a null handle. Create with qkrylov_hamiltonian_create_device(...,
+   "cpu" | "gpu" | "cuda[:id]" | "hip[:id]" | "sycl[:id]" | "auto"). In a GPU build one library serves both:
+   "cpu" runs on the host (OpenMP), "gpu"/"cuda" on the device. "auto" (and the no-device create) means the build's
+   default device. Device-resident vector functions need a Hamiltonian on the default device. */
+QKRYLOV_API const char* qkrylov_hamiltonian_device(qkrylov_hamiltonian_h h);
+QKRYLOV_API int  qkrylov_hamiltonian_is_real_fp32(qkrylov_hamiltonian_h h);
+QKRYLOV_API int  qkrylov_hamiltonian_is_real_fp64(qkrylov_hamiltonian_h h);
+
+/* eigenvector_out: NULL, or room for N values (real H and config->real_output) or 2N values
+   (interleaved re,im). Ignored for QKRYLOV_LANCZOS_ENERGY_ONLY. */
+QKRYLOV_API int  qkrylov_lanczos_solve_fp32(qkrylov_hamiltonian_h h,
+                                            const qkrylov_lanczos_config_t* config,
+                                            qkrylov_lanczos_result_fp32_t* result,
+                                            float* eigenvector_out);
+QKRYLOV_API int  qkrylov_lanczos_solve_fp64(qkrylov_hamiltonian_h h,
+                                            const qkrylov_lanczos_config_t* config,
+                                            qkrylov_lanczos_result_fp64_t* result,
+                                            double* eigenvector_out);
+QKRYLOV_API int  qkrylov_lanczos_solve(qkrylov_hamiltonian_h h,
+                                       const qkrylov_lanczos_config_t* config,
+                                       qkrylov_lanczos_result_c_t* result,
+                                       double* eigenvector_out);
+
 typedef struct {
     int iterations;
     int converged;

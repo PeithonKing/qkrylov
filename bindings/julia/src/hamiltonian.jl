@@ -33,9 +33,18 @@ mutable struct MatrixFreeHamiltonian{T<:Union{Float32, Float64}}
 
         dev_str = device_string(device)
         d_lower = lowercase(dev_str)
-        if occursin("cuda", d_lower) || occursin("hip", d_lower) || occursin("sycl", d_lower) || d_lower == "gpu"
+        requested = occursin("cuda", d_lower) ? "cuda" :
+                    occursin("hip", d_lower)  ? "hip"  :
+                    occursin("sycl", d_lower) ? "sycl" :
+                    d_lower == "gpu"          ? "gpu"  : nothing
+        if requested !== nothing
             if !is_gpu_build()
                 throw(ArgumentError("QKrylov was not built with GPU support. Install/compile a GPU build of libqkrylov with Kokkos CUDA/HIP enabled."))
+            end
+            # A GPU build serves exactly one backend: asking for another one is an error, not a silent substitution.
+            backend = lowercase(something(find_gpu(), ""))
+            if requested != "gpu" && !isempty(backend) && !occursin(requested, backend)
+                throw(ArgumentError("This libqkrylov was built for the '$backend' backend; the '$requested' device is not available. Use device=\"gpu\" or device=\"$backend\"."))
             end
         end
 
@@ -93,7 +102,7 @@ function MatrixFreeHamiltonian(
     site::AbstractSite,
     opsum::OpSum;
     device::Union{AbstractDevice, AbstractString} = CPUDevice(),
-    precision::Type{<:Union{Float32, Float64}} = (device isa CUDADevice || device isa HIPDevice || device isa SYCLDevice || occursin("cuda", lowercase(device_string(device))) || occursin("hip", lowercase(device_string(device))) || occursin("sycl", lowercase(device_string(device))) || lowercase(device_string(device)) == "gpu") ? Float32 : Float64
+    precision::Type{<:Union{Float32, Float64}} = Float64
 )
     return MatrixFreeHamiltonian{precision}(basis, site, opsum; device=device)
 end
@@ -111,7 +120,7 @@ function MatrixFreeHamiltonian(
     basis::AbstractBasis,
     opsum::OpSum;
     device::Union{AbstractDevice, AbstractString} = CPUDevice(),
-    precision::Type{<:Union{Float32, Float64}} = (device isa CUDADevice || device isa HIPDevice || device isa SYCLDevice || occursin("cuda", lowercase(device_string(device))) || occursin("hip", lowercase(device_string(device))) || occursin("sycl", lowercase(device_string(device))) || lowercase(device_string(device)) == "gpu") ? Float32 : Float64
+    precision::Type{<:Union{Float32, Float64}} = Float64
 )
     site = default_site(basis)
     return MatrixFreeHamiltonian{precision}(basis, site, opsum; device=device)
@@ -246,4 +255,31 @@ end
 function Base.show(io::IO, H::MatrixFreeHamiltonian{T}) where {T}
     d = dimension(H)
     print(io, "MatrixFreeHamiltonian{$T}(dim = $d, device = \"$(H.device)\", basis = $(H.basis))")
+end
+
+
+"""
+    isreal(H::MatrixFreeHamiltonian) -> Bool
+
+`true` if every coefficient of `H` is real (a real symmetric matrix in this basis). Real
+Hamiltonians run the Krylov solvers in real arithmetic and return real eigenvectors.
+"""
+function Base.isreal(H::MatrixFreeHamiltonian)
+    status = ccall((:qkrylov_hamiltonian_is_real, libqkrylov), Cint, (Ptr{Cvoid},), H.ptr)
+    status < 0 && error("qkrylov_hamiltonian_is_real failed: $(get_last_error_message())")
+    return status == 1
+end
+
+
+"""
+    active_device(H::MatrixFreeHamiltonian) -> String
+
+The device `H` really runs on: `"cpu"`, or the GPU backend of this build (`"cuda"`, `"hip"`, `"sycl"`).
+One GPU-enabled library serves both: `device="cpu"` runs on the host, `device="gpu"` (or the
+build's backend name) on the GPU, and the choice is made per Hamiltonian.
+"""
+function active_device(H::MatrixFreeHamiltonian)::String
+    c_str = ccall((:qkrylov_hamiltonian_device, libqkrylov), Cstring, (Ptr{Cvoid},), H.ptr)
+    c_str == C_NULL && error("qkrylov_hamiltonian_device failed: $(get_last_error_message())")
+    return unsafe_string(c_str)
 end
