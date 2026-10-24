@@ -175,7 +175,7 @@ DavidsonResult davidson_lowest(
             if (res_norm > tol) {
                 all_converged = false;
                 VectorView<ExecSpace> t("t", dim);
-                Kokkos::parallel_for("davidson_precond", dim, KOKKOS_LAMBDA(const Index i) {
+                Kokkos::parallel_for("davidson_precond", Kokkos::RangePolicy<ExecSpace, Index>(0, dim), KOKKOS_LAMBDA(const Index i) {
                     KComplex diff = diag_dev(i) - lambda;
                     if (Kokkos::abs(diff) < denom_cutoff) diff = (diff.real() >= Real(0.0)) ? denom_cutoff : -denom_cutoff;
                     t(i) = r(i) / diff;

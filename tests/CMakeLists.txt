@@ -21,6 +21,7 @@ set(QKRYLOV_TESTS
     test_state_index
     test_fixed_popcount_basis
     test_lanczos_early_stopping
+    test_host_space
 )
 
 # Tests rely on assert(); keep it active even in Release builds (which define NDEBUG).
@@ -44,6 +45,7 @@ set(QKRYLOV_FP32_TESTS
     test_lanczos_policies
     test_ftlm_sweep
     test_lanczos_early_stopping
+    test_host_space
 )
 
 foreach(test_name IN LISTS QKRYLOV_FP32_TESTS)
