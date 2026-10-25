@@ -46,6 +46,8 @@ public:
     void apply_real(const RealVectorView<ExecSpace>& x, RealVectorView<ExecSpace>& y) const;
     Real apply_dot_real(const RealVectorView<ExecSpace>& x, RealVectorView<ExecSpace>& y) const;
     
+    /// Real diagonal; valid (non-empty) only when has_real_coefficients(). No extra memory is allocated.
+    const RealVectorView<ExecSpace>& diagonal_real() const { return diagonal_real_; }
     /// Diagonal as complex values (built lazily for real Hamiltonians, which store it as Real).
     const VectorView<ExecSpace>& diagonal() const;
     HostVector diagonal_host() const;

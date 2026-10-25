@@ -18,6 +18,15 @@ struct DavidsonResult
     bool converged = false;
 };
 
+/// Lowest `n_eig` eigenpairs by the Davidson method with a diagonal preconditioner.
+///
+/// - `max_subspace`: largest number of stored vectors (kept as columns of one device block that grows on demand);
+///   when it would be exceeded the subspace restarts from the wanted Ritz vectors plus an equal number of the next ones.
+/// - `tol`: convergence threshold on the residual norm ||H v - lambda v|| of every wanted pair.
+/// - Real Hamiltonians run in real arithmetic; complex ones in complex arithmetic. Eigenvectors are returned as
+///   normalised complex host vectors either way.
+/// - Starting vectors are unit vectors on the lowest diagonal entries; results are deterministic and identical
+///   on CPU and GPU up to rounding.
 template <typename ExecSpace>
 DavidsonResult davidson_lowest(
     const MatrixFreeHamiltonian<ExecSpace>& H,
