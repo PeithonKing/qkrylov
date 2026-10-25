@@ -18,7 +18,8 @@ select { width: 100%; padding: 6px; background: var(--bg); color: var(--text); b
 .dual input::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%; background: var(--accent); border: 2px solid var(--panel); cursor: pointer; }
 .dual input::-moz-range-thumb { pointer-events: auto; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid var(--panel); cursor: pointer; }
 table.m { border-collapse: collapse; margin: 6px 0 10px; width: 100%; }
-table.m td, table.m th { border: 1px solid var(--line); padding: 5px 8px; text-align: center; font-weight: 400; }
+table.m td, table.m th { border: 1px solid var(--line); padding: 5px 8px; text-align: center; font-weight: 400; white-space: nowrap; }
+table.m th:first-child { text-align: left; }
 .group { margin-top: 14px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
 .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
 .buttons { display: flex; gap: 8px; margin-top: 18px; }

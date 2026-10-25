@@ -49,27 +49,27 @@ function buildControls() {
     draw();
   };
 
-  const box = $("matrix");
-  for (const p of PRECISIONS) {
-    const t = document.createElement("div");
-    t.innerHTML = `<div class="group"><input type="checkbox" data-p="${p}" checked> FP${p} (${p}-bit)</div>
-      <table class="m"><tr><th></th><th><input type="checkbox" data-n="${p} 1" checked> SP</th>
-      <th><input type="checkbox" data-n="${p} 2" checked> TP</th></tr>
-      ${DEVICES.map((d) => `<tr><th><input type="checkbox" data-d="${p} ${d}" checked> ${d.toUpperCase()}</th>
-        ${PASSES.map((n) => `<td><input type="checkbox" data-k="${key(p, d, n)}" checked>
-        <span class="swatch" style="background:${COLORS[key(p, d, n)]}"></span></td>`).join("")}</tr>`).join("")}</table>`;
-    box.append(t);
-  }
-  box.onchange = (e) => {
+  $("matrix").onchange = (e) => {
     const el = e.target, ds = el.dataset, on = el.checked;
     const set = (k) => (on ? state.enabled.add(k) : state.enabled.delete(k));
+    const devs = DEVICES.filter((d) => state.devs.has(d));
     if (ds.k) set(ds.k);
-    if (ds.p) for (const d of DEVICES) for (const n of PASSES) set(key(ds.p, d, n));
-    if (ds.d) { const [p, d] = ds.d.split(" "); for (const n of PASSES) set(key(p, d, n)); }
-    if (ds.n) { const [p, n] = ds.n.split(" "); for (const d of DEVICES) set(key(p, d, +n)); }
+    if (ds.p) for (const d of devs) for (const n of PASSES) set(key(ds.p, d, n));      // whole row (one precision)
+    if (ds.c) { const [d, n] = ds.c.split(" "); for (const p of PRECISIONS) set(key(p, d, +n)); } // whole column
     syncChecks();
     draw();
   };
+}
+
+// One table: a row per precision, a column per (device, pass) the dataset has data for.
+function renderMatrix() {
+  const devs = DEVICES.filter((d) => state.devs.has(d));
+  const head = devs.length > 1 ? `<tr><th></th>${devs.map((d) => `<th colspan="2">${d.toUpperCase()}</th>`).join("")}</tr>` : "";
+  const cols = devs.flatMap((d) => PASSES.map((n) => `<th><input type="checkbox" data-c="${d} ${n}"> ${n === 1 ? "SP" : "TP"}</th>`)).join("");
+  const rows = PRECISIONS.map((p) => `<tr><th><input type="checkbox" data-p="${p}"> ${p}-bit</th>` +
+    devs.flatMap((d) => PASSES.map((n) => `<td><input type="checkbox" data-k="${key(p, d, n)}">
+      <span class="swatch" style="background:${COLORS[key(p, d, n)]}"></span></td>`)).join("") + "</tr>").join("");
+  $("matrix").innerHTML = `<table class="m">${head}<tr><th></th>${cols}</tr>${rows}</table>`;
 }
 
 function syncChecks() {
@@ -79,8 +79,7 @@ function syncChecks() {
     const d = el.dataset;
     if (d.k) el.checked = on(d.k);
     if (d.p) el.checked = DEV.every((x) => PASSES.every((n) => on(key(d.p, x, n))));
-    if (d.d) { const [p, x] = d.d.split(" "); el.checked = PASSES.every((n) => on(key(p, x, n))); }
-    if (d.n) { const [p, n] = d.n.split(" "); el.checked = DEV.every((x) => on(key(p, x, +n))); }
+    if (d.c) { const [x, n] = d.c.split(" "); el.checked = PRECISIONS.every((p) => on(key(p, x, +n))); }
   });
 }
 
@@ -96,16 +95,14 @@ function selectDataset(ds) {
   let j = hi === "max" ? last : state.Ls.map((L) => L <= hi).lastIndexOf(true); // last size at or below the upper limit
   if (i < 0 || j < 0 || i > j) { i = 0; j = last; }                       // remembered range does not overlap this dataset
   $("lmin").value = i; $("lmax").value = j;
-  // Hide the device rows the dataset has no data for (e.g. a CPU-only machine).
+  // Only the devices the dataset has data for get columns (e.g. a CPU-only machine).
   const devs = new Set(ds.results.map((r) => r.device));
   state.devs = devs;
   for (const k of Object.keys(COLORS)) {
     const d = k.split(" ")[1];
     if (!devs.has(d)) state.enabled.delete(k); else state.enabled.add(k);
   }
-  document.querySelectorAll("#matrix input[data-d]").forEach((el) => {
-    el.closest("tr").style.display = devs.has(el.dataset.d.split(" ")[1]) ? "" : "none";
-  });
+  renderMatrix();
   syncChecks();
   $("meta").textContent = ds.info;
   draw();
@@ -180,7 +177,7 @@ function draw() {
       }
       const top = y(x.v), h = Math.max(base - top, 0);
       svg += `<rect class="bar" x="${bx}" y="${top}" width="${bw}" height="${h}" fill="${COLORS[x.k]}" data-i="${rows.indexOf(x)}"/>`;
-      if (bw >= 34 || series.length <= 4)
+      if (bw >= 42) // narrower bars would let neighbouring labels overlap; the table below has every value
         svg += `<text x="${bx + bw / 2}" y="${top - 4}" text-anchor="middle" font-size="${bw > 50 ? 11 : 9}">${fmtVal(x.v, metric).replace(" ms", "")}</text>`;
     });
   });
