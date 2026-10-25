@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>QKrylov benchmarks</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <aside id="controls">
@@ -23,9 +23,12 @@
 
   <label class="check"><input type="checkbox" id="log"> Logarithmic axis</label>
 
-  <h2>L range</h2>
-  <div class="range"><span id="lmin-label"></span><input type="range" id="lmin"></div>
-  <div class="range"><span id="lmax-label"></span><input type="range" id="lmax"></div>
+  <h2>L range: <span id="lrange-label"></span></h2>
+  <div class="dual">
+    <div class="dual-track"><div class="dual-fill" id="lfill"></div></div>
+    <input type="range" id="lmin" aria-label="smallest L">
+    <input type="range" id="lmax" aria-label="largest L">
+  </div>
 
   <div id="matrix"></div>
 
@@ -42,7 +45,7 @@
 </main>
 
 <div id="tip" hidden></div>
-<script src="data.js"></script>
-<script src="app.js"></script>
+<script src="data.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

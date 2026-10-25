@@ -39,6 +39,7 @@ function buildControls() {
   sel.onchange = () => { selectDataset(DATA.datasets[sel.value]); };
   $("metric").onchange = $("log").onchange = draw;
   $("lmin").oninput = $("lmax").oninput = (e) => {
+    // The knob being dragged pushes the other one along, so the lower limit never passes the upper.
     const lo = $("lmin"), hi = $("lmax");
     if (+lo.value > +hi.value) (e.target === lo ? hi : lo).value = e.target.value;
     draw();
@@ -114,8 +115,11 @@ function draw() {
   const ds = state.ds, metric = $("metric").value, logy = $("log").checked;
   const lo = +$("lmin").value, hi = +$("lmax").value;
   const Ls = state.Ls.slice(lo, hi + 1);
-  $("lmin-label").textContent = `Min L: ${Ls[0]}`;
-  $("lmax-label").textContent = `Max L: ${Ls[Ls.length - 1]}`;
+  $("lrange-label").textContent = Ls[0] === Ls[Ls.length - 1] ? `${Ls[0]}` : `${Ls[0]} – ${Ls[Ls.length - 1]}`;
+  const span = Math.max(state.Ls.length - 1, 1);
+  $("lmin").style.zIndex = lo > span / 2 ? 3 : 1; // when both knobs coincide, the one that can still move stays on top
+  $("lfill").style.left = `${(lo / span) * 100}%`;
+  $("lfill").style.right = `${100 - (hi / span) * 100}%`;
   const unit = { time: "Execution Time (s)", per_iter: "Time per iteration (ms)", speedup: "Speed-up (×)" }[metric];
   $("title").textContent = `QKrylov Benchmark (${ds.label})`;
 
