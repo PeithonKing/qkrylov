@@ -1,0 +1,9 @@
+prefix=${pcfiledir}/@QKRYLOV_PC_REL_PREFIX@
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: qkrylov
+Description: @PROJECT_DESCRIPTION@ (C API and C++ headers; link the shared library)
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -lqkrylov
+Cflags: -I${includedir}

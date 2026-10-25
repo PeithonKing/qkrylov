@@ -993,6 +993,16 @@ const char* qkrylov_find_gpu(void) {
     return nullptr;
 }
 
+void qkrylov_version(int* major, int* minor, int* patch) {
+    if (major) *major = QKRYLOV_VERSION_MAJOR;
+    if (minor) *minor = QKRYLOV_VERSION_MINOR;
+    if (patch) *patch = QKRYLOV_VERSION_PATCH;
+}
+
+const char* qkrylov_version_string(void) {
+    return QKRYLOV_VERSION_STRING;
+}
+
 int qkrylov_gpu_count(void) {
     return Device::gpu_count();
 }

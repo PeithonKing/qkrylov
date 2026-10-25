@@ -1,16 +1,47 @@
 #ifndef QKRYLOV_C_API_H
 #define QKRYLOV_C_API_H
 
+/* qkrylov C API
+ *
+ * Overview
+ *   - Every object is an opaque handle created by a *_create function and released by the matching
+ *     *_destroy / *_free function. The caller owns what it creates. A Hamiltonian keeps its own shared reference
+ *     to the basis and site and its own copy of the operator sum, so those three handles may be destroyed as soon as
+ *     the Hamiltonian has been created.
+ *   - Functions return QKRYLOV_SUCCESS (0) or a negative QKRYLOV_ERROR_* code; functions that create a handle return
+ *     NULL on failure. The reason is available from qkrylov_get_last_error_message() (thread-local). No C++
+ *     exception ever crosses this interface.
+ *   - Precision: functions with an _fp32 / _fp64 suffix work in single / double precision; the unsuffixed names
+ *     use double precision.
+ *   - Runtime: the Kokkos runtime is started on first use (the first Hamiltonian, or an explicit
+ *     qkrylov_initialize_device() call made before that) and shut down automatically at process exit. If the host
+ *     program already initialised Kokkos, that instance is reused. Do not call Kokkos::finalize() yourself while
+ *     qkrylov handles are alive.
+ *   - Threads: treat a handle as not thread-safe (do not use one handle from several threads at once). The
+ *     last-error message is per thread.
+ *   - Version: compare the QKRYLOV_VERSION_* macros of the header you compiled against with qkrylov_version() of the
+ *     library you loaded.
+ */
 #include <stddef.h>
 #include <stdint.h>
+
+#include "qkrylov/version.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/* Symbol export. Unix: default visibility. Windows DLL: dllexport while building the library
+ * (QKRYLOV_SHARED_BUILD), dllimport when using the shared library (QKRYLOV_SHARED_USE); both are set by CMake. */
 #ifndef QKRYLOV_API
 #if defined(_WIN32) || defined(__CYGWIN__)
+#if defined(QKRYLOV_SHARED_BUILD)
+#define QKRYLOV_API __declspec(dllexport)
+#elif defined(QKRYLOV_SHARED_USE)
+#define QKRYLOV_API __declspec(dllimport)
+#else
 #define QKRYLOV_API
+#endif
 #else
 #define QKRYLOV_API __attribute__((visibility("default")))
 #endif
@@ -27,6 +58,13 @@ extern "C" {
 #define QKRYLOV_PRECISION_FP64         1
 
 /* -----------------------------------------------------------------------------
+ * Version
+ * ----------------------------------------------------------------------------- */
+/* Version of the loaded *library* (compare with QKRYLOV_VERSION_* of the header you compiled against). */
+QKRYLOV_API void        qkrylov_version(int* major, int* minor, int* patch);
+QKRYLOV_API const char* qkrylov_version_string(void);
+
+/* -----------------------------------------------------------------------------
  * Error Diagnostics API
  * ----------------------------------------------------------------------------- */
 /* Returns the last error message caught across the C ABI barrier on the current calling thread.
@@ -41,27 +79,27 @@ QKRYLOV_API void        qkrylov_clear_last_error(void);
  * Opaque Handles
  * ----------------------------------------------------------------------------- */
 /// \brief Opaque handle representing a symmetry sector and quantum number constraints.
-/// <TODO-LLM: Detail C ABI memory management, allocation lifecycle, and sector ownership here>
+/// Created by qkrylov_sector_create, released with qkrylov_sector_destroy. Copied into any basis built from it.
 typedef struct qkrylov_sector_t       qkrylov_sector_t;
 typedef struct qkrylov_sector_t*      qkrylov_sector_h;
 
 /// \brief Opaque handle representing a many-body quantum Fock space basis.
-/// <TODO-LLM: Explain C ABI state index mapping and thread-safety invariants here>
+/// Created by the qkrylov_*_basis_create functions, released with qkrylov_basis_destroy. Not thread-safe.
 typedef struct qkrylov_basis_t        qkrylov_basis_t;
 typedef struct qkrylov_basis_t*       qkrylov_basis_h;
 
 /// \brief Opaque handle representing a local physical site degree of freedom.
-/// <TODO-LLM: Document local site operator evaluation across the C ABI barrier here>
+/// Created by the qkrylov_*_site_create functions, released with qkrylov_site_destroy.
 typedef struct qkrylov_site_t         qkrylov_site_t;
 typedef struct qkrylov_site_t*        qkrylov_site_h;
 
 /// \brief Opaque handle representing a symbolic sum of interaction terms.
-/// <TODO-LLM: Detail serialized operator polynomial transfer across language runtimes here>
+/// A list of interaction terms built with qkrylov_opsum_add_term*; copied into a Hamiltonian when it is created.
 typedef struct qkrylov_opsum_t        qkrylov_opsum_t;
 typedef struct qkrylov_opsum_t*       qkrylov_opsum_h;
 
 /// \brief Opaque handle representing a compiled matrix-free Hamiltonian operator.
-/// <TODO-LLM: Explain C ABI SpMV dispatch, memory alignment, and device execution context here>
+/// Matrix-free operator, tied to the device chosen at creation (see qkrylov_hamiltonian_create_device).
 typedef struct qkrylov_hamiltonian_t  qkrylov_hamiltonian_t;
 typedef struct qkrylov_hamiltonian_t* qkrylov_hamiltonian_h;
 typedef struct qkrylov_device_vector_t  qkrylov_device_vector_t;
