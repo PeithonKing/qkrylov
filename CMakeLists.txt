@@ -192,6 +192,12 @@ elseif(UNIX)
 endif()
 set_target_properties(qkrylov PROPERTIES INSTALL_RPATH_USE_LINK_PATH ON)
 
+# ELF shared library: export only the C API and the qkrylov:: C++ API (see cmake/qkrylov.map).
+if(BUILD_SHARED_LIBS AND UNIX AND NOT APPLE)
+    target_link_options(qkrylov PRIVATE "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/qkrylov.map")
+    set_property(TARGET qkrylov APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/qkrylov.map")
+endif()
+
 # Windows DLLs: export the C API (QKRYLOV_API in c_api.h) when building the shared library, import it when using it.
 if(WIN32 AND BUILD_SHARED_LIBS)
     foreach(t qkrylov_c_api_fp32 qkrylov_c_api_fp64 qkrylov)

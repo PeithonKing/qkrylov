@@ -75,6 +75,30 @@ jobs:
               -DQKRYLOV_BUILD_TESTS=OFF -DQKRYLOV_BUILD_PYTHON=OFF -DCMAKE_INSTALL_PREFIX="$PWD/install"
         cmake --build build -j4
         cmake --install build
+
+    # What a C or C++ user does: find the installed package, link one program of each, run them. This fails if the
+    # shared library stops exporting something the headers need (for example the C++ classes' tables).
+    - name: Link and run a C and a C++ program against the installed library
+      run: |
+        mkdir consumer
+        cp examples/quickstart.c consumer/main.c
+        cp examples/quickstart.cpp consumer/main.cpp
+        cat > consumer/CMakeLists.txt <<'EOF'
+        cmake_minimum_required(VERSION 3.20)
+        project(consumer LANGUAGES C CXX)
+        find_package(qkrylov REQUIRED)
+        add_executable(c_app main.c)
+        target_link_libraries(c_app PRIVATE qkrylov::qkrylov m)
+        add_executable(cpp_app main.cpp)
+        target_link_libraries(cpp_app PRIVATE qkrylov::qkrylov)
+        EOF
+        cmake -S consumer -B consumer/build -DCMAKE_PREFIX_PATH="$PWD/install"
+        cmake --build consumer/build
+        OMP_PROC_BIND=spread ./consumer/build/c_app
+        OMP_PROC_BIND=spread ./consumer/build/cpp_app
+
+    - name: Pack the library
+      run: |
         # one tarball keeps the libqkrylov.so -> libqkrylov.so.X.Y symlinks intact
         tar czf qkrylov-lib.tgz -C install lib
 
