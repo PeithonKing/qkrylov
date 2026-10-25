@@ -270,8 +270,8 @@ sz  = size(H)      # (16, 16)
 
 | Function / Syntax | Arguments | Return Type | Description |
 | :--- | :--- | :--- | :--- |
-| `MatrixFreeHamiltonian(basis, opsum; device="cpu")` | `basis::AbstractBasis`<br>`opsum::OpSum`<br>`device::AbstractString="cpu"` | `MatrixFreeHamiltonian` | **Convenience Constructor**. Automatically infers the matching default `Site` model (`SpinHalfSite`, `FermionSite`, `HubbardSite`, or `TJSite`) from the basis type. Targets specified execution `device` (`"cpu"`, `"cuda:0"`, `"hip"`, etc.). |
-| `MatrixFreeHamiltonian(basis, site, opsum; device="cpu")` | `basis::AbstractBasis`<br>`site::AbstractSite`<br>`opsum::OpSum`<br>`device::AbstractString="cpu"` | `MatrixFreeHamiltonian` | **Explicit Constructor**. Constructs a matrix-free Hamiltonian operator with a specified site model on target `device`. |
+| `MatrixFreeHamiltonian(basis, opsum; device="cpu", dtype=Float64)` | `basis::AbstractBasis`<br>`opsum::OpSum`<br>`device::AbstractString="cpu"`<br>`dtype::Type=Float64` (`Float32` or `Float64`; `precision=` is an alias) | `MatrixFreeHamiltonian` | **Convenience Constructor**. Automatically infers the matching default `Site` model (`SpinHalfSite`, `FermionSite`, `HubbardSite`, or `TJSite`) from the basis type. Targets specified execution `device` (`"cpu"`, `"cuda:0"`, `"hip"`, etc.). |
+| `MatrixFreeHamiltonian(basis, site, opsum; device="cpu", dtype=Float64)` | `basis::AbstractBasis`<br>`site::AbstractSite`<br>`opsum::OpSum`<br>`device::AbstractString="cpu"`<br>`dtype::Type=Float64` (`precision=` is an alias) | `MatrixFreeHamiltonian` | **Explicit Constructor**. Constructs a matrix-free Hamiltonian operator with a specified site model on target `device`. |
 | `H * x` | `H::MatrixFreeHamiltonian`<br>`x::AbstractVector{<:Number}` | `Vector{ComplexF64}` | Performs zero-copy matrix-vector multiplication $y = H \cdot x$ on target device. Length of `x` must equal `dimension(H)`. |
 | `diagonal(H)` | `H::MatrixFreeHamiltonian` | `Vector{Float64}` | Computes and returns matrix-free diagonal elements $H_{ii}$. |
 | `dimension(H)` | `H::MatrixFreeHamiltonian` | `UInt64` | Returns total matrix dimension of `H`. |
@@ -301,8 +301,8 @@ is_conv = res.converged  # true (false if maxiter was hit without meeting tol)
 
 # 2. Compute Ground State Wavefunction (|psi_0>)
 res = lanczos_ground_state(H, return_state=true)
-println(res)            # Outputs: LanczosResult(energy = -2.0, iterations = 14, converged = true, state = Vector{ComplexF64}(dim=6))
-psi0 = res.state         # Vector{ComplexF64} of length dimension(H)
+println(res)            # Outputs: LanczosResult(energy = -2.0, iterations = 14, converged = true, state = Vector{Float64}(dim=6))
+psi0 = res.state         # Vector{Float64} (real Hamiltonian) or Vector{ComplexF64} (complex terms), length dimension(H)
 psi0_vec = res.eigenvector # Alternative alias for wavefunction
 
 # 3. Memory-Frugal Two-Pass Lanczos (saves only 3 working vectors in RAM)
@@ -310,6 +310,15 @@ res_tp = lanczos_ground_state(H, return_state=true, two_pass=true)
 
 # 4. Tuple Destructuring Support
 E0, psi0 = lanczos_ground_state(H, return_state=true)
+
+# 5. Fixed work for benchmarking: exactly 100 iterations, no early exit
+res_fixed = lanczos_ground_state(H, maxiter=100, early_stopping=false)
+
+# 6. SciML-style, with the algorithm object
+sol = solve(GroundStateProblem(H), Lanczos(variation=TwoPass(), maxiter=300, tol=1e-10, return_state=true))
+
+# isreal(H) tells you whether you get real or complex states back
+isreal(H)
 ```
 
 #### `lanczos_ground_state` Parameters & Result API
@@ -320,10 +329,11 @@ E0, psi0 = lanczos_ground_state(H, return_state=true)
 | `tol` | `Real` | `1e-12` | Energy convergence tolerance. |
 | `return_state` | `Bool` | `false` | When `true`, computes and stores ground state wavefunction. |
 | `two_pass` | `Bool` | `false` | When `true`, uses a memory-frugal two-pass Lanczos algorithm that requires only 3 working vectors in RAM, reconstructing the Ritz eigenvector on-the-fly in a second pass. |
+| `early_stopping` | `Bool` | `true` | When `false`, runs exactly `maxiter` iterations (only an exhausted Krylov space ends it sooner). With `return_state=false` the solve is energy-only: one pass, three vectors, no eigenvector copy. |
 | `res.energy` | `Float64` | - | Ground state energy eigenvalue. |
 | `res.iterations` | `Int` | - | Total number of Lanczos iterations executed. |
 | `res.converged` | `Bool` | - | `true` if tolerance `tol` was achieved, `false` if `maxiter` was hit. |
-| `res.state` / `res.eigenvector` | `Vector{ComplexF64}` | - | Ground state eigenvector (raises Error if `return_state=false`). |
+| `res.state` / `res.eigenvector` | `Vector{Float64}` if `isreal(H)`, else `Vector{ComplexF64}` (`Float32` / `ComplexF32` for single precision) | - | Ground state eigenvector (raises Error if `return_state=false`). |
 
 ---
 

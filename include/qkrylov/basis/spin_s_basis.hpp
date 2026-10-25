@@ -32,6 +32,7 @@ public:
     Index index(StateID s) const override;
 
     bool contains(StateID s) const override;
+    const std::vector<StateID>* state_list() const override { return &states_; }
 
     int nsites() const noexcept { return N_; }
     double spin() const noexcept { return S_; }

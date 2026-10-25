@@ -1,6 +1,7 @@
 #include "qkrylov/operators/opsum.hpp"
 #include "qkrylov/core/types.hpp"
 #include "qkrylov/sites/tj_site.hpp"
+#include "qkrylov/sites/bitwise_compiler.hpp"
 
 #include <stdexcept>
 #include <bit>
@@ -114,84 +115,19 @@ LocalAction TJSite::apply(
 }
 
 std::vector<Instruction> TJSite::compile(const OperatorTerm& term) const {
-    std::vector<Instruction> insts;
-    insts.push_back({0, 0, 0, 0, term.coeff});
-
-    for (const auto& factor : term.factors) {
-        std::vector<Instruction> next_insts;
-        for (auto inst : insts) {
-            uint64_t up_bit = 1ULL << (2 * factor.site);
-            uint64_t dn_bit = 1ULL << (2 * factor.site + 1);
-            
-            if (factor.op == "Nup") {
-                if (inst.check_mask & up_bit) {
-                    if (!(inst.expected_bits & up_bit)) continue;
-                }
-                inst.check_mask |= up_bit;
-                inst.expected_bits |= up_bit;
-                next_insts.push_back(inst);
-            }
-            else if (factor.op == "Ndn") {
-                if (inst.check_mask & dn_bit) {
-                    if (!(inst.expected_bits & dn_bit)) continue;
-                }
-                inst.check_mask |= dn_bit;
-                inst.expected_bits |= dn_bit;
-                next_insts.push_back(inst);
-            }
-            else if (factor.op == "CUp") {
-                if (inst.check_mask & up_bit) {
-                    if (!(inst.expected_bits & up_bit)) continue;
-                }
-                inst.check_mask |= up_bit;
-                inst.expected_bits |= up_bit;
-                inst.flip_mask ^= up_bit;
-                inst.sign_mask ^= (up_bit - 1);
-                next_insts.push_back(inst);
-            }
-            else if (factor.op == "CdagUp") {
-                if (inst.check_mask & up_bit) {
-                    if (inst.expected_bits & up_bit) continue;
-                }
-                if (inst.check_mask & dn_bit) {
-                    if (inst.expected_bits & dn_bit) continue;
-                }
-                inst.check_mask |= (up_bit | dn_bit);
-                inst.expected_bits &= ~(up_bit | dn_bit);
-                inst.flip_mask ^= up_bit;
-                inst.sign_mask ^= (up_bit - 1);
-                next_insts.push_back(inst);
-            }
-            else if (factor.op == "CDn") {
-                if (inst.check_mask & dn_bit) {
-                    if (!(inst.expected_bits & dn_bit)) continue;
-                }
-                inst.check_mask |= dn_bit;
-                inst.expected_bits |= dn_bit;
-                inst.flip_mask ^= dn_bit;
-                inst.sign_mask ^= (dn_bit - 1);
-                next_insts.push_back(inst);
-            }
-            else if (factor.op == "CdagDn") {
-                if (inst.check_mask & dn_bit) {
-                    if (inst.expected_bits & dn_bit) continue;
-                }
-                if (inst.check_mask & up_bit) {
-                    if (inst.expected_bits & up_bit) continue;
-                }
-                inst.check_mask |= (up_bit | dn_bit);
-                inst.expected_bits &= ~(up_bit | dn_bit);
-                inst.flip_mask ^= dn_bit;
-                inst.sign_mask ^= (dn_bit - 1);
-                next_insts.push_back(inst);
-            }
-            else {
-                throw std::runtime_error("Unknown TJ operator: " + factor.op);
-            }
-        }
-        insts = std::move(next_insts);
-    }
-    return insts;
+    using detail::BitPrimitive;
+    return detail::compile_bitwise(term, [](const OperatorFactor& f, std::vector<BitPrimitive>& out) {
+        // Same mode ordering as Hubbard; creation is projected (no double occupancy).
+        const uint64_t up = 1ULL << (2 * f.site);
+        const uint64_t dn = 1ULL << (2 * f.site + 1);
+        if      (f.op == "Nup")    out.push_back(BitPrimitive::diag(up, 0.0, 1.0));
+        else if (f.op == "Ndn")    out.push_back(BitPrimitive::diag(dn, 0.0, 1.0));
+        else if (f.op == "CUp")    out.push_back(BitPrimitive::lower(up, 1.0, up - 1));
+        else if (f.op == "CdagUp") out.push_back(BitPrimitive::raise(up, 1.0, up - 1, dn));
+        else if (f.op == "CDn")    out.push_back(BitPrimitive::lower(dn, 1.0, dn - 1));
+        else if (f.op == "CdagDn") out.push_back(BitPrimitive::raise(dn, 1.0, dn - 1, up));
+        else throw std::runtime_error("Unknown TJ operator: " + f.op);
+    });
 }
 
 }

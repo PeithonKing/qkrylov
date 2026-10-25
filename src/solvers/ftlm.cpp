@@ -29,7 +29,7 @@ std::vector<FTLMKrylovSample> ftlm_sample(
     std::normal_distribution<Real> dist(Real(0.0), Real(1.0));
 
     const Real mach_eps = std::numeric_limits<Real>::epsilon() * Real(4.0);
-    const int max_steps = std::min<int>(n_steps, static_cast<int>(dim));
+    const int max_steps = clamp_to_dim(n_steps, dim);
 
     std::vector<FTLMKrylovSample> samples(n_random);
 
@@ -340,7 +340,7 @@ FTLMSweepResult ftlm_sweep_streamed(
     const size_t R = static_cast<size_t>(n_random);
     const size_t num_betas = beta_grid.size();
     const size_t num_obs = observables.size();
-    const int max_steps = std::min<int>(n_steps, static_cast<int>(dim));
+    const int max_steps = clamp_to_dim(n_steps, dim);
     const Real mach_eps = std::numeric_limits<Real>::epsilon() * Real(4.0);
     const Real max_exp = (sizeof(Real) > 4) ? Real(700.0) : Real(85.0);
 

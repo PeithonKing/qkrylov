@@ -1,0 +1,71 @@
+--- Benchmarking L=20 on aarch64 (4 cores), OMP_PROC_BIND=spread OMP_NUM_THREADS=4 ---
+
+Running: --precision 32 --passes 1 --device cpu -L 20
+--- QKrylov Benchmark ---
+L=20 | 32-bit | 1-pass | CPU
+Warming up...
+Run 1/5...Run 2/5...Run 3/5...Run 4/5...Run 5/5...
+
+Step                 | Mean (ms)       | Std (ms)       
+-------------------------------------------------------
+1_basis              | 4.243           | 0.037          
+2_hamiltonian        | 10.528          | 0.132          
+3_solver_setup       | 0.009           | 0.001          
+4_execution          | 256.006         | 3.977          
+energy               | -8.9043779373
+iterations           | 39
+ms / iteration       | 6.564
+dimension            | 184,756
+------------------------------------------------
+Running: --precision 32 --passes 2 --device cpu -L 20
+--- QKrylov Benchmark ---
+L=20 | 32-bit | 2-pass | CPU
+Warming up...
+Run 1/5...Run 2/5...Run 3/5...Run 4/5...Run 5/5...
+
+Step                 | Mean (ms)       | Std (ms)       
+-------------------------------------------------------
+1_basis              | 4.268           | 0.097          
+2_hamiltonian        | 10.478          | 0.105          
+3_solver_setup       | 0.009           | 0.003          
+4_execution          | 489.527         | 13.835         
+energy               | -8.9043779373
+iterations           | 39
+ms / iteration       | 12.552
+dimension            | 184,756
+------------------------------------------------
+Running: --precision 64 --passes 1 --device cpu -L 20
+--- QKrylov Benchmark ---
+L=20 | 64-bit | 1-pass | CPU
+Warming up...
+Run 1/5...Run 2/5...Run 3/5...Run 4/5...Run 5/5...
+
+Step                 | Mean (ms)       | Std (ms)       
+-------------------------------------------------------
+1_basis              | 4.230           | 0.057          
+2_hamiltonian        | 15.737          | 1.854          
+3_solver_setup       | 0.009           | 0.000          
+4_execution          | 360.600         | 4.837          
+energy               | -8.9043865262
+iterations           | 48
+ms / iteration       | 7.512
+dimension            | 184,756
+------------------------------------------------
+Running: --precision 64 --passes 2 --device cpu -L 20
+--- QKrylov Benchmark ---
+L=20 | 64-bit | 2-pass | CPU
+Warming up...
+Run 1/5...Run 2/5...Run 3/5...Run 4/5...Run 5/5...
+
+Step                 | Mean (ms)       | Std (ms)       
+-------------------------------------------------------
+1_basis              | 4.219           | 0.017          
+2_hamiltonian        | 14.896          | 0.042          
+3_solver_setup       | 0.009           | 0.000          
+4_execution          | 712.705         | 12.359         
+energy               | -8.9043865262
+iterations           | 48
+ms / iteration       | 14.848
+dimension            | 184,756
+------------------------------------------------
+commit 2e4d86a

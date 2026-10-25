@@ -104,31 +104,50 @@ static void bind_backend(nb::module_& m, const std::string& suffix, const std::s
             return vec_to_numpy(std::move(y_vec));
         })
         .def("dimension", &HType::dimension)
+        .def("has_real_coefficients", &HType::has_real_coefficients)
         .def("diagonal", [](const HType& H) {
             return vec_to_numpy(H.diagonal_host());
         });
 
     std::string lgs_name = "lanczos_ground_state_" + suffix + type_suffix;
     m.def(lgs_name.c_str(),
-        [](const HType& H, int maxiter, Real tol) -> nb::tuple {
+        [](const HType& H, int maxiter, Real tol, bool early_stopping, bool return_state) -> nb::tuple {
             LanczosConfig cfg;
             cfg.maxiter = maxiter;
             cfg.tol = tol;
+            cfg.early_stopping = early_stopping;
+            cfg.real_output = true;   // real H -> real eigenvector without a complex staging copy
+            if (!return_state) {      // energy only: 3 vectors, one pass, no eigenvector at all
+                auto res = solvers::lanczos<solvers::policy::OnePass>(H, cfg);
+                return nb::make_tuple(res.energy, nb::none(), res.iterations, res.converged);
+            }
             auto res = solvers::lanczos<solvers::policy::OnePass_full>(H, cfg);
-            return nb::make_tuple(res.energy, vec_to_numpy(std::move(res.eigenvector)));
+            nb::object vec = res.eigenvector_real.empty()
+                ? nb::cast(vec_to_numpy(std::move(res.eigenvector)))
+                : nb::cast(dvec_to_numpy(std::move(res.eigenvector_real)));
+            return nb::make_tuple(res.energy, vec, res.iterations, res.converged);
         },
-        "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12);
+        "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12, "early_stopping"_a = true, "return_state"_a = true);
 
     std::string ltp_name = "lanczos_two_pass_" + suffix + type_suffix;
     m.def(ltp_name.c_str(),
-        [](const HType& H, int maxiter, Real tol) -> nb::tuple {
+        [](const HType& H, int maxiter, Real tol, bool early_stopping, bool return_state) -> nb::tuple {
             LanczosConfig cfg;
             cfg.maxiter = maxiter;
             cfg.tol = tol;
+            cfg.early_stopping = early_stopping;
+            cfg.real_output = true;   // real H -> real eigenvector without a complex staging copy
+            if (!return_state) {      // energy only: 3 vectors, one pass, no eigenvector at all
+                auto res = solvers::lanczos<solvers::policy::OnePass>(H, cfg);
+                return nb::make_tuple(res.energy, nb::none(), res.iterations, res.converged);
+            }
             auto res = solvers::lanczos<solvers::policy::TwoPass>(H, cfg);
-            return nb::make_tuple(res.energy, vec_to_numpy(std::move(res.eigenvector)));
+            nb::object vec = res.eigenvector_real.empty()
+                ? nb::cast(vec_to_numpy(std::move(res.eigenvector)))
+                : nb::cast(dvec_to_numpy(std::move(res.eigenvector_real)));
+            return nb::make_tuple(res.energy, vec, res.iterations, res.converged);
         },
-        "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12);
+        "H"_a, "maxiter"_a = 200, "tol"_a = 1e-12, "early_stopping"_a = true, "return_state"_a = true);
 
     std::string dav_name = "davidson_lowest_" + suffix + type_suffix;
     m.def(dav_name.c_str(), &davidson_lowest<ExecSpace>,

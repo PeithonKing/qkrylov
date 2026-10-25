@@ -38,10 +38,9 @@ class Basis:
 
     Notes
     -----
-    States are stored as packed integers (one integer per basis state),
-    sorted lexicographically for O(log N) binary search. The C++ backend
-    exposes them as a raw device pointer — Python wraps this as a zero-copy
-    ``np.ndarray`` view with no data duplication.
+    A basis state is a packed integer bit pattern, ordered by increasing value. A single
+    spin-1/2 sector with fixed Sz is only a description (size, ``state(i)`` and ``index(s)`` come from
+    closed formulas); the Hamiltonian generates the states it needs on its own device.
     """
     _cpp_obj: Any
     
@@ -57,6 +56,31 @@ class Basis:
     def nsites(self) -> int:
         """The number of sites in this basis."""
         return self._cpp_obj.nsites()
+
+    def state(self, index: int) -> int:
+        """The basis state number ``index`` as an integer bit pattern (bit k = site k).
+
+        Computed on demand; a single-sector spin-1/2 basis answers from a formula, so this is cheap
+        even when the basis has billions of states. States are ordered by increasing integer value.
+        """
+        return int(self._call_cpp("state", index))
+
+    def index(self, state: int) -> int:
+        """Position of the bit pattern ``state`` in the basis (inverse of :meth:`state`).
+
+        Raises ``RuntimeError`` if the state is not part of this basis.
+        """
+        return int(self._call_cpp("index", state))
+
+    def contains(self, state: int) -> bool:
+        """Whether the bit pattern ``state`` belongs to this basis (right particle number / Sz)."""
+        return bool(self._call_cpp("contains", state))
+
+    def _call_cpp(self, name: str, arg: int):
+        fn = getattr(self._cpp_obj, name, None)
+        if fn is None:
+            raise NotImplementedError(f"{type(self).__name__} does not support {name}() yet")
+        return fn(arg)
 
 def _build_sector(
     dtype: Any,
@@ -105,8 +129,7 @@ def _build_sector(
     Any
         Constructed C++ Sector object.
     """
-    suffix = "_FP64" if dtype == np.float64 else "_FP32"
-    sec = getattr(_cpp, f"Sector{suffix}")()
+    sec = getattr(_cpp, "Sector")()
     if conserve_sz or sz != 0:
         sec.use_sz = True
         sec.sz2 = int(round(sz * 2))  # C++ uses 2*Sz
@@ -154,14 +177,13 @@ class SpinHalfBasis(Basis):
     this to a rank in O(1). Total query time: O(log N).
     """
     
-    def __init__(self, N: int, sz: Optional[Union[float, List[float]]] = None, dtype: Any = np.float64):
-        suffix = "_FP64" if dtype == np.float64 else "_FP32"
-        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, f"Sector{suffix}")()
+    def __init__(self, N: int, sz: Optional[Union[float, List[float]]] = None):
+        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, "Sector")()
         
         if sz is not None:
             sec.sz = _to_list(sz, float)
             
-        self._cpp_obj = getattr(_cpp, "SpinHalfBasis")(N, sec) if hasattr(_cpp, "SpinHalfBasis") else getattr(_cpp, f"SpinHalfBasis{suffix}")(N, sec)
+        self._cpp_obj = getattr(_cpp, "SpinHalfBasis")(N, sec) if hasattr(_cpp, "SpinHalfBasis") else getattr(_cpp, SpinHalfBasis)(N, sec)
         self._conserve_sz = (sz is not None)
         self._sz = sz
 
@@ -211,16 +233,14 @@ class SpinSBasis(Basis):
         self,
         N: int,
         S: float = 0.5,
-        sz: Optional[Union[float, List[float]]] = None,
-        dtype: Any = np.float64
+        sz: Optional[Union[float, List[float]]] = None
     ):
-        suffix = "_FP64" if dtype == np.float64 else "_FP32"
-        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, f"Sector{suffix}")()
+        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, "Sector")()
         
         if sz is not None:
             sec.sz = _to_list(sz, float)
 
-        self._cpp_obj = getattr(_cpp, "SpinSBasis")(N, float(S), sec) if hasattr(_cpp, "SpinSBasis") else getattr(_cpp, f"SpinSBasis{suffix}")(N, float(S), sec)
+        self._cpp_obj = getattr(_cpp, "SpinSBasis")(N, float(S), sec) if hasattr(_cpp, "SpinSBasis") else getattr(_cpp, SpinSBasis)(N, float(S), sec)
         self._S = float(S)
         self._conserve_sz = (sz is not None)
         self._sz = sz
@@ -272,14 +292,13 @@ class FermionBasis(Basis):
     dtype : Any, default=np.float32
         Precision type.
     """
-    def __init__(self, N: int, n: Optional[Union[int, List[int]]] = None, dtype: Any = np.float64):
-        suffix = "_FP64" if dtype == np.float64 else "_FP32"
-        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, f"Sector{suffix}")()
+    def __init__(self, N: int, n: Optional[Union[int, List[int]]] = None):
+        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, "Sector")()
         
         if n is not None:
             sec.n = _to_list(n, int)
 
-        self._cpp_obj = getattr(_cpp, "FermionBasis")(N, sec) if hasattr(_cpp, "FermionBasis") else getattr(_cpp, f"FermionBasis{suffix}")(N, sec)
+        self._cpp_obj = getattr(_cpp, "FermionBasis")(N, sec) if hasattr(_cpp, "FermionBasis") else getattr(_cpp, FermionBasis)(N, sec)
         self._conserve_n = (n is not None)
         self._n = n
 
@@ -314,16 +333,15 @@ class HubbardBasis(Basis):
         Precision type.
     """
     def __init__(self, N: int, nup: Optional[Union[int, List[int]]] = None, 
-                 ndn: Optional[Union[int, List[int]]] = None, dtype: Any = np.float64):
-        suffix = "_FP64" if dtype == np.float64 else "_FP32"
-        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, f"Sector{suffix}")()
+                 ndn: Optional[Union[int, List[int]]] = None):
+        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, "Sector")()
         
         if nup is not None:
             sec.nup = _to_list(nup, int)
         if ndn is not None:
             sec.ndn = _to_list(ndn, int)
 
-        self._cpp_obj = getattr(_cpp, "HubbardBasis")(N, sec) if hasattr(_cpp, "HubbardBasis") else getattr(_cpp, f"HubbardBasis{suffix}")(N, sec)
+        self._cpp_obj = getattr(_cpp, "HubbardBasis")(N, sec) if hasattr(_cpp, "HubbardBasis") else getattr(_cpp, HubbardBasis)(N, sec)
         self._conserve_nup = (nup is not None)
         self._conserve_ndn = (ndn is not None)
         self._nup = nup
@@ -363,16 +381,15 @@ class TJBasis(Basis):
         Precision type.
     """
     def __init__(self, N: int, nup: Optional[Union[int, List[int]]] = None, 
-                 ndn: Optional[Union[int, List[int]]] = None, dtype: Any = np.float64):
-        suffix = "_FP64" if dtype == np.float64 else "_FP32"
-        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, f"Sector{suffix}")()
+                 ndn: Optional[Union[int, List[int]]] = None):
+        sec = getattr(_cpp, "Sector")() if hasattr(_cpp, "Sector") else getattr(_cpp, "Sector")()
         
         if nup is not None:
             sec.nup = _to_list(nup, int)
         if ndn is not None:
             sec.ndn = _to_list(ndn, int)
 
-        self._cpp_obj = getattr(_cpp, "TJBasis")(N, sec) if hasattr(_cpp, "TJBasis") else getattr(_cpp, f"TJBasis{suffix}")(N, sec)
+        self._cpp_obj = getattr(_cpp, "TJBasis")(N, sec) if hasattr(_cpp, "TJBasis") else getattr(_cpp, TJBasis)(N, sec)
         self._conserve_nup = (nup is not None)
         self._conserve_ndn = (ndn is not None)
         self._nup = nup

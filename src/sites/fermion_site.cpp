@@ -1,6 +1,7 @@
 #include "qkrylov/operators/opsum.hpp"
 #include "qkrylov/core/types.hpp"
 #include "qkrylov/sites/fermion_site.hpp"
+#include "qkrylov/sites/bitwise_compiler.hpp"
 
 #include <stdexcept>
 #include <bit>
@@ -85,52 +86,16 @@ LocalAction FermionSite::apply(
 }
 
 std::vector<Instruction> FermionSite::compile(const OperatorTerm& term) const {
-    std::vector<Instruction> insts;
-    insts.push_back({0, 0, 0, 0, term.coeff});
-
-    for (const auto& factor : term.factors) {
-        std::vector<Instruction> next_insts;
-        for (auto inst : insts) {
-            uint64_t bit = 1ULL << factor.site;
-            
-            if (factor.op == "N") {
-                if (inst.check_mask & bit) {
-                    if (!(inst.expected_bits & bit)) continue;
-                }
-                inst.check_mask |= bit;
-                inst.expected_bits |= bit;
-                next_insts.push_back(inst);
-            }
-            else if (factor.op == "Id") {
-                next_insts.push_back(inst);
-            }
-            else if (factor.op == "C") {
-                if (inst.check_mask & bit) {
-                    if (!(inst.expected_bits & bit)) continue;
-                }
-                inst.check_mask |= bit;
-                inst.expected_bits |= bit;
-                inst.flip_mask ^= bit;
-                inst.sign_mask ^= ((1ULL << factor.site) - 1);
-                next_insts.push_back(inst);
-            }
-            else if (factor.op == "Cdag") {
-                if (inst.check_mask & bit) {
-                    if (inst.expected_bits & bit) continue;
-                }
-                inst.check_mask |= bit;
-                inst.expected_bits &= ~bit;
-                inst.flip_mask ^= bit;
-                inst.sign_mask ^= ((1ULL << factor.site) - 1);
-                next_insts.push_back(inst);
-            }
-            else {
-                throw std::runtime_error("Unknown fermion operator: " + factor.op);
-            }
-        }
-        insts = std::move(next_insts);
-    }
-    return insts;
+    using detail::BitPrimitive;
+    return detail::compile_bitwise(term, [](const OperatorFactor& f, std::vector<BitPrimitive>& out) {
+        const uint64_t bit = 1ULL << f.site;
+        const uint64_t jw  = bit - 1; // Jordan-Wigner string: all modes below this one
+        if      (f.op == "N")    out.push_back(BitPrimitive::diag(bit, 0.0, 1.0));
+        else if (f.op == "Id")   {}
+        else if (f.op == "C")    out.push_back(BitPrimitive::lower(bit, 1.0, jw));
+        else if (f.op == "Cdag") out.push_back(BitPrimitive::raise(bit, 1.0, jw));
+        else throw std::runtime_error("Unknown fermion operator: " + f.op);
+    });
 }
 
 }

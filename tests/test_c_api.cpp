@@ -184,9 +184,9 @@ int main() {
     assert(qkrylov_site_apply(site, "Sx", 0, 0ULL, &act) == QKRYLOV_SUCCESS);
     assert(act.valid == 1 && act.new_state == 1ULL && std::abs(act.matrix_element_re - 0.5) < 1e-12);
 
-    // Sy on |0> -> |1> with element +0.5i
+    // Sy on |0> -> |1> with element -0.5i (Sy = (Sp - Sm)/2i, so [Sx,Sy] = +i Sz)
     assert(qkrylov_site_apply(site, "Sy", 0, 0ULL, &act) == QKRYLOV_SUCCESS);
-    assert(act.valid == 1 && act.new_state == 1ULL && std::abs(act.matrix_element_im - 0.5) < 1e-12);
+    assert(act.valid == 1 && act.new_state == 1ULL && std::abs(act.matrix_element_im + 0.5) < 1e-12);
 
     // Invalid operator on Site::apply
     assert(qkrylov_site_apply(site, "UNKNOWN_OP", 0, 0ULL, &act) == QKRYLOV_ERROR_EXCEPTION);
@@ -333,6 +333,118 @@ int main() {
     assert(tp_status == QKRYLOV_SUCCESS);
     assert(tp_res.converged == 1);
     assert(std::abs(tp_res.energy - lanczos_res.energy) < 1e-10);
+
+    // ---- Unified qkrylov_lanczos_solve (config struct) ----
+    assert(qkrylov_hamiltonian_is_real(H) == 1);
+    qkrylov_lanczos_config_t ucfg;
+    qkrylov_lanczos_config_default(&ucfg);
+    assert(ucfg.maxiter == 200 && ucfg.early_stopping == 1 && ucfg.policy == QKRYLOV_LANCZOS_TWO_PASS && ucfg.real_output == 1);
+    ucfg.tol = 1e-12;
+
+    // two-pass, real Hamiltonian -> N reals
+    qkrylov_lanczos_result_c_t ures;
+    std::vector<double> upsi(dim);
+    assert(qkrylov_lanczos_solve(H, &ucfg, &ures, upsi.data()) == QKRYLOV_SUCCESS);
+    assert(std::abs(ures.energy - (-1.6160254037844386)) < 1e-10 && ures.converged == 1);
+    double unorm = 0.0, ures_resid = 0.0;
+    for (size_t i = 0; i < dim; ++i) unorm += upsi[i] * upsi[i];
+    assert(std::abs(unorm - 1.0) < 1e-12);
+    // matches the legacy complex-output solver up to a global sign
+    double ov = 0.0;
+    for (size_t i = 0; i < dim; ++i) ov += upsi[i] * psi_cx[i].real();
+    assert(std::abs(std::abs(ov) - 1.0) < 1e-8);
+    (void)ures_resid;
+
+    // real_output = 0 -> interleaved complex (2N values)
+    ucfg.real_output = 0;
+    std::vector<double> upsi_cx(2 * dim, 0.0);
+    assert(qkrylov_lanczos_solve(H, &ucfg, &ures, upsi_cx.data()) == QKRYLOV_SUCCESS);
+    double cnorm = 0.0;
+    for (size_t i = 0; i < 2 * dim; ++i) cnorm += upsi_cx[i] * upsi_cx[i];
+    assert(std::abs(cnorm - 1.0) < 1e-12);
+    ucfg.real_output = 1;
+
+    // one-pass (stores the basis)
+    ucfg.policy = QKRYLOV_LANCZOS_ONE_PASS;
+    std::vector<double> upsi1(dim);
+    assert(qkrylov_lanczos_solve(H, &ucfg, &ures, upsi1.data()) == QKRYLOV_SUCCESS);
+    assert(std::abs(ures.energy - (-1.6160254037844386)) < 1e-10);
+
+    // energy only: no vector written even if a buffer is given
+    ucfg.policy = QKRYLOV_LANCZOS_ENERGY_ONLY;
+    std::vector<double> untouched(dim, 7.0);
+    assert(qkrylov_lanczos_solve(H, &ucfg, &ures, untouched.data()) == QKRYLOV_SUCCESS);
+    assert(untouched[0] == 7.0 && std::abs(ures.energy - (-1.6160254037844386)) < 1e-10);
+    assert(qkrylov_lanczos_solve(H, &ucfg, &ures, nullptr) == QKRYLOV_SUCCESS);
+
+    // early_stopping = 0 runs exactly maxiter steps (dim = 6, so use 5)
+    ucfg.maxiter = 5;
+    ucfg.early_stopping = 0;
+    assert(qkrylov_lanczos_solve(H, &ucfg, &ures, nullptr) == QKRYLOV_SUCCESS);
+    assert(ures.iterations == 5);
+    ucfg.early_stopping = 1;
+    assert(qkrylov_lanczos_solve(H, &ucfg, &ures, nullptr) == QKRYLOV_SUCCESS);
+    assert(ures.iterations <= 5);
+
+    // ---- Device selection per Hamiltonian ----
+    {
+        const bool gpu_build = qkrylov_is_gpu_build() != 0;
+        const std::string gpu_name = gpu_build ? qkrylov_find_gpu() : "";
+        // default create and "auto" mean the build's default device; "cpu" always means the host
+        assert(std::string(qkrylov_hamiltonian_device(H)) == (gpu_build ? gpu_name : "cpu"));
+        qkrylov_hamiltonian_h H_cpu = qkrylov_hamiltonian_create_device(basis, site, opsum, "cpu");
+        assert(H_cpu && std::string(qkrylov_hamiltonian_device(H_cpu)) == "cpu");
+        qkrylov_hamiltonian_h H_auto = qkrylov_hamiltonian_create_device(basis, site, opsum, "auto");
+        assert(H_auto && std::string(qkrylov_hamiltonian_device(H_auto)) == (gpu_build ? gpu_name : "cpu"));
+        qkrylov_hamiltonian_h H_null_dev = qkrylov_hamiltonian_create_device(basis, site, opsum, nullptr);
+        assert(H_null_dev);   // NULL device string = "auto"
+
+        // impossible requests fail loudly instead of silently running somewhere else
+        assert(qkrylov_hamiltonian_create_device(basis, site, opsum, "bogus") == nullptr);
+        assert(!std::string(qkrylov_get_last_error_message()).empty());
+        qkrylov_clear_last_error();
+        if (!gpu_build) {
+            for (const char* d : {"gpu", "cuda", "hip", "sycl"}) {
+                assert(qkrylov_hamiltonian_create_device(basis, site, opsum, d) == nullptr);
+            }
+            qkrylov_clear_last_error();
+        } else {
+            // a GPU build serves exactly one backend; the other two are errors
+            for (const char* d : {"cuda", "hip", "sycl"}) {
+                const bool mine = gpu_name.find(d) != std::string::npos;
+                qkrylov_hamiltonian_h Hd = qkrylov_hamiltonian_create_device(basis, site, opsum, d);
+                assert((Hd != nullptr) == mine);
+                if (Hd) qkrylov_hamiltonian_destroy(Hd);
+            }
+            qkrylov_clear_last_error();
+            // one library, both devices: same physics, and mixing devices in one call is rejected
+            qkrylov_hamiltonian_h H_gpu = qkrylov_hamiltonian_create_device(basis, site, opsum, "gpu");
+            assert(H_gpu && std::string(qkrylov_hamiltonian_device(H_gpu)) == gpu_name);
+            qkrylov_lanczos_config_t dcfg; qkrylov_lanczos_config_default(&dcfg);
+            dcfg.tol = 1e-12; dcfg.policy = QKRYLOV_LANCZOS_ENERGY_ONLY;
+            qkrylov_lanczos_result_c_t r_cpu, r_gpu;
+            assert(qkrylov_lanczos_solve(H_cpu, &dcfg, &r_cpu, nullptr) == QKRYLOV_SUCCESS);
+            assert(qkrylov_lanczos_solve(H_gpu, &dcfg, &r_gpu, nullptr) == QKRYLOV_SUCCESS);
+            assert(std::abs(r_cpu.energy - r_gpu.energy) < 1e-9);
+            qkrylov_hamiltonian_destroy(H_gpu);
+        }
+        qkrylov_hamiltonian_destroy(H_cpu);
+        qkrylov_hamiltonian_destroy(H_auto);
+        qkrylov_hamiltonian_destroy(H_null_dev);
+        assert(qkrylov_hamiltonian_device(nullptr) == nullptr);
+        qkrylov_clear_last_error();
+    }
+
+    // argument checks
+    ucfg.maxiter = 0;
+    assert(qkrylov_lanczos_solve(H, &ucfg, &ures, nullptr) == QKRYLOV_ERROR_INVALID_ARG);
+    ucfg.maxiter = 200;
+    ucfg.policy = 99;
+    assert(qkrylov_lanczos_solve(H, &ucfg, &ures, nullptr) == QKRYLOV_ERROR_INVALID_ARG);
+    assert(qkrylov_lanczos_solve(nullptr, &ucfg, &ures, nullptr) == QKRYLOV_ERROR_INVALID_ARG);
+    assert(qkrylov_lanczos_solve(H, nullptr, &ures, nullptr) == QKRYLOV_ERROR_INVALID_ARG);
+    assert(qkrylov_hamiltonian_is_real(nullptr) == -1);
+    qkrylov_clear_last_error();
 
     // Verify eigenvector normalization: ||psi||^2 == 1.0
     double norm_sq = 0.0;
@@ -496,6 +608,22 @@ int main() {
     assert(tp_status32 == QKRYLOV_SUCCESS);
     assert(tp_res32.converged == 1 || tp_res32.iterations == static_cast<int>(dim));
     assert(std::abs(tp_res32.energy - (-1.6160254038f)) < 1e-4f);
+
+    // Unified solve (FP32): real vector, precision-matched pointer
+    assert(qkrylov_hamiltonian_is_real(H32) == 1 && qkrylov_hamiltonian_is_real_fp32(H32) == 1);
+    qkrylov_lanczos_config_t ucfg32;
+    qkrylov_lanczos_config_default(&ucfg32);
+    ucfg32.tol = 1e-5;
+    qkrylov_lanczos_result_fp32_t ures32;
+    std::vector<float> upsi32(dim);
+    assert(qkrylov_lanczos_solve_fp32(H32, &ucfg32, &ures32, upsi32.data()) == QKRYLOV_SUCCESS);
+    assert(std::abs(ures32.energy - (-1.6160254038f)) < 1e-4f);
+    float unorm32 = 0.0f;
+    for (size_t i = 0; i < dim; ++i) unorm32 += upsi32[i] * upsi32[i];
+    assert(std::abs(unorm32 - 1.0f) < 1e-4f);
+    // precision mismatch is rejected
+    assert(qkrylov_lanczos_solve_fp64(H32, &ucfg32, nullptr, nullptr) == QKRYLOV_ERROR_INVALID_ARG);
+    qkrylov_clear_last_error();
 
     // Test Davidson Lowest (FP32)
     std::vector<float> dav_evals32(n_eig);

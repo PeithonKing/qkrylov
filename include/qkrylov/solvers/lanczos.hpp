@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 
 #include "qkrylov/core/types.hpp"
 #include "qkrylov/linalg/vector_ops.hpp"
@@ -28,6 +29,21 @@ struct LanczosConfig
     Real breakdown_tol = Real(0.0);              // Invariant subspace breakdown tolerance (0 => 4 * eps)
     std::optional<uint64_t> seed = std::nullopt; // Deterministic PRNG seed (default: 123456789ULL)
     HostVector initial_vector = {};              // Warm-starting trial vector
+    // true: stop as soon as the Ritz values converge (default). false: always run maxiter steps
+    // (or until the Krylov space is exhausted) -- for fixed-work benchmarks and profiling.
+    bool early_stopping = true;
+
+    // For a real Hamiltonian, return the ground state in LanczosResult::eigenvector_real (one device ->
+    // host copy, 1x the vector size) instead of a complex eigenvector (2x, plus a duplicate in
+    // eigenvectors). Ignored for complex Hamiltonians. Default false keeps the old behaviour.
+    bool real_output = false;
+
+    // Optional caller-owned destination for the ground state. When one is set the vector is copied
+    // there exactly once (device -> caller memory, no intermediate host vector) and the result's
+    // eigenvector / eigenvector_real / eigenvectors stay empty. Sizes: N reals, or N complex numbers.
+    // The real pointer is used for real Hamiltonians, the complex one for complex Hamiltonians.
+    Real*    eigenvector_real_out    = nullptr;
+    Complex* eigenvector_complex_out = nullptr;
     bool compute_eigenvectors = true;            // Compute state vector(s) when policy supports it
 };
 
@@ -38,6 +54,8 @@ struct LanczosResult
     Real energy = Real(0.0);                     // Lowest eigenvalue (lambda_0)
     std::vector<Real> eigenvalues = {};          // All computed eigenvalues (size n_eig)
     HostVector eigenvector = {};                 // Lowest eigenvector (psi_0)
+    std::vector<Real> eigenvector_real = {};     // psi_0 as a real vector; filled INSTEAD of eigenvector/eigenvectors
+                                                 // when LanczosConfig::real_output is set and H is real
     std::vector<HostVector> eigenvectors = {};   // All computed eigenvectors (size n_eig)
     int iterations = 0;                          // Iterations run
     bool converged = false;                      // True if requested state(s) converged

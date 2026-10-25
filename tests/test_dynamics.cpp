@@ -70,8 +70,8 @@ int main() {
     MatrixFreeHamiltonian<Kokkos::DefaultExecutionSpace> Sz1(basis, site, os_sz1);
 
     // Prepare |up, down> state
-    auto d0 = Sz0.diagonal();
-    auto d1 = Sz1.diagonal();
+    auto d0 = Sz0.diagonal_host();   // host copy: diagonal() lives in device memory
+    auto d1 = Sz1.diagonal_host();
     HostVector psi0_complex(H.dimension(), Complex(0.0, 0.0));
     for (size_t i = 0; i < H.dimension(); ++i) {
         if (std::abs(d0[i].real() - Real(0.5)) < 1e-5 && std::abs(d1[i].real() - Real(-0.5)) < 1e-5) {

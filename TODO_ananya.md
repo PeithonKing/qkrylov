@@ -1,284 +1,277 @@
-# Ananya’s Documentation Writing TODO
+# Ananya's Documentation Writing TODO: qkrylov
 
-## qkrylov
+*Updated: 27 Sep 2026*
 
-Welcome! This file is your complete brief. qkrylov is a polyglot (C++, Python, Julia) quantum many-body physics engine. Your job is to write the narrative documentation.
+---
 
 ## The Big Picture: Read This First
 
-### Why is the docs system unusual?
+**qkrylov** is a polyglot (C++, Python, Julia) quantum many-body physics engine. Your job is to write the narrative documentation.
 
-Normally, documentation sites like this are built from plain `.md` (Markdown) files. That is exactly what we are using: a tool called Zensical, which is a very fast static site generator (essentially MkDocs written in Rust).
+### Where files actually live
 
-However, when you are documenting a physics engine, you don’t just want to describe things: you want to demo them. And the natural way to demo computational physics is a Jupyter notebook (`.ipynb`), because you can have narrative text, live code, and output all in one place.
+The PDF had wrong paths. The docs source lives entirely inside:
 
-On top of that, qkrylov is a polyglot library. It has Python, Julia, and C++ interfaces. Writing a tutorial that shows all three languages inside a single Jupyter notebook would be a nightmare: you cannot mix kernels, and the narrative flow gets tangled.
-
-So Aritra built a small hack to make your life easier.
-
-### The Hack: `build_polyglot.py`
-
-Instead of running Zensical directly, you run:
-
-```bash
-python build_polyglot.py serve
+```
+website/src/content/docs/
 ```
 
-This script acts as a smart wrapper. It does the following:
+Everything below refers to paths inside this folder. The `docs/` folder at the repo root contains only auto-generated C++ API reference output: **do not touch it**.
 
-1. It looks for any tutorial folders you’ve set up (more on that in a second).
-2. For each one, it reads your `main.ipynb` notebook and generates a beautiful Markdown page with synchronized multi-language tabs and download buttons for all three languages.
-3. It boots Zensical and serves the live docs site with hot-reload: so every time you save a file, the browser refreshes automatically.
-4. When you kill the server (Ctrl+C), it deletes all the auto-generated files so your working directory stays completely clean.
+### How the docs system works
 
-Although this might not work always, your working directory sometimes might remain dirty with generated files.
+The docs system is **Astro + Starlight** (not Zensical: that was the old system). The sidebar nav is configured in `website/astro.config.mjs`.
 
-You will never need to touch `build_polyglot.py` itself. Just use it.
+To preview your work locally, from the repo root:
+
+```bash
+cd website
+npm run dev
+```
+
+Then open `http://localhost:4321`. Hot-reload is automatic: every save triggers a browser refresh.
+
+---
 
 ## Two Modes of Writing Documentation
 
-### Mode 1: Plain Markdown (for reference pages, theory, API overviews)
+### Mode 1: Plain Markdown (reference pages, theory, concept explanations)
 
-If you are writing a page that does NOT need interactive demos or live code output, just write a regular `.md` file and list it in `zensical.toml`.
+Write a `.md` file anywhere under `website/src/content/docs/`. Starlight auto-routes it. It will appear at a URL matching the path.
 
-Example: `docs/theory/lanczos_memory.md` is a plain markdown file explaining the single-Pass vs Two-Pass memory trade-off. It has (not yet, you would add) math and code blocks, but they are not interactive: they are just illustrative snippets. This is totally fine.
+**Example:** `website/src/content/docs/theory/lanczos_memory.md` is already in the sidebar because Aritra added this entry to the `sidebar` array in `astro.config.mjs`:
 
-In `zensical.toml`, you must list it in the nav block so it appears in the sidebar:
-
-You create the file. You list it in `zensical.toml`. Done.
-
-### Mode 2: Polyglot Tutorial (for hands-on demos across all 3 languages)
-
-If you are writing a tutorial that shows actual working code in Python, Julia, AND C++ see the Polyglot Tutorial format.
-
-Instead of creating a something.md file, you create a folder called something/.
-
-Inside that folder, you put three files:
-
-```text
-docs/foo/bar/something/
-├── main.ipynb # You write this. Python narrative + code.
-├── main.jl # You write this. Same logic in Julia.
-└── main.cpp # You write this. Same logic in C++.
+```js
+{ label: 'Single-Pass vs Two-Pass Lanczos', link: '/theory/lanczos_memory/' },
 ```
 
-Behind the scenes, Aritra will point the navigation to the auto-generated `index.md`:
+You create the file. You tell Aritra the path so he can add it to the sidebar. Done.
 
-He will also register the folder in the `[extra]` section of `zensical.toml` so the build script knows to process it:
+### Mode 2: Polyglot Tutorial (live code demos in Python, Julia, and C++)
 
-You create the folder and the three files. You tell Aritra the folder name. He wires it up. Done.
+Instead of a `.md` file, create a **folder** with three source files:
 
-(Note: If you want to see a live example of exactly how this looks, open the `docs/getting_started/tutorial_hamiltonian/` folder and look at how the three files are structured.)
-
-```toml
-{ "Single-Pass vs Two-Pass Lanczos" = "theory/lanczos_memory.md" },
-{ "Your Tutorial Title" = "foo/bar/something/index.md" },
+```
+website/src/content/docs/getting_started/tutorial_something/
+├── main.ipynb   ← you write this (Python narrative + code)
+├── main.jl      ← you write this (same logic in Julia)
+└── main.cpp     ← you write this (same logic in C++)
 ```
 
-```toml
-[extra]
-polyglot_tutorials = [
-    "docs/foo/bar/something",
-]
+A Vite plugin (`website/plugins/polyglot-vite-plugin.mjs`) automatically transforms `main.ipynb` into an MDX page at build/dev time, stitching in the Julia and C++ blocks as synchronized language tabs.
+
+After creating the folder, tell Aritra. He will:
+1. Create a thin `.astro` wrapper page at `website/src/pages/getting_started/tutorial_something.astro` that imports the notebook (look at `tutorial_hamiltonian.astro` as the template).
+2. Add a sidebar entry to `astro.config.mjs`.
+
+**Do NOT create any `.astro` file or edit `astro.config.mjs` yourself.**
+
+**Reference example:** study `website/src/content/docs/getting_started/tutorial_hamiltonian/`: it has the three files you need to model yours on.
+
+### How IDs work across the three files
+
+The plugin matches C++/Julia code blocks to Python cells by ID annotations. **IDs must be identical** across all three files.
+
+In `main.ipynb` Python cells: the first line of each code cell is read as the ID marker:
+```python
+# [ID: init_basis]
+basis = SpinHalfBasis(N=16, sz=0)
+site  = SpinHalfSite()
 ```
 
-## How the Three Files Work Together
-
-The build script stitches the three files into synchronized tabs. The key is that each code “step” has an ID annotation that must match across all three files.
-
-In `main.ipynb` (Jupyter notebook, Python):
-
-Each julia or c++ code cell that you want to appear in the docs gets a comment at the top and bottom (python don’t coz we know the cell boundaries already):
-
-In `main.jl` (Julia):
-
-In `main.cpp` (C++):
-
-The build script finds matching IDs and places them into synchronized language tabs in the output page.
-
-Important: The ID names must be identical across all three files. If a step has no meaningful C++ or Julia equivalent, you can simply omit it from those files.
-
-The narrative text (markdown prose, headings, explanations) lives in the Markdown cells of `main.ipynb`. The build script extracts that and uses it as the page content between code blocks.
-
-### Live Preview
-
-To see your work as you write, from the qkrylov/ root directory run:
-
-```bash
-python build_polyglot.py serve
+In `main.jl`:
+```julia
+# [ID: init_basis]
+b = SpinHalfBasis(16, Sector(0))
+# [END: init_basis]
 ```
 
-Then open your browser at http://localhost:8000.
+In `main.cpp`:
+```cpp
+// [ID: init_basis]
+qkrylov::basis::SpinHalf b(16, qkrylov::sector::Sz(0));
+// [END: init_basis]
+```
 
-When you save any of the three source files, the browser will refresh automatically.
+If a step has no meaningful C++ or Julia equivalent, simply omit it from those files.
 
-## The Golden API References
+---
 
-Always use these files as ground truth for exact function names and syntax. Do not invent function names: copy them from here:
+## The Golden API References (Ground Truth)
 
-### Python
+**Never invent function names.** Always look here first:
 
-`docs/api/python.md`
+| Language | Path |
+|----------|------|
+| Python | `docs/src/content/docs/api/auto/python/` |
+| Julia | `docs/src/content/docs/api/auto/julia/` |
+| C++ | `docs/src/content/docs/api/auto/cpp/` |
 
-### Julia
+> **Critical note for Julia:** `SinglePass` was renamed to `OnePass`. Always write `Lanczos(variation=OnePass())` or simply `Lanczos()` (defaults to `OnePass`). Never write `SinglePass`.
 
-`docs/api/julia.md`
+> **Do NOT edit anything in `docs/src/content/docs/api/auto/`**: those are Pritipriya's auto-generated authoritative references. Leave them alone.
 
-### C++
+---
 
-`docs/api/cpp.md`
+## 🔴 High Priority: Pages in the Nav with Broken Content
 
-### C ABI
+These are already linked in the sidebar. Users can click them right now and see wrong code. Fix these first.
 
-`docs/api/c-abi.md`
+### 1. `website/src/content/docs/getting_started/ecosystem.md`
 
-Critical API note for Julia: SinglePass was recently renamed to OnePass. Always write `Lanczos(variation=OnePass())` or simply `Lanczos()` (defaults to OnePass).
+**Current state:** Uses completely wrong API. Wrong import paths, nonexistent methods (`solver.get_ground_state()`, `H.to_scipy_sparse()`).
 
-## 🔴 High Priority: Pages Are in the Nav But Broken
+**What it should be:** A practical page showing how to use qkrylov output downstream. Use the 1D Heisenberg model (L=10, Sz=0 sector) as the running example throughout. Cover these four things with minimal working code snippets:
 
-These pages are already linked from the sidebar. Users can click them right now and see garbage content written by an AI that was using the wrong API. Fix these first.
+1. **Convert eigenvector to NumPy**: `result.eigenvector` is already a `np.ndarray`; show this explicitly with a print/shape check.
+2. **Export Hamiltonian as a SciPy CSR matrix**: use `H.to_sparse()` (returns `scipy.sparse.csr_matrix`).
+3. **Wrap as a `scipy.sparse.linalg.LinearOperator`**: use `H.aslinearoperator()`, then pass to `scipy.sparse.linalg.eigsh` as a cross-check.
+4. **Export eigenvector as a `torch.Tensor`**: `torch.from_numpy(result.eigenvector)`.
 
-### 1. `docs/getting_started/ecosystem.md`
+Reference: `docs/src/content/docs/api/auto/python/hamiltonian.md`: `MatrixFreeHamiltonian` methods section (`aslinearoperator()`, `to_sparse()`).
 
-Current state: ❌ Wrong API. Wrong function names, wrong package imports.
+This is **Mode 1** (plain markdown, no notebook needed).
 
-What it should be: A practical page showing how to use qkrylov output downstream.
+---
 
-This is a plain markdown page (Mode 1), no notebook needed.
+### 2. `website/src/content/docs/getting_started/sciml_julia.md`
 
-Show each of these with a minimal working code snippet:
+**Current state:** Uses `SpinBasis`, `EigenProblem`, `build_heisenberg_hamiltonian`: none of these exist in the actual API.
 
-- Convert eigenvector to a numpy array
-- Export the Hamiltonian as a scipy.sparse.csr_matrix
-- Wrap the Hamiltonian as a scipy.sparse.linalg.LinearOperator for use with eigsh
-- Export an eigenvector as a torch.Tensor for downstream ML tasks
+**What it should be:** A Julia-focused page showing the SciML `solve(prob, alg)` pattern. Cover:
 
-Use the 1D Heisenberg model (L=10, Sz=0 sector) as the example throughout.
+- `GroundStateProblem` + `solve(prob, Lanczos())`: ground state energy and eigenvector
+- `ExcitedStatesProblem` + `solve(prob, Davidson(n_eig=3))`: lowest 3 eigenstates
+- `ThermalProblem` + `solve(prob, FTLM())`: finite-temperature observables at a single β
+- The decoupled workflow: `ftlm_sample(H; n_random=50, n_steps=100)` → `FTLMSamples` handle → `ftlm_evaluate_sweep(samples, betas)`: zero extra SpMV for any temperature grid
 
-Reference: Python API docs: look for the ecosystem and LinearOperator sections.
+Reference: `docs/src/content/docs/api/auto/julia/solvers.md` (full signatures for `ftlm_sample`, `ftlm_evaluate_sweep`, `FTLMSamples`) and `docs/src/content/docs/api/auto/julia/hamiltonian.md` (for `MatrixFreeHamiltonian` constructor).
 
-### 2. `docs/getting_started/sciml_julia.md`
+This is **Mode 1** (plain markdown, no notebook needed).
 
-Current state: ❌ Wrong API. Uses SpinBasis, EigenProblem: these do not exist.
+---
 
-What it should be: A Julia-focused page showing the SciML `solve(prob, alg)` pattern.
+### 3. `website/src/content/docs/api/index.md`
 
-This is also a plain markdown page (Mode 1).
+**Current state:** Stub. Says "Under Construction."
 
-Cover:
+**What it should be:** A short (~200 word) overview of the four API layers and when to use each, ending with a link table. Good warmup task.
 
-- `GroundStateProblem + solve(prob, Lanczos())`
-- `ExcitedStatesProblem + solve(prob, Davidson(n_eig=3))`
-- `ThermalProblem + solve(prob, FTLM())` for finite temperature observables
-- The decoupled workflow: `ftlm_sample + ftlm_evaluate_sweep` (fast multi-temperature sweeps)
+| Layer | When to use |
+|-------|-------------|
+| Python | Interactive research, Jupyter notebooks, scripting |
+| Julia | SciML ecosystem, DifferentialEquations.jl integration |
+| C++ | Maximum performance, custom kernels, embedding in other C++ projects |
+| C ABI | Language-agnostic FFI: use when writing bindings for any other language |
 
-Reference: Julia API docs
+Note: this file is at `website/src/content/docs/api/index.md` (not `docs/src/...`: that is the auto-gen folder).
 
-### 3. `docs/api/index.md`
+This is **Mode 1**.
 
-Current state: ❌ Stub. Just says “Under Construction.”
+---
 
-What it should be: A short (~200 word) overview explaining the four API layers (pure C++, C ABI, Python, Julia) and when to use each one.
+## 🟡 Medium Priority: AI-Written Pages That Need Human Physics Check
 
-Finish with a table linking to the four dedicated API reference pages.
+These pages exist and have plausible-looking prose but have **not been reviewed** by a human physicist. Check math and code examples against the API refs and fix anything wrong.
 
-This is a quick win: good first task if you want to warm up.
+### 4. `website/src/content/docs/theory/matrix_free_spmv.md`
 
-## 🟡 Medium Priority: Pages Are Written but Need Vetting
+Explains why we never build the full Hamiltonian matrix. Check the memory scaling claim (should be $O(N \cdot \text{nnz\_per\_row})$ for CSR vs $O(N)$ for matrix-free state vector) and verify Python code examples use real API names.
 
-These pages were written by AI and contain plausible-looking physics prose, but have NOT been reviewed by a human physicist. Check the code and physics against the API references and fix anything wrong.
+### 5. `website/src/content/docs/theory/lanczos_memory.md`
 
-### 4. `docs/theory/matrix_free_spmv.md`
+Explains Single-Pass ($O(k \times N)$ memory, stores full Krylov subspace) vs Two-Pass ($O(N)$ memory, recomputes vectors on the fly at the cost of one extra SpMV per step). Verify the memory formulas are correct and make sure it recommends `LanczosTwoPass` for L > 22 on GPU.
 
-Explains why we never build the full Hamiltonian matrix. Check the math (2 memory growth for spin systems) and the Python code examples.
+### 6. `website/src/content/docs/theory/precision_stability.md`
 
-### 5. `docs/theory/lanczos_memory.md`
+Explains FP32 vs FP64 in Lanczos. Key physics to verify:
+- FP32 is faster per iteration but loss of orthogonality accumulates sooner → "ghost states" (spurious duplicate eigenvalues in the Ritz spectrum)
+- FP64 maintains cleaner orthogonality → fewer iterations to convergence
+- With early stopping, FP64 often wins in wall-clock time despite slower individual iterations
 
-Explains Single-Pass (high memory, stores full Krylov subspace O(k×N)) vs Two-Pass (recomputes Krylov vectors on the fly, O(N) memory, much slower per-run but GPU-friendly). Verify the memory formulas are correct.
+### 7. `website/src/content/docs/replications.md`
 
-### 6. `docs/theory/precision_stability.md`
+Contains paper replications (Bethe Ansatz for 1D Heisenberg, etc.). Check every Python code example uses the correct current API function names. Fix any wrong calls.
 
-Explains FP32 vs FP64 in Lanczos: ghost states, loss of orthogonality, convergence speed.
-
-Key physics to verify: FP32 is faster per iteration but pollutes the Krylov subspace (“ghost states”), requiring more iterations. FP64 is slower per iteration but maintains clean orthogonality, so it needs fewer iterations. With early stopping, FP64 often wins in wall-clock time.
-
-### 7. `docs/replications.md`
-
-Contains paper replications (Bethe Ansatz for 1D Heisenberg, etc.). Check that the Python code examples use the correct qkrylov API function names. Fix any wrong function calls.
+---
 
 ## 🟢 New Tutorials to Write (Not Started)
 
-These do not exist yet. For each one, create the folder and files, then wire the folder into `zensical.toml`’s navigation and `[extra]` blocks as explained in Mode 2.
-
-All of these use Mode 2 (Polyglot Tutorial): you create `main.ipynb`, `main.jl`, and `main.cpp`.
+All use **Mode 2** (Polyglot Tutorial). Create the folder with `main.ipynb`, `main.jl`, and `main.cpp`, then tell Aritra: he handles the `.astro` wrapper and sidebar wiring.
 
 ### 8. Tutorial: FTLM (Finite Temperature Lanczos Method)
 
-Create: `docs/getting_started/tutorial_ftlm/`
+**Create:** `website/src/content/docs/getting_started/tutorial_ftlm/`
 
 Storyline:
+1. Build the Heisenberg Hamiltonian (can reference the Hamiltonian tutorial).
+2. Use the decoupled workflow: `FTLM(mode="cached").sample(H)` → `FTLMSamples` (Stage 1, heavy SpMV, run once).
+3. Call `samples.evaluate_sweep(betas)` on a temperature grid (Stage 2, zero SpMV cost, instant).
+4. Plot $E(\beta)$, $C_v(\beta)$, $S(\beta)$ vs temperature.
+5. Show the decoupled advantage explicitly: change the temperature grid and re-run Stage 2 at zero cost.
 
-1. Build the Heisenberg Hamiltonian briefly (you can reference the Hamiltonian tutorial).
-2. Use `FTLM.sample()` to generate R random Krylov samples (the heavy step: SpMV).
-3. Use `FTLM.evaluate_sweep(betas)` with a temperature grid to compute observables.
-4. Plot E(β), Cv(β), S(β) vs temperature.
-5. Show the decoupled workflow advantage: generate samples once, then call `evaluate_sweep` for many different temperature grids instantly at zero SpMV cost.
+Reference: `docs/src/content/docs/api/auto/python/solvers.md`: `FTLM`, `FTLMSamples`, `ftlm_sample`, `ftlm_evaluate_sweep`.
 
-Reference: Python `FTLM.sample`, `FTLM.evaluate_sweep`, `FTLMSamples` in Python API.
+---
 
 ### 9. Tutorial: Quantum Dynamics & Spectral Functions
 
-Create: `docs/getting_started/tutorial_dynamics/`
+**Create:** `website/src/content/docs/getting_started/tutorial_dynamics/`
 
 Storyline:
-
-1. Build Hamiltonian, get ground state.
-2. Evolve in time using `time_evolve`: compute survival probability `|⟨ψ₀|ψ(t)⟩|²`.
-3. Compute a dynamical spin structure factor `S(q, ω)` using `dynamical_correlator`.
+1. Build Hamiltonian, get ground state via `Lanczos().solve(H)` → `result.energy`, `result.eigenvector`.
+2. Time evolution: `TimeEvolve(time_grid=times).solve(H, psi0)`: compute survival probability $|\langle\psi_0|\psi(t)\rangle|^2$ from `result.survival_probabilities`.
+3. Spectral function: `CorrectionVector(e0=result.energy, omega=..., eta=0.05).solve(H)` at a grid of $\omega$ values.
 4. Show a simple spectral function plot.
 
-Reference: Dynamics section of Python API.
+Reference: `docs/src/content/docs/api/auto/python/solvers.md`: `TimeEvolve`, `CorrectionVector`, `FTLMDynamics`.
+
+---
 
 ### 10. Tutorial: Excited States (Davidson Solver)
 
-Create: `docs/getting_started/tutorial_excited_states/`
+**Create:** `website/src/content/docs/getting_started/tutorial_excited_states/`
 
 Storyline:
-
 1. Build Hamiltonian.
-2. Use `Davidson(n_eig=5)` to get the 5 lowest energy eigenstates.
-3. Explain why Davidson is better than running Lanczos 5 separate times for multiple eigenstates.
+2. Use `Davidson(n_eig=5).solve(H)` → `DavidsonResult` with `.eigenvalues` list and `.eigenvectors` list.
+3. Explain why Davidson is better than running Lanczos 5 separate times (deflation: each new eigenpair is found orthogonal to already-converged ones, avoiding re-convergence of lower states).
 4. Show an energy level spectrum plot.
+
+Reference: `docs/src/content/docs/api/auto/python/solvers.md`: `Davidson`, `DavidsonResult`.
+
+---
 
 ## Writing Style Guide
 
-Use the Heisenberg model everywhere. It is the canonical example: L=10 sites, J=1.0, Sz=0 sector.
+- **Use the Heisenberg model everywhere.** Canonical example: L=10 sites, J=1.0, Sz=0 sector.
+- **Never invent function names.** Copy them exactly from the API reference files under `docs/src/content/docs/api/auto/`.
+- **Write prose, not bullets.** Tutorials should read like a lab notebook: explain *why*, not just *how*.
+- **Math is encouraged.** Use LaTeX: inline `$...$` and display `$$...$$` freely. KaTeX renders it via the Astro rehype plugin.
+- **Tabs for polyglot snippets in Mode 1 pages.** Use the remark-tabs directive syntax (Mode 2 pages generate tabs automatically from the `.ipynb`/`.jl`/`.cpp` files):
 
-Never invent function names. Copy them exactly from the API reference files.
+    ```markdown
+    :::tabs
+    == Python
+    ```python
+    # your code here
+    ```
+    == Julia
+    ```julia
+    # your code here
+    ```
+    == C++
+    ```cpp
+    // your code here
+    ```
+    :::
+    ```
 
-Write prose, not bullets. The tutorials should read like a lab notebook: explain why, not just how.
+---
 
-Math is encouraged. Use LaTeX: inline `$...$` and display `$$...$$` freely. Zensical renders it beautifully.
+## What NOT to Do
 
-Tabs for polyglot. For short snippets that have Python, Julia, and C++ versions, use the tab syntax directly in your markdown:
-
-=== "Python"
-```python
-# your code here
-```
-
-=== "Julia"
-```julia
-# your code here
-```
-
-=== "C++"
-```cpp
-# your code here
-```
-
-## Important Restrictions
-
-Do NOT edit files in `docs/api/`: those are Pritipriya’s authoritative API references. Leave them alone.
-
-Do NOT create `index.md` inside a tutorial folder: the build system generates this automatically. If you create one manually, it will be overwritten and you will be confused.
+- **Do not edit files in `docs/src/content/docs/api/auto/`**: auto-generated, owned by Pritipriya.
+- **Do not create `.astro` files or edit `astro.config.mjs`**: Aritra handles that.
+- **Do not touch `website/dist/`, `website/node_modules/`, `website/public/.generated_webp/`**: build artifacts.
+- **Do not confuse `docs/` with `website/src/content/docs/`**: the former is C++ API auto-gen output only. You work in the latter.

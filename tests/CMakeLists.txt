@@ -18,12 +18,21 @@ set(QKRYLOV_TESTS
     test_lanczos_lowest
     test_lanczos_policies
     test_ftlm_sweep
+    test_state_index
+    test_lanczos_early_stopping
+    test_fixed_popcount_basis
+    test_host_space
+    test_spin1_correction_vector
 )
+
+# Tests rely on assert(); keep it active even in Release builds (which define NDEBUG).
+set(QKRYLOV_TEST_KEEP_ASSERTS $<IF:$<CXX_COMPILER_ID:MSVC>,/UNDEBUG,-UNDEBUG>)
 
 foreach(test_name IN LISTS QKRYLOV_TESTS)
     add_executable(${test_name} ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE qkrylov::qkrylov)
     target_compile_definitions(${test_name} PRIVATE QKRYLOV_DOUBLE_PRECISION)
+    target_compile_options(${test_name} PRIVATE ${QKRYLOV_TEST_KEEP_ASSERTS})
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
 
@@ -36,6 +45,8 @@ set(QKRYLOV_FP32_TESTS
     test_ftlm
     test_lanczos_policies
     test_ftlm_sweep
+    test_lanczos_early_stopping
+    test_host_space
 )
 
 foreach(test_name IN LISTS QKRYLOV_FP32_TESTS)
@@ -43,6 +54,13 @@ foreach(test_name IN LISTS QKRYLOV_FP32_TESTS)
     add_executable(${target_name} ${test_name}.cpp)
     target_link_libraries(${target_name} PRIVATE qkrylov::qkrylov)
     target_compile_definitions(${target_name} PRIVATE QKRYLOV_SINGLE_PRECISION)
+    target_compile_options(${target_name} PRIVATE ${QKRYLOV_TEST_KEEP_ASSERTS})
     add_test(NAME ${target_name} COMMAND ${target_name})
 endforeach()
 
+
+# C API test: pure C interface, both precisions are exercised inside the test itself.
+add_executable(test_c_api test_c_api.cpp)
+target_link_libraries(test_c_api PRIVATE qkrylov::qkrylov)
+target_compile_options(test_c_api PRIVATE ${QKRYLOV_TEST_KEEP_ASSERTS})
+add_test(NAME test_c_api COMMAND test_c_api)

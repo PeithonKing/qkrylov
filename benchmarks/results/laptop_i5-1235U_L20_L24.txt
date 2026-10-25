@@ -1,0 +1,16 @@
+x86 laptop (Intel i5-1235U, 12 threads, OMP_PROC_BIND=spread, Release, no -march=native, on AC)
+C++ benchmark custom_bench/bench.cpp (Lanczos tol 1e-8, maxiter 200), mean of 5 runs (2 at L=24).
+base = commit 0cf53d4 (Phase 1 fixes, before any optimisation); new = commit db44814.
+
+ver   prec passes L     |  basis_ms    ham_ms   exec_ms  total_ms
+base  64   1      20    |       2.4       3.8     664.7     670.9
+new   64   1      20    |       2.4       4.3      65.3      72.0
+base  64   2      20    |       2.6       5.0    1386.6    1394.2
+new   64   2      20    |       3.7       7.5     151.1     162.4
+base  32   1      20    |       3.3       4.7     710.9     718.9
+new   32   1      20    |       3.6       6.2      61.4      71.2
+base  32   2      20    |       3.6       5.3    1374.4    1383.2
+new   32   2      20    |       3.8       5.9     107.5     117.3
+--- L=24, 64-bit, 1-pass
+base  64   1      24    |      54.6      74.3   22809.8   22938.7
+new   64   1      24    |      47.1      77.2    2071.1    2195.4

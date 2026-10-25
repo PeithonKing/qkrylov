@@ -17,6 +17,10 @@ using Vector = Kokkos::View<KComplex*>;
 template <typename ExecSpace>
 using VectorView = Kokkos::View<KComplex*, typename ExecSpace::memory_space>;
 
+/// Real-valued vector (used when the Hamiltonian is real: half the memory of VectorView).
+template <typename ExecSpace>
+using RealVectorView = Kokkos::View<Real*, typename ExecSpace::memory_space>;
+
 /// The execution space selected at compile time by the Kokkos backend.
 using ExecutionSpace = Kokkos::DefaultExecutionSpace;
 

@@ -99,7 +99,7 @@ RealTimeResult time_evolve(
     const Real mach_eps = std::numeric_limits<Real>::epsilon() * Real(4.0);
     if (norm_psi < mach_eps) return {};
 
-    const int max_steps = std::min<int>(n_steps, static_cast<int>(dim));
+    const int max_steps = clamp_to_dim(n_steps, dim);
 
     VectorView<ExecSpace> v_prev("v_prev", dim);
     VectorView<ExecSpace> v_curr("v_curr", dim);
@@ -223,7 +223,7 @@ FTLMDynamicsResult ftlm_dynamics(
 
     const size_t R = static_cast<size_t>(n_random);
     const size_t num_times = time_grid.size();
-    const int max_steps = std::min<int>(n_steps, static_cast<int>(dim));
+    const int max_steps = clamp_to_dim(n_steps, dim);
     const Real mach_eps = std::numeric_limits<Real>::epsilon() * Real(4.0);
 
     // Pass 1: Find global ground-state energy shift E_min

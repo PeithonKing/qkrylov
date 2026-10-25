@@ -36,7 +36,7 @@ export OpSum, add_term!, clear!, OpTerm, OpExpr, opsum_size, opsum_get_term_info
 export Sz, Sp, Sm, Sx, Sy, n, c, cdag
 export CdagUp, CUp, CdagDn, CDn, Nup, Ndn, Nupdn, Bdag, B, N
 export validate, validate!
-export MatrixFreeHamiltonian, diagonal, diagonal_device
+export MatrixFreeHamiltonian, diagonal, diagonal_device, active_device
 export DeviceVector, mul!
 export solve
 export AbstractQuantumProblem, GroundStateProblem, ExcitedStatesProblem, ThermalProblem, DynamicsProblem, SpectralProblem

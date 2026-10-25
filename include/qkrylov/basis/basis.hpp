@@ -36,6 +36,23 @@ public:
     /// \param s 64-bit state bitstring.
     /// \return True if state belongs to this basis.
     virtual bool contains(StateID s) const = 0;
+
+    /// \brief True if state(i) == i for every i (full space with implicit indexing).
+    virtual bool is_identity() const { return false; }
+
+    /// \brief True if the basis is exactly "all nbits-wide integers with k bits set", in ascending
+    /// order, and is still described by formulas (no state list built). The Hamiltonian then
+    /// generates states and lookup tables itself, in parallel on its device.
+    virtual bool fixed_popcount_sector(int& /*nbits*/, int& /*k*/) const { return false; }
+
+    /// \brief The sorted state list, if the basis stores one (nullptr otherwise).
+    virtual const std::vector<StateID>* state_list() const { return nullptr; }
+
+    /// \brief Bit masks whose popcounts are fixed inside one symmetry sector.
+    ///
+    /// Used to build O(1) state->index tables; the tables are verified against the
+    /// state list, so a wrong answer here only costs speed, never correctness.
+    virtual std::vector<uint64_t> conserved_masks() const { return {~0ULL}; }
 };
 
 namespace QKRYLOV_PRECISION_NAMESPACE {

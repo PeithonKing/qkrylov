@@ -1,5 +1,4 @@
 import pytest
-pytestmark = pytest.mark.skip(reason="Spin-S Bitmask VM execution pending Phase 3")
 import numpy as np
 import math
 
@@ -35,7 +34,7 @@ from qkrylov import (
 ])
 def test_spin_s_site_valid_parameters(S, expected_dim, dtype):
     """Test SpinSSite construction, properties, and dimensions for standard spins."""
-    site = SpinSSite(S=S, dtype=dtype)
+    site = SpinSSite(S=S)
     assert math.isclose(site.spin, S, abs_tol=1e-6)
     assert site.dimension_per_site == expected_dim
     assert "SpinSSite" in repr(site)
@@ -47,7 +46,7 @@ def test_spin_s_site_valid_parameters(S, expected_dim, dtype):
 def test_spin_s_site_invalid_spin_raises(invalid_S, dtype):
     """Test SpinSSite rejects non-positive spin quantum numbers."""
     with pytest.raises(RuntimeError, match="Spin S must be positive"):
-        SpinSSite(S=invalid_S, dtype=dtype)
+        SpinSSite(S=invalid_S)
 
 
 def test_spin_s_site_default_arguments():
@@ -78,7 +77,7 @@ def test_spin_s_site_default_arguments():
 ])
 def test_spin_s_basis_full_dimensions(N, S, expected_dim, dtype):
     """Test unconstrained SpinSBasis dimension equals (2S+1)^N."""
-    basis = SpinSBasis(N=N, S=S, conserve_sz=False, dtype=dtype)
+    basis = SpinSBasis(N=N, S=S)
     assert basis.nsites == N
     assert math.isclose(basis.spin, S, abs_tol=1e-6)
     expected_local_d = int(round(2.0 * S + 1.0))
@@ -106,7 +105,7 @@ def test_spin_s_basis_full_dimensions(N, S, expected_dim, dtype):
 ])
 def test_spin_s_basis_sz_sectors(N, S, sz, expected_dim, dtype):
     """Test Sz-conserved SpinSBasis sector sizes."""
-    basis = SpinSBasis(N=N, S=S, sz=sz, dtype=dtype)
+    basis = SpinSBasis(N=N, S=S, sz=sz)
     assert basis.nsites == N
     assert basis.size == expected_dim
     assert "sz=" in repr(basis)
@@ -116,8 +115,8 @@ def test_spin_s_basis_sz_sectors(N, S, sz, expected_dim, dtype):
 @pytest.mark.parametrize("N", [2, 4, 6])
 def test_spin_s_basis_equivalence_with_spinhalf_full(N, dtype):
     """Test SpinSBasis(S=0.5) dimensions match SpinHalfBasis exactly for full space."""
-    s_basis = SpinSBasis(N=N, S=0.5, conserve_sz=False, dtype=dtype)
-    sh_basis = SpinHalfBasis(N=N, conserve_sz=False, dtype=dtype)
+    s_basis = SpinSBasis(N=N, S=0.5)
+    sh_basis = SpinHalfBasis(N=N)
     assert s_basis.size == sh_basis.size
     assert s_basis.nsites == sh_basis.nsites
 
@@ -134,8 +133,8 @@ def test_spin_s_basis_equivalence_with_spinhalf_full(N, dtype):
 ])
 def test_spin_s_basis_equivalence_with_spinhalf_sz(N, sz, dtype):
     """Test SpinSBasis(S=0.5, sz) sector dimensions match SpinHalfBasis(N, sz)."""
-    s_basis = SpinSBasis(N=N, S=0.5, sz=sz, dtype=dtype)
-    sh_basis = SpinHalfBasis(N=N, sz=sz, dtype=dtype)
+    s_basis = SpinSBasis(N=N, S=0.5, sz=sz)
+    sh_basis = SpinHalfBasis(N=N, sz=sz)
     assert s_basis.size == sh_basis.size
     assert s_basis.nsites == sh_basis.nsites
 
@@ -143,7 +142,7 @@ def test_spin_s_basis_equivalence_with_spinhalf_sz(N, sz, dtype):
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 def test_spin_s_basis_state_index_contains_methods(dtype):
     """Test state(), index(), and contains() methods and consistency."""
-    basis = SpinSBasis(N=4, S=1.0, sz=0, dtype=dtype)
+    basis = SpinSBasis(N=4, S=1.0, sz=0)
     assert basis.size == 19
 
     states = []
@@ -169,7 +168,7 @@ def test_spin_s_basis_state_index_contains_methods(dtype):
 def test_spin_s_basis_invalid_nsites_raises(invalid_N, dtype):
     """Test SpinSBasis rejects non-positive site count."""
     with pytest.raises(RuntimeError, match="N must be > 0"):
-        SpinSBasis(N=invalid_N, S=1.0, dtype=dtype)
+        SpinSBasis(N=invalid_N, S=1.0)
 
 
 # ==============================================================================
@@ -178,9 +177,9 @@ def test_spin_s_basis_invalid_nsites_raises(invalid_N, dtype):
 
 def _build_heisenberg_chain(N, S, sz, dtype):
     """Helper to build a 1D Heisenberg chain with SpinSSite and SpinSBasis."""
-    basis = SpinSBasis(N=N, S=S, sz=sz, dtype=dtype)
-    site = SpinSSite(S=S, dtype=dtype)
-    ops = OpSum(dtype=dtype)
+    basis = SpinSBasis(N=N, S=S, sz=sz)
+    site = SpinSSite(S=S)
+    ops = OpSum()
     for i in range(N - 1):
         ops += 1.0 * Sz(i) * Sz(i + 1) + 0.5 * (Sp(i) * Sm(i + 1) + Sm(i) * Sp(i + 1))
     H = MatrixFreeHamiltonian(basis, site, ops, dtype=dtype)
@@ -205,7 +204,7 @@ def test_spin1_correction_vector_4site_heisenberg_e2e(dtype):
     assert lgs.energy < -4.0
 
     # Apply excitation operator Sz(0) to ground state
-    ops_sz0 = OpSum(dtype=dtype)
+    ops_sz0 = OpSum()
     ops_sz0 += 1.0 * Sz(0)
     H_sz0 = MatrixFreeHamiltonian(basis, site, ops_sz0, dtype=dtype)
     op_psi0 = H_sz0.apply(lgs.eigenvector)
@@ -296,7 +295,7 @@ def test_correction_vector_frequency_scan(omega, dtype):
     basis, site, H = _build_heisenberg_chain(N, S, sz=0.0, dtype=dtype)
 
     lgs = lanczos_ground_state(H)
-    ops_sz0 = OpSum(dtype=dtype)
+    ops_sz0 = OpSum()
     ops_sz0 += 1.0 * Sz(0)
     H_sz0 = MatrixFreeHamiltonian(basis, site, ops_sz0, dtype=dtype)
     op_psi0 = H_sz0.apply(lgs.eigenvector)
@@ -316,7 +315,7 @@ def test_correction_vector_broadening_parameter(eta, dtype):
     basis, site, H = _build_heisenberg_chain(N, S, sz=0.0, dtype=dtype)
 
     lgs = lanczos_ground_state(H)
-    ops_sz0 = OpSum(dtype=dtype)
+    ops_sz0 = OpSum()
     ops_sz0 += 1.0 * Sz(0)
     H_sz0 = MatrixFreeHamiltonian(basis, site, ops_sz0, dtype=dtype)
     op_psi0 = H_sz0.apply(lgs.eigenvector)

@@ -54,6 +54,7 @@ whl_out/
 .vscode/
 .idea/
 .ipynb_checkpoints/
+.claude
 
 # private work
 private/

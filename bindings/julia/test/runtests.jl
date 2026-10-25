@@ -495,14 +495,16 @@ using QuantumKrylov
     @testset "Device & Hardware Query API" begin
         gpu_build = is_gpu_build()
         @test isa(gpu_build, Bool)
-        @test gpu_build == false # Testing on CPU environment
-
         gpu_name = find_gpu()
-        @test gpu_name === nothing
-
         gpus = gpu_count()
         @test isa(gpus, Int)
-        @test gpus == 0
+        if gpu_build
+            @test gpu_name isa String
+            @test gpus >= 1
+        else
+            @test gpu_name === nothing
+            @test gpus == 0
+        end
 
         @test initialize_device!("cpu") === nothing
 
@@ -522,12 +524,44 @@ using QuantumKrylov
         @test H_cpu_trait.device == "cpu"
         @test H_cpu_trait.device == CPUDevice()
 
-        # Requesting GPU on CPU build throws an informative ArgumentError
-        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device="cuda")
-        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device="gpu")
-        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device=CUDADevice())
-        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device=HIPDevice())
-        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device=SYCLDevice())
+        # CPU-only build: every GPU request throws an informative ArgumentError.
+        # GPU build: its own backend works ("gpu" always does), every other backend throws.
+        backend = gpu_build ? lowercase(something(gpu_name, "")) : ""
+        for (name, dev) in (("cuda", CUDADevice()), ("hip", HIPDevice()), ("sycl", SYCLDevice()))
+            if gpu_build && occursin(name, backend)
+                @test dimension(MatrixFreeHamiltonian(basis, op; device=name)) == 4
+                @test dimension(MatrixFreeHamiltonian(basis, op; device=dev)) == 4
+            else
+                @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device=name)
+                @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device=dev)
+            end
+        end
+        if gpu_build
+            @test dimension(MatrixFreeHamiltonian(basis, op; device="gpu")) == 4
+        else
+            @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; device="gpu")
+        end
+
+        # Where a Hamiltonian really runs: "cpu" really means the CPU, even in a GPU build.
+        @test active_device(H_cpu) == "cpu"
+        @test active_device(MatrixFreeHamiltonian(basis, op; device=CPUDevice())) == "cpu"
+        if gpu_build
+            Hg = MatrixFreeHamiltonian(basis, op; device="gpu")
+            @test active_device(Hg) == backend
+            # same physics on both devices, chosen per Hamiltonian from one library
+            Nd = 8
+            bd = SpinHalfBasis(Nd; sz=0)
+            od = OpSum()
+            for i in 0:(Nd-1)
+                od += 1.0 * Sz(i) * Sz(mod(i + 1, Nd)) + 0.5 * (Sp(i) * Sm(mod(i + 1, Nd)) + Sm(i) * Sp(mod(i + 1, Nd)))
+            end
+            # explicit dtype (the default is Float64 on every device)
+            e_cpu = lanczos_ground_state(MatrixFreeHamiltonian(bd, od; device="cpu", dtype=Float64); maxiter=60, tol=1e-12).energy
+            e_gpu = lanczos_ground_state(MatrixFreeHamiltonian(bd, od; device="gpu", dtype=Float64); maxiter=60, tol=1e-12).energy
+            @test abs(e_cpu - e_gpu) < 1e-9
+        else
+            @test active_device(MatrixFreeHamiltonian(basis, op)) == "cpu"
+        end
     end
 
     @testset "Hubbard & Boson Operator Generators" begin
@@ -589,11 +623,12 @@ using QuantumKrylov
         @test res64.energy isa Float64
         @test isapprox(res64.energy, -1.6160254037844386, atol=1e-10)
         @test res64.converged == true
-        @test eltype(res64.state) === ComplexF64
+        @test isreal(H64)
+        @test eltype(res64.state) === Float64      # real Hamiltonian -> real eigenvector
 
         # 2. FP32 Explicit
-        H32 = MatrixFreeHamiltonian(basis, op; precision=Float32)
-        @test H32.precision === Float32
+        H32 = MatrixFreeHamiltonian(basis, op; dtype=Float32)
+        @test H32.dtype === Float32
         @test dimension(H32) == 6
 
         d32 = diagonal(H32)
@@ -610,7 +645,7 @@ using QuantumKrylov
         @test res32.energy isa Float32
         @test isapprox(res32.energy, Float32(-1.6160254), atol=1e-4)
         @test res32.converged == true || res32.iterations == dimension(H32)
-        @test eltype(res32.state) === ComplexF32
+        @test eltype(res32.state) === Float32
         # 3. Solvers with FP64 & FP32
         dav64 = davidson_lowest(H64, n_eig=2, max_subspace=10, tol=1e-10)
         @test eltype(dav64.eigenvalues) === Float64
@@ -619,6 +654,79 @@ using QuantumKrylov
         dav32 = davidson_lowest(H32, n_eig=2, max_subspace=10, tol=1e-5)
         @test eltype(dav32.eigenvalues) === Float32
         @test isapprox(dav32.eigenvalues[1], res32.energy, atol=1e-4)
+    end
+
+    @testset "dtype keyword (precision= is a kept alias)" begin
+        basis = SpinHalfBasis(4; sz=0)
+        op = OpSum()
+        for i in 0:2
+            op += 1.0 * Sz(i) * Sz(i+1) + 0.5 * (Sp(i)*Sm(i+1) + Sm(i)*Sp(i+1))
+        end
+        Ha = MatrixFreeHamiltonian(basis, op; dtype=Float32)
+        Hb = MatrixFreeHamiltonian(basis, op; precision=Float32)
+        Hc = MatrixFreeHamiltonian(basis, op)
+        @test Ha.dtype === Float32 && Hb.dtype === Float32 && Hc.dtype === Float64
+        @test Ha.precision === Float32               # historical field name still works
+        @test :dtype in propertynames(Ha)
+        # giving both is fine when they agree and an error when they do not
+        @test MatrixFreeHamiltonian(basis, op; dtype=Float32, precision=Float32).dtype === Float32
+        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; dtype=Float32, precision=Float64)
+        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; dtype=Int)
+        # same keywords on the 3-argument form and on DeviceVector
+        @test MatrixFreeHamiltonian(basis, SpinHalfSite(), op; dtype=Float32).dtype === Float32
+        @test DeviceVector(8; dtype=Float32).dtype === Float32
+        @test DeviceVector(8; precision=Float32).dtype === Float32
+        @test DeviceVector(8).dtype === Float64
+    end
+
+    @testset "Lanczos options: early_stopping, return_state, real vs complex states" begin
+        N = 6
+        basis = SpinHalfBasis(N; sz=0)
+        op = OpSum()
+        for i in 0:(N-2)
+            op += 1.0 * Sz(i) * Sz(i+1) + 0.5 * (Sp(i)*Sm(i+1) + Sm(i)*Sp(i+1))
+        end
+        for prec in (Float64, Float32)
+            H = MatrixFreeHamiltonian(basis, op; precision=prec)
+            tol = prec === Float64 ? 1e-11 : 1e-5
+            etol = prec === Float64 ? 1e-9 : 2e-3
+
+            # all variations agree; real states for a real Hamiltonian
+            ref = solve(GroundStateProblem(H), Lanczos(variation=TwoPass(), maxiter=100, tol=tol))
+            one = solve(GroundStateProblem(H), Lanczos(variation=OnePass(), maxiter=100, tol=tol))
+            @test one.energy isa prec && ref.energy isa prec
+            @test abs(one.energy - ref.energy) < etol
+            @test eltype(ref.state) === prec && eltype(one.state) === prec
+            @test abs(sum(abs2, ref.state) - 1) < 1e-4
+            @test abs(abs(sum(ref.state .* one.state)) - 1) < 1e-3
+
+            # energy only: no state
+            eo = solve(GroundStateProblem(H), Lanczos(maxiter=100, tol=tol, return_state=false))
+            @test !eo.has_state
+            @test abs(eo.energy - ref.energy) < etol
+
+            # early_stopping=false runs exactly maxiter steps
+            early = solve(GroundStateProblem(H), Lanczos(maxiter=40, tol=tol))
+            full  = solve(GroundStateProblem(H), Lanczos(maxiter=5, tol=tol, early_stopping=false))
+            @test early.converged && early.iterations < 40
+            @test full.iterations == 5 && !full.converged
+            e_full = lanczos_ground_state(H; maxiter=5, tol=tol, early_stopping=false)
+            @test e_full.iterations == 5
+            tp = lanczos_ground_state(H; maxiter=100, tol=tol, return_state=true, two_pass=true)
+            @test abs(tp.energy - ref.energy) < etol && eltype(tp.state) === prec
+        end
+
+        # a complex Hamiltonian (Sy terms) keeps a complex state
+        Nc = 4
+        bc = SpinHalfBasis(Nc)
+        opc = OpSum()
+        for i in 0:(Nc-2)
+            opc += 0.4 * Sx(i) * Sy(i+1) - 0.4 * Sy(i) * Sx(i+1) + 1.0 * Sz(i) * Sz(i+1)
+        end
+        Hc = MatrixFreeHamiltonian(bc, opc)
+        @test !isreal(Hc)
+        rc = solve(GroundStateProblem(Hc), Lanczos(variation=TwoPass(), maxiter=100, tol=1e-11))
+        @test eltype(rc.state) === ComplexF64
     end
 
     @testset "Spin-1 & Correction Vector Spectroscopy" begin
@@ -728,7 +836,7 @@ using QuantumKrylov
         @test act_x.valid == true && act_x.new_state == 1 && isapprox(act_x.matrix_element, 0.5)
 
         act_y = apply(sh_site, "Sy", 0, UInt64(0))
-        @test act_y.valid == true && act_y.new_state == 1 && isapprox(act_y.matrix_element, 0.5im)
+        @test act_y.valid == true && act_y.new_state == 1 && isapprox(act_y.matrix_element, -0.5im)  # Sy = (Sp - Sm)/2i
 
         # Invalid operator throws ErrorException with diagnostic
         @test_throws ErrorException apply(sh_site, "NONEXISTENT", 0, UInt64(0))
@@ -896,8 +1004,16 @@ using QuantumKrylov
         ops += 0.5 * Sp(0) * Sm(1)
         ops += 0.5 * Sm(0) * Sp(1)
 
-        H64 = MatrixFreeHamiltonian{Float64}(b, ops)
-        H32 = MatrixFreeHamiltonian{Float32}(b, ops)
+        # device-resident vectors live on the build's GPU, so the Hamiltonian must run there too
+        dv_device = is_gpu_build() ? "gpu" : "cpu"
+        H64 = MatrixFreeHamiltonian{Float64}(b, ops; device=dv_device)
+        H32 = MatrixFreeHamiltonian{Float32}(b, ops; device=dv_device)
+
+        if is_gpu_build()
+            # a CPU Hamiltonian refuses GPU-resident vectors with a clear error instead of mixing memory spaces
+            H_on_cpu = MatrixFreeHamiltonian{Float64}(b, ops; device="cpu")
+            @test_throws ErrorException H_on_cpu * DeviceVector{Float64}(Int(dimension(H_on_cpu)))
+        end
 
         # Host SpMV reference
         y_ref64 = H64 * h64
