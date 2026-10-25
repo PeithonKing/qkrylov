@@ -36,3 +36,7 @@ main { flex: 1; min-width: 0; padding: 14px 20px; }
 #table th, #table td { border: 1px solid var(--line); padding: 3px 9px; text-align: right; }
 #table th { color: var(--dim); font-weight: 600; }
 #tip { position: fixed; pointer-events: none; padding: 6px 9px; background: #000d; border: 1px solid #555; border-radius: 4px; font-size: 12px; white-space: pre; }
+.about { max-width: 900px; margin: 10px auto 40px; padding: 4px 18px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.about h3 { margin: 12px 0 6px; font-size: 16px; color: var(--accent); }
+.about p, .about li { color: var(--text); }
+.about code { background: var(--bg); padding: 1px 5px; border-radius: 3px; }

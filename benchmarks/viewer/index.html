@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>QKrylov benchmarks</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <aside id="controls">
@@ -42,10 +42,30 @@
   <h2 id="title"></h2>
   <div id="chart"></div>
   <table id="table"></table>
+
+  <section class="about">
+    <h3>SP and TP: two different algorithms</h3>
+    <p><b>SP</b> = <b>Single-Pass</b> Lanczos (<code>qk.solvers.Lanczos</code>) and <b>TP</b> = <b>Two-Pass</b> Lanczos
+      (<code>qk.solvers.LanczosTwoPass</code>). Both find the same ground state and the same energy; they differ in how
+      they get the eigenvector.</p>
+    <ul>
+      <li><b>Single-pass</b> runs the Lanczos recursion once and keeps every Krylov vector in memory, then builds the
+        eigenvector from them. It is the faster one, but memory grows with the number of iterations: iterations &times;
+        one state vector.</li>
+      <li><b>Two-pass</b> keeps only a few vectors. It runs the recursion once to get the energy and the coefficients,
+        then runs it a second time to rebuild the eigenvector without having stored anything. That is twice the
+        matrix&ndash;vector products, so it is roughly <b>2&times; slower</b> (about 1.2&ndash;2&times; in the
+        measurements above), but it needs a small fraction of the RAM, so <b>much larger systems become reachable
+        at the price of time</b>.</li>
+    </ul>
+    <p>Example: on the 24&nbsp;GB GPU at L&nbsp;=&nbsp;28 in FP64, single-pass would need about 30&nbsp;GB for its 100
+      stored vectors and runs out of memory (shown as &ldquo;out of memory&rdquo;), while two-pass finishes in
+      3.6&nbsp;s. FP32 / FP64 are single / double precision.</p>
+  </section>
 </main>
 
 <div id="tip" hidden></div>
-<script src="data.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="data.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
