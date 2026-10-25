@@ -513,68 +513,6 @@ int SUFFIX(qkrylov_hamiltonian_diagonal_device)(
     }
 }
 
-int SUFFIX(qkrylov_lanczos_ground_state)(
-    qkrylov_hamiltonian_h h,
-    int maxiter,
-    Scalar tol,
-    LanczosResT* result)
-{
-    return SUFFIX(qkrylov_lanczos_ground_state_complex)(h, maxiter, tol, result, nullptr);
-}
-
-int SUFFIX(qkrylov_lanczos_ground_state_complex)(
-    qkrylov_hamiltonian_h h,
-    int maxiter,
-    Scalar tol,
-    LanczosResT* result,
-    Scalar* eigenvector_complex)
-{
-    if (!h) {
-        set_last_error("qkrylov_lanczos_ground_state_complex: hamiltonian handle is null");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (h->precision != PREC_ID) {
-        set_last_error("qkrylov_lanczos_ground_state_complex: precision mismatch");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (!h->impl || !result) {
-        set_last_error("qkrylov_lanczos_ground_state_complex: null result pointer or uninitialized hamiltonian");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (maxiter <= 0) {
-        set_last_error("qkrylov_lanczos_ground_state_complex: maxiter must be positive");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    try {
-        return qk_dispatch(h->space, [&](auto sp) -> int {
-            using Space = typename decltype(sp)::type;
-            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
-            LanczosConfig cfg;
-            cfg.maxiter = maxiter;
-            cfg.tol = static_cast<Real>(tol);
-            auto res = eigenvector_complex
-                ? solvers::lanczos<solvers::policy::OnePass_DKGS>(*H, cfg)
-                : solvers::lanczos<solvers::policy::OnePass>(*H, cfg);
-            result->energy     = static_cast<Scalar>(res.energy);
-            result->iterations = res.iterations;
-            result->converged  = res.converged ? 1 : 0;
-            if (eigenvector_complex && !res.eigenvector.empty()) {
-                for (size_t i = 0; i < res.eigenvector.size(); ++i) {
-                    eigenvector_complex[2 * i]     = static_cast<Scalar>(res.eigenvector[i].real());
-                    eigenvector_complex[2 * i + 1] = static_cast<Scalar>(res.eigenvector[i].imag());
-                }
-            }
-            return QKRYLOV_SUCCESS;
-        });
-    } catch (const std::exception& e) {
-        set_last_error(e.what());
-        return QKRYLOV_ERROR_EXCEPTION;
-    } catch (...) {
-        set_last_error("Unknown exception in qkrylov_lanczos_ground_state_complex");
-        return QKRYLOV_ERROR_EXCEPTION;
-    }
-}
-
 int SUFFIX(qkrylov_hamiltonian_is_real)(qkrylov_hamiltonian_h h)
 {
     if (!h || !h->impl) {
@@ -670,66 +608,6 @@ int SUFFIX(qkrylov_lanczos_solve)(
         return QKRYLOV_ERROR_EXCEPTION;
     } catch (...) {
         set_last_error("Unknown exception in qkrylov_lanczos_solve");
-        return QKRYLOV_ERROR_EXCEPTION;
-    }
-}
-
-int SUFFIX(qkrylov_lanczos_two_pass_ground_state)(
-    qkrylov_hamiltonian_h h,
-    int maxiter,
-    Scalar tol,
-    LanczosResT* result)
-{
-    return SUFFIX(qkrylov_lanczos_two_pass_ground_state_complex)(h, maxiter, tol, result, nullptr);
-}
-
-int SUFFIX(qkrylov_lanczos_two_pass_ground_state_complex)(
-    qkrylov_hamiltonian_h h,
-    int maxiter,
-    Scalar tol,
-    LanczosResT* result,
-    Scalar* eigenvector_complex)
-{
-    if (!h) {
-        set_last_error("qkrylov_lanczos_two_pass_ground_state_complex: hamiltonian handle is null");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (h->precision != PREC_ID) {
-        set_last_error("qkrylov_lanczos_two_pass_ground_state_complex: precision mismatch");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (!h->impl || !result) {
-        set_last_error("qkrylov_lanczos_two_pass_ground_state_complex: null result pointer or uninitialized hamiltonian");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (maxiter <= 0) {
-        set_last_error("qkrylov_lanczos_two_pass_ground_state_complex: maxiter must be positive");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    try {
-        return qk_dispatch(h->space, [&](auto sp) -> int {
-            using Space = typename decltype(sp)::type;
-            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
-            LanczosConfig cfg;
-            cfg.maxiter = maxiter;
-            cfg.tol = static_cast<Real>(tol);
-            auto res = solvers::lanczos<solvers::policy::TwoPass>(*H, cfg);
-            result->energy     = static_cast<Scalar>(res.energy);
-            result->iterations = res.iterations;
-            result->converged  = res.converged ? 1 : 0;
-            if (eigenvector_complex && !res.eigenvector.empty()) {
-                for (size_t i = 0; i < res.eigenvector.size(); ++i) {
-                    eigenvector_complex[2 * i]     = static_cast<Scalar>(res.eigenvector[i].real());
-                    eigenvector_complex[2 * i + 1] = static_cast<Scalar>(res.eigenvector[i].imag());
-                }
-            }
-            return QKRYLOV_SUCCESS;
-        });
-    } catch (const std::exception& e) {
-        set_last_error(e.what());
-        return QKRYLOV_ERROR_EXCEPTION;
-    } catch (...) {
-        set_last_error("Unknown exception in qkrylov_lanczos_two_pass_ground_state_complex");
         return QKRYLOV_ERROR_EXCEPTION;
     }
 }

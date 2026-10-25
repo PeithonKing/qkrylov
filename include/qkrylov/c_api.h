@@ -499,24 +499,6 @@ typedef struct {
 typedef qkrylov_correction_vector_result_fp64_t qkrylov_correction_vector_result_c_t;
 
 /* Single-Precision (FP32) Solvers */
-QKRYLOV_API int   qkrylov_lanczos_ground_state_fp32(qkrylov_hamiltonian_h h,
-                                                    int maxiter,
-                                                    float tol,
-                                                    qkrylov_lanczos_result_fp32_t* result);
-QKRYLOV_API int   qkrylov_lanczos_ground_state_complex_fp32(qkrylov_hamiltonian_h h,
-                                                            int maxiter,
-                                                            float tol,
-                                                            qkrylov_lanczos_result_fp32_t* result,
-                                                            float* eigenvector_complex);
-QKRYLOV_API int   qkrylov_lanczos_two_pass_ground_state_fp32(qkrylov_hamiltonian_h h,
-                                                             int maxiter,
-                                                             float tol,
-                                                             qkrylov_lanczos_result_fp32_t* result);
-QKRYLOV_API int   qkrylov_lanczos_two_pass_ground_state_complex_fp32(qkrylov_hamiltonian_h h,
-                                                                     int maxiter,
-                                                                     float tol,
-                                                                     qkrylov_lanczos_result_fp32_t* result,
-                                                                     float* eigenvector_complex);
 QKRYLOV_API int   qkrylov_lanczos_lowest_complex_fp32(qkrylov_hamiltonian_h h,
                                                       int n_eig,
                                                       int maxiter,
@@ -621,24 +603,6 @@ QKRYLOV_API int   qkrylov_vector_zero_fill_fp32(uint64_t dim, float* x_complex);
 QKRYLOV_API int   qkrylov_vector_copy_fp32(uint64_t dim, const float* src_complex, float* dst_complex);
 
 /* Double-Precision (FP64) Solvers */
-QKRYLOV_API int    qkrylov_lanczos_ground_state_fp64(qkrylov_hamiltonian_h h,
-                                                     int maxiter,
-                                                     double tol,
-                                                     qkrylov_lanczos_result_fp64_t* result);
-QKRYLOV_API int    qkrylov_lanczos_ground_state_complex_fp64(qkrylov_hamiltonian_h h,
-                                                              int maxiter,
-                                                              double tol,
-                                                              qkrylov_lanczos_result_fp64_t* result,
-                                                              double* eigenvector_complex);
-QKRYLOV_API int    qkrylov_lanczos_two_pass_ground_state_fp64(qkrylov_hamiltonian_h h,
-                                                              int maxiter,
-                                                              double tol,
-                                                              qkrylov_lanczos_result_fp64_t* result);
-QKRYLOV_API int    qkrylov_lanczos_two_pass_ground_state_complex_fp64(qkrylov_hamiltonian_h h,
-                                                                      int maxiter,
-                                                                      double tol,
-                                                                      qkrylov_lanczos_result_fp64_t* result,
-                                                                      double* eigenvector_complex);
 QKRYLOV_API int    qkrylov_lanczos_lowest_complex_fp64(qkrylov_hamiltonian_h h,
                                                         int n_eig,
                                                         int maxiter,
@@ -743,24 +707,6 @@ QKRYLOV_API int    qkrylov_vector_zero_fill_fp64(uint64_t dim, double* x_complex
 QKRYLOV_API int    qkrylov_vector_copy_fp64(uint64_t dim, const double* src_complex, double* dst_complex);
 
 /* Default (FP64) Convenience Aliases */
-QKRYLOV_API int    qkrylov_lanczos_ground_state(qkrylov_hamiltonian_h h,
-                                                int maxiter,
-                                                double tol,
-                                                qkrylov_lanczos_result_c_t* result);
-QKRYLOV_API int    qkrylov_lanczos_ground_state_complex(qkrylov_hamiltonian_h h,
-                                                        int maxiter,
-                                                        double tol,
-                                                        qkrylov_lanczos_result_c_t* result,
-                                                        double* eigenvector_complex);
-QKRYLOV_API int    qkrylov_lanczos_two_pass_ground_state(qkrylov_hamiltonian_h h,
-                                                         int maxiter,
-                                                         double tol,
-                                                         qkrylov_lanczos_result_c_t* result);
-QKRYLOV_API int    qkrylov_lanczos_two_pass_ground_state_complex(qkrylov_hamiltonian_h h,
-                                                                 int maxiter,
-                                                                 double tol,
-                                                                 qkrylov_lanczos_result_c_t* result,
-                                                                 double* eigenvector_complex);
 QKRYLOV_API int    qkrylov_lanczos_lowest_complex(qkrylov_hamiltonian_h h,
                                                   int n_eig,
                                                   int maxiter,

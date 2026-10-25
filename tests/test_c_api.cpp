@@ -39,13 +39,13 @@ int main() {
     assert(std::string(qkrylov_get_last_error_message()).find("hamiltonian handle is null") != std::string::npos);
 
     // Verify invalid argument on solvers
-    err_code = qkrylov_lanczos_ground_state(nullptr, 10, 1e-6, nullptr);
-    assert(err_code == QKRYLOV_ERROR_INVALID_ARG);
-    assert(std::string(qkrylov_get_last_error_message()).find("hamiltonian handle is null") != std::string::npos);
-
-    err_code = qkrylov_lanczos_two_pass_ground_state(nullptr, 10, 1e-6, nullptr);
-    assert(err_code == QKRYLOV_ERROR_INVALID_ARG);
-    assert(std::string(qkrylov_get_last_error_message()).find("hamiltonian handle is null") != std::string::npos);
+    {
+        qkrylov_lanczos_config_t null_cfg;
+        qkrylov_lanczos_config_default(&null_cfg);
+        err_code = qkrylov_lanczos_solve(nullptr, &null_cfg, nullptr, nullptr);
+        assert(err_code == QKRYLOV_ERROR_INVALID_ARG);
+        assert(std::string(qkrylov_get_last_error_message()).find("hamiltonian handle is null") != std::string::npos);
+    }
 
     // Verify exception capture during Hamiltonian creation with unknown operator
     qkrylov_basis_h dummy_basis = qkrylov_spinhalf_basis_create(2, nullptr);
@@ -318,7 +318,12 @@ int main() {
     // Test Lanczos Ground State Solver via FP64 C API (random start with nullptr)
     qkrylov_lanczos_result_c_t lanczos_res;
     std::vector<std::complex<double>> psi_cx(dim);
-    int solver_res = qkrylov_lanczos_ground_state_complex(H, 200, 1e-12, &lanczos_res, reinterpret_cast<double*>(psi_cx.data()));
+    qkrylov_lanczos_config_t op_cfg;
+    qkrylov_lanczos_config_default(&op_cfg);
+    op_cfg.tol = 1e-12;
+    op_cfg.policy = QKRYLOV_LANCZOS_ONE_PASS;     // keeps every Krylov vector
+    op_cfg.real_output = 0;                       // interleaved complex output
+    int solver_res = qkrylov_lanczos_solve(H, &op_cfg, &lanczos_res, reinterpret_cast<double*>(psi_cx.data()));
     assert(solver_res == QKRYLOV_SUCCESS);
     assert(lanczos_res.converged == 1);
 
@@ -329,7 +334,9 @@ int main() {
     // Test Two-Pass Lanczos Ground State Solver via FP64 C API
     qkrylov_lanczos_result_c_t tp_res;
     std::vector<std::complex<double>> tp_psi(dim);
-    int tp_status = qkrylov_lanczos_two_pass_ground_state_complex(H, 200, 1e-12, &tp_res, reinterpret_cast<double*>(tp_psi.data()));
+    qkrylov_lanczos_config_t tp_cfg = op_cfg;
+    tp_cfg.policy = QKRYLOV_LANCZOS_TWO_PASS;
+    int tp_status = qkrylov_lanczos_solve(H, &tp_cfg, &tp_res, reinterpret_cast<double*>(tp_psi.data()));
     assert(tp_status == QKRYLOV_SUCCESS);
     assert(tp_res.converged == 1);
     assert(std::abs(tp_res.energy - lanczos_res.energy) < 1e-10);
@@ -596,7 +603,12 @@ int main() {
     // Test Lanczos Ground State (FP32)
     qkrylov_lanczos_result_fp32_t lanczos_res32;
     std::vector<std::complex<float>> psi_cx32(dim);
-    int solver_res32 = qkrylov_lanczos_ground_state_complex_fp32(H32, 200, 1e-5f, &lanczos_res32, reinterpret_cast<float*>(psi_cx32.data()));
+    qkrylov_lanczos_config_t op_cfg32;
+    qkrylov_lanczos_config_default(&op_cfg32);
+    op_cfg32.tol = 1e-5;
+    op_cfg32.policy = QKRYLOV_LANCZOS_ONE_PASS;
+    op_cfg32.real_output = 0;
+    int solver_res32 = qkrylov_lanczos_solve_fp32(H32, &op_cfg32, &lanczos_res32, reinterpret_cast<float*>(psi_cx32.data()));
     assert(solver_res32 == QKRYLOV_SUCCESS);
     std::cout << "C API Lanczos FP32 Ground State Energy: " << lanczos_res32.energy << std::endl;
     assert(lanczos_res32.converged == 1 || lanczos_res32.iterations == static_cast<int>(dim));
@@ -604,7 +616,9 @@ int main() {
 
     // Test Two-Pass Lanczos Ground State (FP32)
     qkrylov_lanczos_result_fp32_t tp_res32;
-    int tp_status32 = qkrylov_lanczos_two_pass_ground_state_fp32(H32, 200, 1e-5f, &tp_res32);
+    qkrylov_lanczos_config_t tp_cfg32 = op_cfg32;
+    tp_cfg32.policy = QKRYLOV_LANCZOS_ENERGY_ONLY;      // energy only, no eigenvector
+    int tp_status32 = qkrylov_lanczos_solve_fp32(H32, &tp_cfg32, &tp_res32, nullptr);
     assert(tp_status32 == QKRYLOV_SUCCESS);
     assert(tp_res32.converged == 1 || tp_res32.iterations == static_cast<int>(dim));
     assert(std::abs(tp_res32.energy - (-1.6160254038f)) < 1e-4f);
@@ -737,8 +751,13 @@ int main() {
 
     qkrylov_lanczos_result_c_t lanczos_s1_res;
     std::vector<std::complex<double>> psi0_s1(dim_s1);
-    int gs_status = qkrylov_lanczos_ground_state_complex(
-        H_s1, 200, 1e-10, &lanczos_s1_res, reinterpret_cast<double*>(psi0_s1.data())
+    qkrylov_lanczos_config_t s1_cfg;
+    qkrylov_lanczos_config_default(&s1_cfg);
+    s1_cfg.tol = 1e-10;
+    s1_cfg.policy = QKRYLOV_LANCZOS_ONE_PASS;
+    s1_cfg.real_output = 0;
+    int gs_status = qkrylov_lanczos_solve(
+        H_s1, &s1_cfg, &lanczos_s1_res, reinterpret_cast<double*>(psi0_s1.data())
     );
     assert(gs_status == QKRYLOV_SUCCESS);
     assert(lanczos_s1_res.converged == 1);
