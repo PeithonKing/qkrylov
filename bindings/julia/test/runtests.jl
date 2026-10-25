@@ -413,7 +413,7 @@ using QuantumKrylov
         # Decoupled FTLM testing (Float64)
         samples = ftlm_sample(H; observables=[H], n_random=10, n_steps=20, seed=123)
         @test samples isa FTLMSamples{Float64}
-        @test samples.precision === Float64
+        @test samples.dtype === Float64
 
         decoupled_res = ftlm_evaluate_sweep(samples, [0.5, 1.0, 2.0])
         @test decoupled_res isa FTLMSweepResult{Float64}
@@ -435,7 +435,7 @@ using QuantumKrylov
         H32 = MatrixFreeHamiltonian{Float32}(basis, site, op)
         samples32 = ftlm_sample(H32; observables=[H32], n_random=10, n_steps=20, seed=123)
         @test samples32 isa FTLMSamples{Float32}
-        @test samples32.precision === Float32
+        @test samples32.dtype === Float32
         decoupled_res32 = ftlm_evaluate_sweep(samples32, [0.5, 1.0, 2.0])
         @test decoupled_res32 isa FTLMSweepResult{Float32}
         @test length(decoupled_res32.beta_grid) == 3
@@ -612,7 +612,7 @@ using QuantumKrylov
 
         # 1. FP64 (Default on CPU)
         H64 = MatrixFreeHamiltonian(basis, op)
-        @test H64.precision === Float64
+        @test H64.dtype === Float64
         @test dimension(H64) == 6
 
         d64 = diagonal(H64)
@@ -661,26 +661,20 @@ using QuantumKrylov
         @test isapprox(dav32.eigenvalues[1], res32.energy, atol=1e-4)
     end
 
-    @testset "dtype keyword (precision= is a kept alias)" begin
+    @testset "dtype keyword" begin
         basis = SpinHalfBasis(4; sz=0)
         op = OpSum()
         for i in 0:2
             op += 1.0 * Sz(i) * Sz(i+1) + 0.5 * (Sp(i)*Sm(i+1) + Sm(i)*Sp(i+1))
         end
         Ha = MatrixFreeHamiltonian(basis, op; dtype=Float32)
-        Hb = MatrixFreeHamiltonian(basis, op; precision=Float32)
         Hc = MatrixFreeHamiltonian(basis, op)
-        @test Ha.dtype === Float32 && Hb.dtype === Float32 && Hc.dtype === Float64
-        @test Ha.precision === Float32               # historical field name still works
-        @test :dtype in propertynames(Ha)
-        # giving both is fine when they agree and an error when they do not
-        @test MatrixFreeHamiltonian(basis, op; dtype=Float32, precision=Float32).dtype === Float32
-        @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; dtype=Float32, precision=Float64)
+        @test Ha.dtype === Float32 && Hc.dtype === Float64
         @test_throws ArgumentError MatrixFreeHamiltonian(basis, op; dtype=Int)
-        # same keywords on the 3-argument form and on DeviceVector
+        @test_throws MethodError MatrixFreeHamiltonian(basis, op; precision=Float32)   # the old keyword is gone
+        # same keyword on the 3-argument form and on DeviceVector
         @test MatrixFreeHamiltonian(basis, SpinHalfSite(), op; dtype=Float32).dtype === Float32
         @test DeviceVector(8; dtype=Float32).dtype === Float32
-        @test DeviceVector(8; precision=Float32).dtype === Float32
         @test DeviceVector(8).dtype === Float64
     end
 
@@ -692,7 +686,7 @@ using QuantumKrylov
             op += 1.0 * Sz(i) * Sz(i+1) + 0.5 * (Sp(i)*Sm(i+1) + Sm(i)*Sp(i+1))
         end
         for prec in (Float64, Float32)
-            H = MatrixFreeHamiltonian(basis, op; precision=prec)
+            H = MatrixFreeHamiltonian(basis, op; dtype=prec)
             tol = prec === Float64 ? 1e-11 : 1e-5
             etol = prec === Float64 ? 1e-9 : 2e-3
 
@@ -751,7 +745,7 @@ using QuantumKrylov
 
         H = MatrixFreeHamiltonian(basis, site, op)
         @test dimension(H) == 19
-        @test H.precision === Float64
+        @test H.dtype === Float64
 
         # Ground state
         res_gs = lanczos_ground_state(H, maxiter=100, tol=1e-10, return_state=true)

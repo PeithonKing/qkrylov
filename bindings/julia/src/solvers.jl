@@ -61,10 +61,6 @@ abstract type AbstractLanczosVariation end
 struct OnePass <: AbstractLanczosVariation end
 struct TwoPass <: AbstractLanczosVariation end
 
-# C++ policy parity aliases
-const OnePass_DKGS = OnePass
-const OnePass_DGKS = OnePass
-
 """
     Lanczos(; variation=OnePass(), maxiter=200, tol=1e-12, return_state=true, early_stopping=true)
 
@@ -408,7 +404,7 @@ end
 function lanczos_ground_state(
     H::MatrixFreeHamiltonian;
     maxiter::Integer=100,
-    tol::Real=(H.precision === Float32 ? 1e-6 : 1e-12),
+    tol::Real=(H.dtype === Float32 ? 1e-6 : 1e-12),
     return_state::Bool=false,
     compute_eigenvector::Bool=return_state,
     early_stopping::Bool=true,
@@ -1050,7 +1046,7 @@ observable matrices. Allows zero-cost re-evaluation across arbitrary temperature
 """
 mutable struct FTLMSamples{T<:Union{Float32, Float64}}
     ptr::Ptr{Cvoid}
-    precision::Type{T}
+    dtype::Type{T}
 
     function FTLMSamples{T}(ptr::Ptr{Cvoid}) where {T<:Union{Float32, Float64}}
         obj = new{T}(ptr, T)
@@ -1063,9 +1059,6 @@ mutable struct FTLMSamples{T<:Union{Float32, Float64}}
         return obj
     end
 end
-
-Base.getproperty(x::FTLMSamples, s::Symbol) = s === :dtype ? getfield(x, :precision) : getfield(x, s)
-Base.propertynames(x::FTLMSamples, private::Bool=false) = (fieldnames(FTLMSamples)..., :dtype)
 
 Base.unsafe_convert(::Type{Ptr{Cvoid}}, s::FTLMSamples) = s.ptr
 Base.show(io::IO, s::FTLMSamples{T}) where {T} = print(io, "FTLMSamples{$T}(ptr = $(s.ptr))")

@@ -93,18 +93,14 @@ function initialize_device!(device::AbstractString="cpu")
 end
 
 """
-    resolve_dtype(dtype, precision) -> Type
+    check_dtype(dtype) -> Type
 
-Pick the floating-point element type from the `dtype` keyword (the documented name, same as in the Python
-API) or its alias `precision`. Defaults to `Float64`. Giving both with different values is an error.
+The element type of a Hamiltonian or device vector: `Float64` or `Float32` (the `dtype` keyword, same name as in the
+Python API).
 """
-function resolve_dtype(dtype, precision)
-    if dtype !== nothing && precision !== nothing && dtype !== precision
-        throw(ArgumentError("dtype=$dtype and precision=$precision disagree; pass dtype only (precision is a deprecated alias)"))
-    end
-    T = dtype !== nothing ? dtype : (precision !== nothing ? precision : Float64)
-    (T === Float32 || T === Float64) || throw(ArgumentError("dtype must be Float32 or Float64, got $T"))
-    return T
+function check_dtype(dtype)
+    (dtype === Float32 || dtype === Float64) || throw(ArgumentError("dtype must be Float32 or Float64, got $dtype"))
+    return dtype
 end
 
 """
@@ -120,7 +116,7 @@ device BLAS-1 operations without CPU host staging overhead.
 mutable struct DeviceVector{T<:Union{Float32, Float64}}
     ptr::Ptr{Cvoid}
     dim::Int
-    precision::Type{T}
+    dtype::Type{T}
 
     function DeviceVector{T}(dim::Integer) where {T<:Union{Float32, Float64}}
         dim < 0 && throw(ArgumentError("DeviceVector dimension must be non-negative, got $dim"))
@@ -144,11 +140,7 @@ mutable struct DeviceVector{T<:Union{Float32, Float64}}
     end
 end
 
-DeviceVector(dim::Integer; dtype=nothing, precision=nothing) = DeviceVector{resolve_dtype(dtype, precision)}(dim)
-
-# `v.dtype` mirrors the Python attribute; the stored field keeps its historical name `precision`.
-Base.getproperty(v::DeviceVector, s::Symbol) = s === :dtype ? getfield(v, :precision) : getfield(v, s)
-Base.propertynames(v::DeviceVector, private::Bool=false) = (fieldnames(DeviceVector)..., :dtype)
+DeviceVector(dim::Integer; dtype=Float64) = DeviceVector{check_dtype(dtype)}(dim)
 
 Base.length(v::DeviceVector) = v.dim
 Base.size(v::DeviceVector) = (v.dim,)

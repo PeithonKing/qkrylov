@@ -86,10 +86,6 @@ struct LanczosResult
     }
 };
 
-// Aliases for unified result types
-using LanczosLowestResult = LanczosResult;
-using LanczosLowestConfig = LanczosConfig;
-
 template <std::size_t I>
 decltype(auto) get(const LanczosResult& res) {
     return res.template get<I>();
@@ -111,8 +107,6 @@ namespace solvers {
 
 using QKRYLOV_PRECISION_NAMESPACE::LanczosConfig;
 using QKRYLOV_PRECISION_NAMESPACE::LanczosResult;
-using QKRYLOV_PRECISION_NAMESPACE::LanczosLowestConfig;
-using QKRYLOV_PRECISION_NAMESPACE::LanczosLowestResult;
 
 template <typename Policy = policy::Default, typename ExecSpace>
 LanczosResult lanczos(
