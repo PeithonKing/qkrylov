@@ -22,7 +22,9 @@ for path in sys.argv[1:]:
 
 datasets = []
 GPU_NAME = {"susskind": "RTX 4500 Ada"}
-for (machine, dev, mode), g in sorted(groups.items(), key=lambda kv: (kv[0][2] != "fixed", kv[0][0].startswith("Raspberry"), kv[0][0].startswith("Laptop"), kv[0][1] == "gpu")):
+ORDER = ["susskind cpu", "susskind gpu", "laptop cpu", "raspberry pi 5 cpu"]  # each device: no early stopping, then early stopping
+rank = lambda k: (ORDER.index(f"{k[0].split(' (')[0]} {k[1]}".lower()) if f"{k[0].split(' (')[0]} {k[1]}".lower() in ORDER else len(ORDER), k[2] != "fixed")
+for (machine, dev, mode), g in sorted(groups.items(), key=lambda kv: rank(kv[0])):
     m = g["metas"][0]
     name = machine.split(" (")[0]
     hw = f"{GPU_NAME.get(name, 'GPU')} GPU" if dev == "gpu" else f"{m['cores']}-core CPU"
