@@ -10,6 +10,7 @@ set(QKRYLOV_TESTS
     test_fermion_site
     test_davidson
     test_davidson_exact
+    test_solvers_exact
     test_lanczos_ritz
     test_dynamics
     test_tj_basis
@@ -43,6 +44,7 @@ set(QKRYLOV_FP32_TESTS
     test_lanczos_ritz
     test_davidson
     test_davidson_exact
+    test_solvers_exact
     test_dynamics
     test_ftlm
     test_lanczos_policies

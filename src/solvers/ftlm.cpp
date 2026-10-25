@@ -3,6 +3,7 @@
 #include "qkrylov/solvers/policy.hpp"
 #include "qkrylov/linalg/tridiag_qr.hpp"
 #include "qkrylov/linalg/vector_ops.hpp"
+#include "krylov_detail.hpp"
 
 #include <random>
 #include <cmath>
@@ -22,74 +23,35 @@ std::vector<FTLMKrylovSample> ftlm_sample(
     uint64_t seed
 )
 {
+    using namespace krylov_detail;
     const Index dim = H.dimension();
     if (dim == 0 || n_random <= 0 || n_steps <= 0) return {};
 
-    std::mt19937_64 rng(seed);
-    std::normal_distribution<Real> dist(Real(0.0), Real(1.0));
-
-    const Real mach_eps = std::numeric_limits<Real>::epsilon() * Real(4.0);
     const int max_steps = clamp_to_dim(n_steps, dim);
+    const bool need_basis = !observables.empty();
 
     std::vector<FTLMKrylovSample> samples(n_random);
 
+    Vec<ExecSpace> v_prev = make_vector<ExecSpace>("ftlm::v_prev", dim);
+    Vec<ExecSpace> v_curr = make_vector<ExecSpace>("ftlm::v_curr", dim);
+    Vec<ExecSpace> w = make_vector<ExecSpace>("ftlm::w", dim);
+    // The Krylov vectors are only kept when observables must be projected onto them.
+    Blk<ExecSpace> basis;
+    if (need_basis) basis = make_block<ExecSpace>("ftlm::basis", dim, max_steps);
+
     for (int r = 0; r < n_random; ++r) {
-        HostVector r_vec_host(dim);
-        Real sum_sq = Real(0.0);
-        for (Index i = 0; i < dim; ++i) {
-            Complex c(dist(rng), dist(rng));
-            r_vec_host[i] = c;
-            sum_sq += std::norm(c);
-        }
-        Real nrm = std::sqrt(sum_sq);
-        if (nrm < mach_eps) nrm = Real(1.0);
+        random_unit_vector<ExecSpace>(v_curr, seed, static_cast<uint64_t>(r));
 
-        VectorView<ExecSpace> v_prev("v_prev", dim);
-        VectorView<ExecSpace> v_curr("v_curr", dim);
-        VectorView<ExecSpace> w("w", dim);
+        auto tri = lanczos_recursion<ExecSpace>(H, v_prev, v_curr, w, max_steps,
+            [&](int j, const Vec<ExecSpace>& v) {
+                if (need_basis) {
+                    Vec<ExecSpace> c = column<ExecSpace>(basis, j);
+                    Kokkos::deep_copy(c, v);
+                }
+            });
 
-        copy_host_to_device(r_vec_host, v_curr);
-        scal(Real(1.0) / nrm, v_curr);
-        zero_fill(v_prev);
-
-        std::vector<VectorView<ExecSpace>> basis_vectors;
-        basis_vectors.reserve(max_steps);
-
-        std::vector<Real> alphas;
-        std::vector<Real> betas;
-        alphas.reserve(max_steps);
-        betas.reserve(max_steps);
-
-        for (int j = 0; j < max_steps; ++j) {
-            VectorView<ExecSpace> v_saved("basis_v", dim);
-            Kokkos::deep_copy(v_saved, v_curr);
-            basis_vectors.push_back(v_saved);
-
-            H.apply(v_curr, w);
-            Real alpha = dot(v_curr, w).real();
-            alphas.push_back(alpha);
-
-            axpy(KComplex(-alpha, 0.0), v_curr, w);
-            if (j > 0) {
-                axpy(KComplex(-betas.back(), 0.0), v_prev, w);
-            }
-
-            Real beta_val = norm(w);
-            if (beta_val < mach_eps) {
-                break;
-            }
-            if (j + 1 == max_steps) {
-                break;
-            }
-            betas.push_back(beta_val);
-
-            Kokkos::deep_copy(v_prev, v_curr);
-            Kokkos::deep_copy(v_curr, w);
-            scal(Real(1.0) / beta_val, v_curr);
-        }
-
-        const int M = static_cast<int>(alphas.size());
-        auto eig = linalg::tridiag_eigensystem_full(alphas, betas, M);
+        const int M = static_cast<int>(tri.alphas.size());
+        auto eig = linalg::tridiag_eigensystem_full(tri.alphas, tri.betas, M);
 
         samples[r].dimension = dim;
         samples[r].norm = Real(1.0);
@@ -101,20 +63,11 @@ std::vector<FTLMKrylovSample> ftlm_sample(
         samples[r].eigenvectors = std::move(eig.eigenvectors);
 
         // Project observables onto the Krylov subspace: O_jk = <v_j | O | v_k>
-        if (!observables.empty()) {
+        if (need_basis) {
             samples[r].projected_operators.resize(observables.size());
             for (size_t oi = 0; oi < observables.size(); ++oi) {
-                const auto& obs = observables[oi];
                 ProjectedOperator proj;
-                proj.matrix.resize(M * M);
-
-                for (int k = 0; k < M; ++k) {
-                    obs.apply(basis_vectors[k], w);
-                    for (int j = 0; j < M; ++j) {
-                        KComplex val = dot(basis_vectors[j], w);
-                        proj.matrix[j * M + k] = Complex(val.real(), val.imag());
-                    }
-                }
+                proj.matrix = project_between<ExecSpace>(observables[oi], basis, M, basis, M, w);
                 samples[r].projected_operators[oi] = std::move(proj);
             }
         }
@@ -334,6 +287,7 @@ FTLMSweepResult ftlm_sweep_streamed(
     uint64_t seed
 )
 {
+    using namespace krylov_detail;
     const Index dim = H.dimension();
     if (dim == 0 || n_random <= 0 || n_steps <= 0 || beta_grid.empty()) return {};
 
@@ -341,7 +295,6 @@ FTLMSweepResult ftlm_sweep_streamed(
     const size_t num_betas = beta_grid.size();
     const size_t num_obs = observables.size();
     const int max_steps = clamp_to_dim(n_steps, dim);
-    const Real mach_eps = std::numeric_limits<Real>::epsilon() * Real(4.0);
     const Real max_exp = (sizeof(Real) > 4) ? Real(700.0) : Real(85.0);
 
     // =========================================================================
@@ -357,76 +310,37 @@ FTLMSweepResult ftlm_sweep_streamed(
     std::vector<SampleSpectrum> spectra(R);
     Real E_min = std::numeric_limits<Real>::infinity();
 
-    {
-        std::mt19937_64 rng(seed);
-        std::normal_distribution<Real> dist(Real(0.0), Real(1.0));
+    Vec<ExecSpace> v_prev = make_vector<ExecSpace>("ftlm::v_prev", dim);
+    Vec<ExecSpace> v_curr = make_vector<ExecSpace>("ftlm::v_curr", dim);
+    Vec<ExecSpace> w = make_vector<ExecSpace>("ftlm::w", dim);
 
-        VectorView<ExecSpace> v_prev("v_prev", dim);
-        VectorView<ExecSpace> v_curr("v_curr", dim);
-        VectorView<ExecSpace> w("w", dim);
+    for (size_t r = 0; r < R; ++r) {
+        random_unit_vector<ExecSpace>(v_curr, seed, static_cast<uint64_t>(r));
+        auto tri = lanczos_recursion<ExecSpace>(H, v_prev, v_curr, w, max_steps,
+                                                [](int, const Vec<ExecSpace>&) {});
 
-        for (size_t r = 0; r < R; ++r) {
-            HostVector r_vec_host(dim);
-            Real sum_sq = Real(0.0);
-            for (Index i = 0; i < dim; ++i) {
-                Complex c(dist(rng), dist(rng));
-                r_vec_host[i] = c;
-                sum_sq += std::norm(c);
-            }
-            Real nrm = std::sqrt(sum_sq);
-            if (nrm < mach_eps) nrm = Real(1.0);
+        const int M = static_cast<int>(tri.alphas.size());
+        auto eig = linalg::tridiag_eigensystem_full(tri.alphas, tri.betas, M);
 
-            copy_host_to_device(r_vec_host, v_curr);
-            scal(Real(1.0) / nrm, v_curr);
-            zero_fill(v_prev);
-
-            std::vector<Real> alphas;
-            std::vector<Real> betas;
-            alphas.reserve(max_steps);
-            betas.reserve(max_steps);
-
-            for (int j = 0; j < max_steps; ++j) {
-                H.apply(v_curr, w);
-                Real alpha = dot(v_curr, w).real();
-                alphas.push_back(alpha);
-
-                axpy(KComplex(-alpha, 0.0), v_curr, w);
-                if (j > 0) {
-                    axpy(KComplex(-betas.back(), 0.0), v_prev, w);
-                }
-
-                Real beta_val = norm(w);
-                if (beta_val < mach_eps) break;
-                if (j + 1 == max_steps) break;
-                betas.push_back(beta_val);
-
-                Kokkos::deep_copy(v_prev, v_curr);
-                Kokkos::deep_copy(v_curr, w);
-                scal(Real(1.0) / beta_val, v_curr);
-            }
-
-            const int M = static_cast<int>(alphas.size());
-            auto eig = linalg::tridiag_eigensystem_full(alphas, betas, M);
-
-            if (!eig.eigenvalues.empty() && eig.eigenvalues[0] < E_min) {
-                E_min = eig.eigenvalues[0];
-            }
-
-            spectra[r].eigenvalues = eig.eigenvalues;
-            spectra[r].first_components.resize(M);
-            for (int m = 0; m < M; ++m) {
-                spectra[r].first_components[m] = eig.eigenvectors[m][0];
-            }
-            spectra[r].eigenvectors = std::move(eig.eigenvectors);
-            spectra[r].alphas = std::move(alphas);
-            spectra[r].betas = std::move(betas);
+        if (!eig.eigenvalues.empty() && eig.eigenvalues[0] < E_min) {
+            E_min = eig.eigenvalues[0];
         }
+
+        spectra[r].eigenvalues = eig.eigenvalues;
+        spectra[r].first_components.resize(M);
+        for (int m = 0; m < M; ++m) {
+            spectra[r].first_components[m] = eig.eigenvectors[m][0];
+        }
+        spectra[r].eigenvectors = std::move(eig.eigenvectors);
+        spectra[r].alphas = std::move(tri.alphas);
+        spectra[r].betas = std::move(tri.betas);
     }
 
     if (std::isinf(E_min)) return {};
 
     // =========================================================================
-    // PASS 2: Streamed Projection & Accumulation on the go (O(M^2 * N_obs) RAM)
+    // PASS 2: Boltzmann accumulation per sample. The Krylov vectors are regenerated and observables projected only
+    // when there are observables; thermodynamics alone needs just the spectra above.
     // =========================================================================
     std::vector<Real> Z_sum(num_betas, Real(0.0));
     std::vector<Real> E_sum(num_betas, Real(0.0));
@@ -438,86 +352,59 @@ FTLMSweepResult ftlm_sweep_streamed(
     std::vector<std::vector<Real>> sample_Z(num_betas, std::vector<Real>(R, Real(0.0)));
     std::vector<std::vector<std::vector<Complex>>> sample_A(num_obs, std::vector<std::vector<Complex>>(num_betas, std::vector<Complex>(R, Complex(0.0, 0.0))));
 
-    {
-        std::mt19937_64 rng(seed);
-        std::normal_distribution<Real> dist(Real(0.0), Real(1.0));
+    Blk<ExecSpace> basis;
+    int M_max = 0;
+    for (const auto& sp : spectra) M_max = std::max<int>(M_max, static_cast<int>(sp.eigenvalues.size()));
+    if (num_obs > 0) basis = make_block<ExecSpace>("ftlm::basis", dim, M_max);
 
-        VectorView<ExecSpace> v_prev("v_prev", dim);
-        VectorView<ExecSpace> v_curr("v_curr", dim);
-        VectorView<ExecSpace> w("w", dim);
+    // Two exact ways to get <phi_beta|O|phi_beta> with |phi_beta> = sum_j c_j v_j:
+    //   projection: O_jk = <v_j|O|v_k> once per sample (M applications of O and M block dot products), then
+    //               c^† O c for every temperature -- cheap per temperature, expensive up front;
+    //   direct:     form |phi_beta> (one pass over the basis), apply O once, one dot -- per temperature.
+    // Direct wins whenever there are fewer temperatures than Krylov steps.
+    const bool direct = num_obs > 0 && static_cast<int>(num_betas) < M_max;
+    Vec<ExecSpace> phi = direct ? make_vector<ExecSpace>("ftlm::phi", dim) : Vec<ExecSpace>();
 
-        for (size_t r = 0; r < R; ++r) {
-            HostVector r_vec_host(dim);
-            Real sum_sq = Real(0.0);
-            for (Index i = 0; i < dim; ++i) {
-                Complex c(dist(rng), dist(rng));
-                r_vec_host[i] = c;
-                sum_sq += std::norm(c);
-            }
-            Real nrm = std::sqrt(sum_sq);
-            if (nrm < mach_eps) nrm = Real(1.0);
+    for (size_t r = 0; r < R; ++r) {
+        const int M = static_cast<int>(spectra[r].eigenvalues.size());
 
-            copy_host_to_device(r_vec_host, v_curr);
-            scal(Real(1.0) / nrm, v_curr);
-            zero_fill(v_prev);
-
-            const int M = static_cast<int>(spectra[r].eigenvalues.size());
-            std::vector<VectorView<ExecSpace>> basis_vectors;
-            basis_vectors.reserve(M);
-
-            for (int j = 0; j < M; ++j) {
-                VectorView<ExecSpace> v_saved("basis_v", dim);
-                Kokkos::deep_copy(v_saved, v_curr);
-                basis_vectors.push_back(v_saved);
-
-                if (j + 1 == M) break; // All M basis vectors collected; no need for extra SpMV on the last step
-
-                H.apply(v_curr, w);
-                Real alpha = spectra[r].alphas[j];
-                axpy(KComplex(-alpha, 0.0), v_curr, w);
-                if (j > 0) {
-                    axpy(KComplex(-spectra[r].betas[j - 1], 0.0), v_prev, w);
-                }
-
-                Real beta_val = spectra[r].betas[j];
-                Kokkos::deep_copy(v_prev, v_curr);
-                Kokkos::deep_copy(v_curr, w);
-                scal(Real(1.0) / beta_val, v_curr);
-            }
-
-            // Project observables for sample r only
-            std::vector<std::vector<Complex>> projected_mats(num_obs);
-            for (size_t oi = 0; oi < num_obs; ++oi) {
-                projected_mats[oi].resize(M * M);
-                for (int k = 0; k < M; ++k) {
-                    observables[oi].apply(basis_vectors[k], w);
-                    for (int j = 0; j < M; ++j) {
-                        KComplex val = dot(basis_vectors[j], w);
-                        projected_mats[oi][j * M + k] = Complex(val.real(), val.imag());
-                    }
+        // Project observables for sample r only
+        std::vector<std::vector<Complex>> projected_mats(num_obs);
+        if (num_obs > 0) {
+            random_unit_vector<ExecSpace>(v_curr, seed, static_cast<uint64_t>(r));
+            lanczos_replay<ExecSpace>(H, v_prev, v_curr, w, spectra[r].alphas, spectra[r].betas,
+                [&](int j, const Vec<ExecSpace>& v) {
+                    Vec<ExecSpace> c = column<ExecSpace>(basis, j);
+                    Kokkos::deep_copy(c, v);
+                });
+            if (!direct) {
+                for (size_t oi = 0; oi < num_obs; ++oi) {
+                    projected_mats[oi] = project_between<ExecSpace>(observables[oi], basis, M, basis, M, w);
                 }
             }
+        }
 
-            // Accumulate Boltzmann sums across all temperatures for sample r
-            const auto& s = spectra[r];
-            for (size_t bi = 0; bi < num_betas; ++bi) {
-                Real beta = beta_grid[bi];
+        // Accumulate Boltzmann sums across all temperatures for sample r
+        const auto& s = spectra[r];
+        for (size_t bi = 0; bi < num_betas; ++bi) {
+            Real beta = beta_grid[bi];
 
-                Real z_r = Real(0.0);
-                Real e_r = Real(0.0);
-                Real e2_r = Real(0.0);
-                std::vector<Complex> c(M, Complex(0.0, 0.0));
+            Real z_r = Real(0.0);
+            Real e_r = Real(0.0);
+            Real e2_r = Real(0.0);
+            std::vector<Complex> c(M, Complex(0.0, 0.0));
 
-                for (int m = 0; m < M; ++m) {
-                    Real exp_arg = -beta * (s.eigenvalues[m] - E_min);
-                    Real exp_val = (exp_arg < -Real(80.0)) ? Real(0.0) : std::exp(exp_arg);
-                    Real v0 = s.first_components[m];
-                    Real weight = v0 * v0 * exp_val;
+            for (int m = 0; m < M; ++m) {
+                Real exp_arg = -beta * (s.eigenvalues[m] - E_min);
+                Real exp_val = (exp_arg < -Real(80.0)) ? Real(0.0) : std::exp(exp_arg);
+                Real v0 = s.first_components[m];
+                Real weight = v0 * v0 * exp_val;
 
-                    z_r += weight;
-                    e_r += s.eigenvalues[m] * weight;
-                    e2_r += s.eigenvalues[m] * s.eigenvalues[m] * weight;
+                z_r += weight;
+                e_r += s.eigenvalues[m] * weight;
+                e2_r += s.eigenvalues[m] * s.eigenvalues[m] * weight;
 
+                if (num_obs > 0) {
                     Real half_exp_arg = -beta * (s.eigenvalues[m] - E_min) * Real(0.5);
                     Real half_exp_val = (half_exp_arg < -Real(80.0)) ? Real(0.0) : std::exp(half_exp_arg);
                     Complex factor(v0 * half_exp_val, Real(0.0));
@@ -525,13 +412,26 @@ FTLMSweepResult ftlm_sweep_streamed(
                         c[j] += factor * Complex(s.eigenvectors[m][j], Real(0.0));
                     }
                 }
+            }
 
-                sample_Z[bi][r] = z_r;
-                Z_sum[bi] += z_r;
-                E_sum[bi] += e_r;
-                E2_sum[bi] += e2_r;
-                sum_Z_sq[bi] += z_r * z_r;
+            sample_Z[bi][r] = z_r;
+            Z_sum[bi] += z_r;
+            E_sum[bi] += e_r;
+            E2_sum[bi] += e2_r;
+            sum_Z_sq[bi] += z_r * z_r;
 
+            if (direct) {
+                // |phi_beta> = sum_j c_j v_j, then <phi|O|phi> with a single application of each observable
+                linalg::CoefBuffer<KComplex, typename ExecSpace::memory_space> cbuf(M);
+                linalg::block_combine<KComplex, typename ExecSpace::memory_space>(basis, M, cbuf.set(c, M), phi);
+                for (size_t oi = 0; oi < num_obs; ++oi) {
+                    observables[oi].apply(phi, w);
+                    const KComplex val = dot(phi, w);
+                    const Complex obs_val(val.real(), val.imag());
+                    sample_A[oi][bi][r] = obs_val;
+                    A_sum[oi][bi] += obs_val;
+                }
+            } else {
                 for (size_t oi = 0; oi < num_obs; ++oi) {
                     Complex obs_val(0.0, 0.0);
                     for (int j = 0; j < M; ++j) {
@@ -544,10 +444,6 @@ FTLMSweepResult ftlm_sweep_streamed(
                     A_sum[oi][bi] += obs_val;
                 }
             }
-
-            // Immediately release sample r memory
-            basis_vectors.clear();
-            projected_mats.clear();
         }
     }
 

@@ -60,6 +60,11 @@ struct FTLMResult
     std::vector<Real> observable_errors = {};
 };
 
+// Random start vectors: sample r is a complex Gaussian vector drawn on the device from a counter-based generator
+// seeded by (seed, r). The same seed gives the same result on any device and thread count, every sample is
+// independent of the others, and the streamed and cached workflows use the same vectors. (Earlier versions drew
+// the vectors on the host from a sequential generator, so a given seed now gives a different -- statistically
+// equivalent -- estimate than before.)
 // Mode 2 / Stage 1: Krylov Subspace Sampling (Cached mode)
 template <typename ExecSpace, typename Policy = solvers::policy::OnePass_full>
 std::vector<FTLMKrylovSample> ftlm_sample(

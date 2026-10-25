@@ -3,6 +3,7 @@
 #include "qkrylov/solvers/lanczos.hpp"
 #include "qkrylov/linalg/tridiag_qr.hpp"
 #include "qkrylov/linalg/vector_ops.hpp"
+#include "krylov_detail.hpp"
 
 #include <cmath>
 #include <complex>
@@ -88,6 +89,8 @@ RealTimeResult time_evolve(
     int n_steps
 )
 {
+    using namespace krylov_detail;
+    using MemSpace = typename ExecSpace::memory_space;
     const Index dim = H.dimension();
     if (dim == 0 || psi0.empty() || time_grid.empty()) return {};
 
@@ -101,16 +104,17 @@ RealTimeResult time_evolve(
 
     const int max_steps = clamp_to_dim(n_steps, dim);
 
-    VectorView<ExecSpace> v_prev("v_prev", dim);
-    VectorView<ExecSpace> v_curr("v_curr", dim);
-    VectorView<ExecSpace> w("w", dim);
+    Vec<ExecSpace> v_prev = make_vector<ExecSpace>("te::v_prev", dim);
+    Vec<ExecSpace> v_curr = make_vector<ExecSpace>("te::v_curr", dim);
+    Vec<ExecSpace> w = make_vector<ExecSpace>("te::w", dim);
 
     copy_host_to_device(psi0, v_curr);
-    scal(Real(1.0) / norm_psi, v_curr);
-    zero_fill(v_prev);
+    scale_into(v_curr, v_curr, Real(1.0) / norm_psi);
 
-    std::vector<VectorView<ExecSpace>> basis_vectors;
-    basis_vectors.reserve(max_steps);
+    // The Krylov vectors are kept as the columns of one block: full reorthogonalisation (to keep the evolution
+    // unitary) and the observable projections each cost one pass over the block, not one per vector.
+    Blk<ExecSpace> basis = make_block<ExecSpace>("te::basis", dim, max_steps);
+    linalg::CoefBuffer<KComplex, MemSpace> coef(max_steps);
 
     std::vector<Real> alphas;
     std::vector<Real> betas;
@@ -118,33 +122,25 @@ RealTimeResult time_evolve(
     betas.reserve(max_steps);
 
     for (int j = 0; j < max_steps; ++j) {
-        VectorView<ExecSpace> v_saved("basis_v", dim);
-        Kokkos::deep_copy(v_saved, v_curr);
-        basis_vectors.push_back(v_saved);
+        {
+            Vec<ExecSpace> c = column<ExecSpace>(basis, j);
+            Kokkos::deep_copy(c, v_curr);
+        }
 
-        H.apply(v_curr, w);
-        Real alpha = dot(v_curr, w).real();
+        const Real alpha = H.apply_dot(v_curr, w).real();
         alphas.push_back(alpha);
+        lanczos_update_norm2(w, v_curr, v_prev, alpha, j > 0 ? betas.back() : Real(0.0), j > 0);
 
-        axpy(KComplex(-alpha, 0.0), v_curr, w);
-        if (j > 0) {
-            axpy(KComplex(-betas.back(), 0.0), v_prev, w);
-        }
+        // Full reorthogonalisation against every basis vector so far (twice: "twice is enough")
+        linalg::block_orthogonalize<KComplex, MemSpace>(basis, j + 1, w, coef);
 
-        // Full reorthogonalization to preserve exact unitary norms
-        for (int k = 0; k <= j; ++k) {
-            KComplex ovlp = dot(basis_vectors[k], w);
-            axpy(-ovlp, basis_vectors[k], w);
-        }
-
-        Real beta_val = norm(w);
+        const Real beta_val = norm(w);
         if (beta_val < mach_eps) break;
         if (j + 1 == max_steps) break;
         betas.push_back(beta_val);
 
-        Kokkos::deep_copy(v_prev, v_curr);
-        Kokkos::deep_copy(v_curr, w);
-        scal(Real(1.0) / beta_val, v_curr);
+        scale_into(v_prev, w, Real(1.0) / beta_val);
+        std::swap(v_prev, v_curr);
     }
 
     const int M = static_cast<int>(alphas.size());
@@ -153,18 +149,16 @@ RealTimeResult time_evolve(
     const size_t num_times = time_grid.size();
     const size_t num_obs = observables.size();
 
-    // Project observables onto Krylov basis: O_jk = <v_j | O | v_k>
+    // Observables: project onto the Krylov basis once (M applications), or, when there are fewer times than
+    // Krylov vectors, evaluate <psi(t)|O|psi(t)> directly at each time (one application per time).
+    const bool direct = num_obs > 0 && static_cast<int>(num_times) < M;
     std::vector<std::vector<Complex>> projected_obs(num_obs);
-    for (size_t oi = 0; oi < num_obs; ++oi) {
-        projected_obs[oi].resize(M * M);
-        for (int k = 0; k < M; ++k) {
-            observables[oi].apply(basis_vectors[k], w);
-            for (int j = 0; j < M; ++j) {
-                KComplex val = dot(basis_vectors[j], w);
-                projected_obs[oi][j * M + k] = Complex(val.real(), val.imag());
-            }
+    if (!direct) {
+        for (size_t oi = 0; oi < num_obs; ++oi) {
+            projected_obs[oi] = project_between<ExecSpace>(observables[oi], basis, M, basis, M, w);
         }
     }
+    Vec<ExecSpace> psi_t = direct ? make_vector<ExecSpace>("te::psi_t", dim) : Vec<ExecSpace>();
 
     RealTimeResult res;
     res.time_grid = time_grid;
@@ -191,15 +185,24 @@ RealTimeResult time_evolve(
 
         res.survival_probabilities[ti] = overlap;
 
-        for (size_t oi = 0; oi < num_obs; ++oi) {
-            const auto& mat = projected_obs[oi];
-            Complex val(0.0, 0.0);
-            for (int j = 0; j < M; ++j) {
-                for (int k = 0; k < M; ++k) {
-                    val += std::conj(c[j]) * mat[j * M + k] * c[k];
-                }
+        if (direct) {
+            linalg::block_combine<KComplex, MemSpace>(basis, M, coef.set(c, M), psi_t);
+            for (size_t oi = 0; oi < num_obs; ++oi) {
+                observables[oi].apply(psi_t, w);
+                const KComplex val = dot(psi_t, w);
+                res.observable_expectations[oi][ti] = Complex(val.real(), val.imag());
             }
-            res.observable_expectations[oi][ti] = val;
+        } else {
+            for (size_t oi = 0; oi < num_obs; ++oi) {
+                const auto& mat = projected_obs[oi];
+                Complex val(0.0, 0.0);
+                for (int j = 0; j < M; ++j) {
+                    for (int k = 0; k < M; ++k) {
+                        val += std::conj(c[j]) * mat[j * M + k] * c[k];
+                    }
+                }
+                res.observable_expectations[oi][ti] = val;
+            }
         }
     }
 
@@ -218,6 +221,7 @@ FTLMDynamicsResult ftlm_dynamics(
     uint64_t seed
 )
 {
+    using namespace krylov_detail;
     const Index dim = H.dimension();
     if (dim == 0 || n_random <= 0 || n_steps <= 0 || time_grid.empty()) return {};
 
@@ -226,56 +230,19 @@ FTLMDynamicsResult ftlm_dynamics(
     const int max_steps = clamp_to_dim(n_steps, dim);
     const Real mach_eps = std::numeric_limits<Real>::epsilon() * Real(4.0);
 
-    // Pass 1: Find global ground-state energy shift E_min
+    Vec<ExecSpace> v_prev = make_vector<ExecSpace>("ftlmdyn::v_prev", dim);
+    Vec<ExecSpace> v_curr = make_vector<ExecSpace>("ftlmdyn::v_curr", dim);
+    Vec<ExecSpace> w = make_vector<ExecSpace>("ftlmdyn::w", dim);
+
+    // Pass 1: Find global ground-state energy shift E_min (spectra only, no stored vectors)
     Real E_min = std::numeric_limits<Real>::infinity();
-    {
-        std::mt19937_64 rng(seed);
-        std::normal_distribution<Real> dist(Real(0.0), Real(1.0));
-
-        VectorView<ExecSpace> v_prev("v_prev", dim);
-        VectorView<ExecSpace> v_curr("v_curr", dim);
-        VectorView<ExecSpace> w("w", dim);
-
-        for (size_t r = 0; r < R; ++r) {
-            HostVector r_vec(dim);
-            Real sum_sq = Real(0.0);
-            for (Index i = 0; i < dim; ++i) {
-                Complex c(dist(rng), dist(rng));
-                r_vec[i] = c;
-                sum_sq += std::norm(c);
-            }
-            Real nrm = std::sqrt(sum_sq);
-            if (nrm < mach_eps) nrm = Real(1.0);
-
-            copy_host_to_device(r_vec, v_curr);
-            scal(Real(1.0) / nrm, v_curr);
-            zero_fill(v_prev);
-
-            std::vector<Real> alphas;
-            std::vector<Real> betas;
-            for (int j = 0; j < max_steps; ++j) {
-                H.apply(v_curr, w);
-                Real alpha = dot(v_curr, w).real();
-                alphas.push_back(alpha);
-
-                axpy(KComplex(-alpha, 0.0), v_curr, w);
-                if (j > 0) axpy(KComplex(-betas.back(), 0.0), v_prev, w);
-
-                Real beta_val = norm(w);
-                if (beta_val < mach_eps) break;
-                if (j + 1 == max_steps) break;
-                betas.push_back(beta_val);
-
-                Kokkos::deep_copy(v_prev, v_curr);
-                Kokkos::deep_copy(v_curr, w);
-                scal(Real(1.0) / beta_val, v_curr);
-            }
-
-            int M = static_cast<int>(alphas.size());
-            auto eig = linalg::tridiag_eigensystem_full(alphas, betas, M);
-            if (!eig.eigenvalues.empty() && eig.eigenvalues[0] < E_min) {
-                E_min = eig.eigenvalues[0];
-            }
+    for (size_t r = 0; r < R; ++r) {
+        random_unit_vector<ExecSpace>(v_curr, seed, static_cast<uint64_t>(r));
+        auto tri = lanczos_recursion<ExecSpace>(H, v_prev, v_curr, w, max_steps, [](int, const Vec<ExecSpace>&) {});
+        const int M = static_cast<int>(tri.alphas.size());
+        auto eig = linalg::tridiag_eigensystem_full(tri.alphas, tri.betas, M);
+        if (!eig.eigenvalues.empty() && eig.eigenvalues[0] < E_min) {
+            E_min = eig.eigenvalues[0];
         }
     }
 
@@ -287,190 +254,115 @@ FTLMDynamicsResult ftlm_dynamics(
     std::vector<Real> sample_Z(R, Real(0.0));
     std::vector<std::vector<Complex>> sample_C(R, std::vector<Complex>(num_times, Complex(0.0, 0.0)));
 
-    {
-        std::mt19937_64 rng(seed);
-        std::normal_distribution<Real> dist(Real(0.0), Real(1.0));
+    // Two Krylov bases (thermal state and B|phi>) as blocks, plus a few work vectors, allocated once.
+    Blk<ExecSpace> basis = make_block<ExecSpace>("ftlmdyn::basis", dim, max_steps);
+    Blk<ExecSpace> chi_basis = make_block<ExecSpace>("ftlmdyn::chi_basis", dim, max_steps);
+    Vec<ExecSpace> phi_vec = make_vector<ExecSpace>("ftlmdyn::phi", dim);
+    Vec<ExecSpace> chi_0 = make_vector<ExecSpace>("ftlmdyn::chi0", dim);
+    Vec<ExecSpace> u_prev = make_vector<ExecSpace>("ftlmdyn::u_prev", dim);
+    Vec<ExecSpace> u_curr = make_vector<ExecSpace>("ftlmdyn::u_curr", dim);
+    Vec<ExecSpace> u_w = make_vector<ExecSpace>("ftlmdyn::u_w", dim);
 
-        VectorView<ExecSpace> v_prev("v_prev", dim);
-        VectorView<ExecSpace> v_curr("v_curr", dim);
-        VectorView<ExecSpace> w("w", dim);
+    for (size_t r = 0; r < R; ++r) {
+        random_unit_vector<ExecSpace>(v_curr, seed, static_cast<uint64_t>(r));
+        auto tri = lanczos_recursion<ExecSpace>(H, v_prev, v_curr, w, max_steps,
+            [&](int j, const Vec<ExecSpace>& v) {
+                Vec<ExecSpace> c = column<ExecSpace>(basis, j);
+                Kokkos::deep_copy(c, v);
+            });
 
-        for (size_t r = 0; r < R; ++r) {
-            HostVector r_vec(dim);
-            Real sum_sq = Real(0.0);
-            for (Index i = 0; i < dim; ++i) {
-                Complex c(dist(rng), dist(rng));
-                r_vec[i] = c;
-                sum_sq += std::norm(c);
+        const int M = static_cast<int>(tri.alphas.size());
+        auto eig = linalg::tridiag_eigensystem_full(tri.alphas, tri.betas, M);
+
+        // Thermal state |phi_r(beta/2)> components and sample partition weight
+        Real z_r = Real(0.0);
+        std::vector<Real> c_phi(M, Real(0.0));
+        for (int m = 0; m < M; ++m) {
+            Real exp_arg = -beta * (eig.eigenvalues[m] - E_min);
+            Real exp_val = (exp_arg < -Real(80.0)) ? Real(0.0) : std::exp(exp_arg);
+            Real v0 = eig.eigenvectors[m][0];
+            z_r += v0 * v0 * exp_val;
+
+            Real half_exp_arg = -beta * (eig.eigenvalues[m] - E_min) * Real(0.5);
+            Real half_exp_val = (half_exp_arg < -Real(80.0)) ? Real(0.0) : std::exp(half_exp_arg);
+            Real factor = v0 * half_exp_val;
+            for (int j = 0; j < M; ++j) {
+                c_phi[j] += factor * eig.eigenvectors[m][j];
             }
-            Real nrm = std::sqrt(sum_sq);
-            if (nrm < mach_eps) nrm = Real(1.0);
+        }
+        sample_Z[r] = z_r;
+        Z_sum += z_r;
 
-            copy_host_to_device(r_vec, v_curr);
-            scal(Real(1.0) / nrm, v_curr);
-            zero_fill(v_prev);
+        // Form thermal state |phi> in full Hilbert space (one pass over the basis)
+        combine_real<ExecSpace>(basis, c_phi, phi_vec);
 
-            std::vector<VectorView<ExecSpace>> basis_vectors;
-            basis_vectors.reserve(max_steps);
-            std::vector<Real> alphas;
-            std::vector<Real> betas;
+        // Apply B to |phi>: |chi_0> = B |phi>
+        B.apply(phi_vec, chi_0);
+        const Real chi_norm = norm(chi_0);
 
-            for (int j = 0; j < max_steps; ++j) {
-                VectorView<ExecSpace> v_saved("basis_v", dim);
-                Kokkos::deep_copy(v_saved, v_curr);
-                basis_vectors.push_back(v_saved);
-
-                H.apply(v_curr, w);
-                Real alpha = dot(v_curr, w).real();
-                alphas.push_back(alpha);
-
-                axpy(KComplex(-alpha, 0.0), v_curr, w);
-                if (j > 0) axpy(KComplex(-betas.back(), 0.0), v_prev, w);
-
-                Real beta_val = norm(w);
-                if (beta_val < mach_eps) break;
-                if (j + 1 == max_steps) break;
-                betas.push_back(beta_val);
-
-                Kokkos::deep_copy(v_prev, v_curr);
-                Kokkos::deep_copy(v_curr, w);
-                scal(Real(1.0) / beta_val, v_curr);
+        if (chi_norm < mach_eps) {
+            for (size_t ti = 0; ti < num_times; ++ti) {
+                sample_C[r][ti] = Complex(0.0, 0.0);
             }
+            continue;
+        }
 
-            const int M = static_cast<int>(alphas.size());
-            auto eig = linalg::tridiag_eigensystem_full(alphas, betas, M);
+        // Run Lanczos for |chi_0>
+        scale_into(u_curr, chi_0, Real(1.0) / chi_norm);
+        auto tri_chi = lanczos_recursion<ExecSpace>(H, u_prev, u_curr, u_w, max_steps,
+            [&](int j, const Vec<ExecSpace>& v) {
+                Vec<ExecSpace> c = column<ExecSpace>(chi_basis, j);
+                Kokkos::deep_copy(c, v);
+            });
 
-            // Thermal state |phi_r(beta/2)> components and sample partition weight
-            Real z_r = Real(0.0);
-            std::vector<Real> c_phi(M, Real(0.0));
+        const int M_chi = static_cast<int>(tri_chi.alphas.size());
+        auto eig_chi = linalg::tridiag_eigensystem_full(tri_chi.alphas, tri_chi.betas, M_chi);
+
+        // Project operator A between the two Krylov bases: A_jk = <v_j | A | w_k>
+        std::vector<Complex> mat_A_cross = project_between<ExecSpace>(A, basis, M, chi_basis, M_chi, w);
+
+        // Propagate in real time across time_grid
+        for (size_t ti = 0; ti < num_times; ++ti) {
+            Real t = time_grid[ti];
+
+            // Real-time evolved |phi(t)> coefficients in basis_vectors
+            std::vector<Complex> phi_t(M, Complex(0.0, 0.0));
             for (int m = 0; m < M; ++m) {
-                Real exp_arg = -beta * (eig.eigenvalues[m] - E_min);
-                Real exp_val = (exp_arg < -Real(80.0)) ? Real(0.0) : std::exp(exp_arg);
-                Real v0 = eig.eigenvectors[m][0];
-                z_r += v0 * v0 * exp_val;
+                Real theta = -eig.eigenvalues[m] * t;
+                Complex phase(std::cos(theta), std::sin(theta));
 
                 Real half_exp_arg = -beta * (eig.eigenvalues[m] - E_min) * Real(0.5);
                 Real half_exp_val = (half_exp_arg < -Real(80.0)) ? Real(0.0) : std::exp(half_exp_arg);
-                Real factor = v0 * half_exp_val;
+                Complex factor_phi = (eig.eigenvectors[m][0] * half_exp_val) * phase;
+
                 for (int j = 0; j < M; ++j) {
-                    c_phi[j] += factor * eig.eigenvectors[m][j];
+                    phi_t[j] += factor_phi * eig.eigenvectors[m][j];
                 }
             }
-            sample_Z[r] = z_r;
-            Z_sum += z_r;
 
-            // Form thermal state |phi> in full Hilbert space
-            VectorView<ExecSpace> phi_vec("phi_vec", dim);
-            zero_fill(phi_vec);
-            for (int j = 0; j < M; ++j) {
-                axpy(KComplex(c_phi[j], 0.0), basis_vectors[j], phi_vec);
-            }
+            // Real-time evolved |chi(t)> coefficients in chi_basis
+            std::vector<Complex> chi_t(M_chi, Complex(0.0, 0.0));
+            for (int m = 0; m < M_chi; ++m) {
+                Real theta = -eig_chi.eigenvalues[m] * t;
+                Complex phase(std::cos(theta), std::sin(theta));
+                Complex factor_chi = eig_chi.eigenvectors[m][0] * phase;
 
-            // Apply B to |phi>: |chi_0> = B |phi>
-            VectorView<ExecSpace> chi_0("chi_0", dim);
-            B.apply(phi_vec, chi_0);
-            Real chi_norm = norm(chi_0);
-
-            if (chi_norm < mach_eps) {
-                for (size_t ti = 0; ti < num_times; ++ti) {
-                    sample_C[r][ti] = Complex(0.0, 0.0);
-                }
-            } else {
-                // Run Lanczos for |chi_0>
-                VectorView<ExecSpace> u_prev("u_prev", dim);
-                VectorView<ExecSpace> u_curr("u_curr", dim);
-                VectorView<ExecSpace> u_w("u_w", dim);
-
-                Kokkos::deep_copy(u_curr, chi_0);
-                scal(Real(1.0) / chi_norm, u_curr);
-                zero_fill(u_prev);
-
-                std::vector<VectorView<ExecSpace>> chi_basis;
-                chi_basis.reserve(max_steps);
-                std::vector<Real> chi_alphas;
-                std::vector<Real> chi_betas;
-
-                for (int j = 0; j < max_steps; ++j) {
-                    VectorView<ExecSpace> u_saved("chi_basis_v", dim);
-                    Kokkos::deep_copy(u_saved, u_curr);
-                    chi_basis.push_back(u_saved);
-
-                    H.apply(u_curr, u_w);
-                    Real alpha = dot(u_curr, u_w).real();
-                    chi_alphas.push_back(alpha);
-
-                    axpy(KComplex(-alpha, 0.0), u_curr, u_w);
-                    if (j > 0) axpy(KComplex(-chi_betas.back(), 0.0), u_prev, u_w);
-
-                    Real b_val = norm(u_w);
-                    if (b_val < mach_eps) break;
-                    if (j + 1 == max_steps) break;
-                    chi_betas.push_back(b_val);
-
-                    Kokkos::deep_copy(u_prev, u_curr);
-                    Kokkos::deep_copy(u_curr, u_w);
-                    scal(Real(1.0) / b_val, u_curr);
-                }
-
-                const int M_chi = static_cast<int>(chi_alphas.size());
-                auto eig_chi = linalg::tridiag_eigensystem_full(chi_alphas, chi_betas, M_chi);
-
-                // Project operator A between the two Krylov bases: A_jk = <v_j | A | w_k>
-                std::vector<Complex> mat_A_cross(M * M_chi);
                 for (int k = 0; k < M_chi; ++k) {
-                    A.apply(chi_basis[k], w);
-                    for (int j = 0; j < M; ++j) {
-                        KComplex val = dot(basis_vectors[j], w);
-                        mat_A_cross[j * M_chi + k] = Complex(val.real(), val.imag());
-                    }
-                }
-
-                // Propagate in real time across time_grid
-                for (size_t ti = 0; ti < num_times; ++ti) {
-                    Real t = time_grid[ti];
-
-                    // Real-time evolved |phi(t)> coefficients in basis_vectors
-                    std::vector<Complex> phi_t(M, Complex(0.0, 0.0));
-                    for (int m = 0; m < M; ++m) {
-                        Real theta = -eig.eigenvalues[m] * t;
-                        Complex phase(std::cos(theta), std::sin(theta));
-
-                        Real half_exp_arg = -beta * (eig.eigenvalues[m] - E_min) * Real(0.5);
-                        Real half_exp_val = (half_exp_arg < -Real(80.0)) ? Real(0.0) : std::exp(half_exp_arg);
-                        Complex factor_phi = (eig.eigenvectors[m][0] * half_exp_val) * phase;
-
-                        for (int j = 0; j < M; ++j) {
-                            phi_t[j] += factor_phi * eig.eigenvectors[m][j];
-                        }
-                    }
-
-                    // Real-time evolved |chi(t)> coefficients in chi_basis
-                    std::vector<Complex> chi_t(M_chi, Complex(0.0, 0.0));
-                    for (int m = 0; m < M_chi; ++m) {
-                        Real theta = -eig_chi.eigenvalues[m] * t;
-                        Complex phase(std::cos(theta), std::sin(theta));
-                        Complex factor_chi = eig_chi.eigenvectors[m][0] * phase;
-
-                        for (int k = 0; k < M_chi; ++k) {
-                            chi_t[k] += factor_chi * eig_chi.eigenvectors[m][k];
-                        }
-                    }
-
-                    // Contract: <phi(t) | A | chi(t)>
-                    Complex corr(0.0, 0.0);
-                    for (int j = 0; j < M; ++j) {
-                        for (int k = 0; k < M_chi; ++k) {
-                            corr += std::conj(phi_t[j]) * mat_A_cross[j * M_chi + k] * chi_t[k];
-                        }
-                    }
-                    corr *= chi_norm;
-
-                    sample_C[r][ti] = corr;
-                    C_sum[ti] += corr;
+                    chi_t[k] += factor_chi * eig_chi.eigenvectors[m][k];
                 }
             }
 
-            basis_vectors.clear();
+            // Contract: <phi(t) | A | chi(t)>
+            Complex corr(0.0, 0.0);
+            for (int j = 0; j < M; ++j) {
+                for (int k = 0; k < M_chi; ++k) {
+                    corr += std::conj(phi_t[j]) * mat_A_cross[j * M_chi + k] * chi_t[k];
+                }
+            }
+            corr *= chi_norm;
+
+            sample_C[r][ti] = corr;
+            C_sum[ti] += corr;
         }
     }
 
