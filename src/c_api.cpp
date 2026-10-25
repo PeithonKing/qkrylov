@@ -253,9 +253,9 @@ int qkrylov_sector_get_nb(qkrylov_sector_h sector, int* nb_out, int* active_out)
 /* -----------------------------------------------------------------------------
  * Basis API
  * ----------------------------------------------------------------------------- */
-qkrylov_basis_h qkrylov_spinhalf_basis_create(int num_sites, qkrylov_sector_h sector) {
+qkrylov_basis_h qkrylov_basis_create_spin_half(int num_sites, qkrylov_sector_h sector) {
     if (num_sites <= 0) {
-        set_last_error("qkrylov_spinhalf_basis_create: num_sites must be positive");
+        set_last_error("qkrylov_basis_create_spin_half: num_sites must be positive");
         return nullptr;
     }
     try {
@@ -269,7 +269,7 @@ qkrylov_basis_h qkrylov_spinhalf_basis_create(int num_sites, qkrylov_sector_h se
         set_last_error(e.what());
         return nullptr;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_spinhalf_basis_create");
+        set_last_error("Unknown exception in qkrylov_basis_create_spin_half");
         return nullptr;
     }
 }
@@ -300,9 +300,9 @@ qkrylov_basis_h qkrylov_basis_create_spin_s(int N, double S, const qkrylov_secto
     }
 }
 
-qkrylov_basis_h qkrylov_fermion_basis_create(int num_sites, qkrylov_sector_h sector) {
+qkrylov_basis_h qkrylov_basis_create_fermion(int num_sites, qkrylov_sector_h sector) {
     if (num_sites <= 0) {
-        set_last_error("qkrylov_fermion_basis_create: num_sites must be positive");
+        set_last_error("qkrylov_basis_create_fermion: num_sites must be positive");
         return nullptr;
     }
     try {
@@ -316,14 +316,14 @@ qkrylov_basis_h qkrylov_fermion_basis_create(int num_sites, qkrylov_sector_h sec
         set_last_error(e.what());
         return nullptr;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_fermion_basis_create");
+        set_last_error("Unknown exception in qkrylov_basis_create_fermion");
         return nullptr;
     }
 }
 
-qkrylov_basis_h qkrylov_hubbard_basis_create(int num_sites, qkrylov_sector_h sector) {
+qkrylov_basis_h qkrylov_basis_create_hubbard(int num_sites, qkrylov_sector_h sector) {
     if (num_sites <= 0) {
-        set_last_error("qkrylov_hubbard_basis_create: num_sites must be positive");
+        set_last_error("qkrylov_basis_create_hubbard: num_sites must be positive");
         return nullptr;
     }
     try {
@@ -337,14 +337,14 @@ qkrylov_basis_h qkrylov_hubbard_basis_create(int num_sites, qkrylov_sector_h sec
         set_last_error(e.what());
         return nullptr;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_hubbard_basis_create");
+        set_last_error("Unknown exception in qkrylov_basis_create_hubbard");
         return nullptr;
     }
 }
 
-qkrylov_basis_h qkrylov_tj_basis_create(int num_sites, qkrylov_sector_h sector) {
+qkrylov_basis_h qkrylov_basis_create_tj(int num_sites, qkrylov_sector_h sector) {
     if (num_sites <= 0) {
-        set_last_error("qkrylov_tj_basis_create: num_sites must be positive");
+        set_last_error("qkrylov_basis_create_tj: num_sites must be positive");
         return nullptr;
     }
     try {
@@ -358,7 +358,7 @@ qkrylov_basis_h qkrylov_tj_basis_create(int num_sites, qkrylov_sector_h sector) 
         set_last_error(e.what());
         return nullptr;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_tj_basis_create");
+        set_last_error("Unknown exception in qkrylov_basis_create_tj");
         return nullptr;
     }
 }
@@ -385,9 +385,9 @@ uint64_t qkrylov_basis_dimension(qkrylov_basis_h basis) {
     }
 }
 
-int qkrylov_basis_nsites(qkrylov_basis_h basis) {
+int qkrylov_basis_num_sites(qkrylov_basis_h basis) {
     if (!basis) {
-        set_last_error("qkrylov_basis_nsites: basis handle is null");
+        set_last_error("qkrylov_basis_num_sites: basis handle is null");
         return 0;
     }
     return basis->num_sites;
@@ -533,7 +533,7 @@ qkrylov_sector_h qkrylov_basis_get_sector(qkrylov_basis_h basis) {
 /* -----------------------------------------------------------------------------
  * Site API
  * ----------------------------------------------------------------------------- */
-qkrylov_site_h qkrylov_spinhalf_site_create(void) {
+qkrylov_site_h qkrylov_site_create_spin_half(void) {
     try {
         auto handle = std::make_unique<qkrylov_site_t>();
         handle->type = SiteType::SpinHalf;
@@ -543,7 +543,7 @@ qkrylov_site_h qkrylov_spinhalf_site_create(void) {
         set_last_error(e.what());
         return nullptr;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_spinhalf_site_create");
+        set_last_error("Unknown exception in qkrylov_site_create_spin_half");
         return nullptr;
     }
 }
@@ -572,7 +572,7 @@ qkrylov_site_h qkrylov_site_create_spin_s(double S) {
     }
 }
 
-qkrylov_site_h qkrylov_fermion_site_create(void) {
+qkrylov_site_h qkrylov_site_create_fermion(void) {
     try {
         auto handle = std::make_unique<qkrylov_site_t>();
         handle->type = SiteType::Fermion;
@@ -582,12 +582,12 @@ qkrylov_site_h qkrylov_fermion_site_create(void) {
         set_last_error(e.what());
         return nullptr;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_fermion_site_create");
+        set_last_error("Unknown exception in qkrylov_site_create_fermion");
         return nullptr;
     }
 }
 
-qkrylov_site_h qkrylov_hubbard_site_create(void) {
+qkrylov_site_h qkrylov_site_create_hubbard(void) {
     try {
         auto handle = std::make_unique<qkrylov_site_t>();
         handle->type = SiteType::Hubbard;
@@ -597,12 +597,12 @@ qkrylov_site_h qkrylov_hubbard_site_create(void) {
         set_last_error(e.what());
         return nullptr;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_hubbard_site_create");
+        set_last_error("Unknown exception in qkrylov_site_create_hubbard");
         return nullptr;
     }
 }
 
-qkrylov_site_h qkrylov_tj_site_create(void) {
+qkrylov_site_h qkrylov_site_create_tj(void) {
     try {
         auto handle = std::make_unique<qkrylov_site_t>();
         handle->type = SiteType::TJ;
@@ -612,7 +612,7 @@ qkrylov_site_h qkrylov_tj_site_create(void) {
         set_last_error(e.what());
         return nullptr;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_tj_site_create");
+        set_last_error("Unknown exception in qkrylov_site_create_tj");
         return nullptr;
     }
 }
@@ -1124,7 +1124,7 @@ int qkrylov_lanczos_solve(qkrylov_hamiltonian_h h,
     return qkrylov_lanczos_solve_fp64(h, config, result, eigenvector_out);
 }
 
-int qkrylov_lanczos_lowest_complex(qkrylov_hamiltonian_h h,
+int qkrylov_lanczos_solve_lowest(qkrylov_hamiltonian_h h,
                                    int n_eig,
                                    int maxiter,
                                    double tol,
@@ -1132,45 +1132,45 @@ int qkrylov_lanczos_lowest_complex(qkrylov_hamiltonian_h h,
                                    double* eigenvectors_complex_out,
                                    qkrylov_lanczos_lowest_result_c_t* result_info,
                                    const double* initial_vector_complex) {
-    return qkrylov_lanczos_lowest_complex_fp64(h, n_eig, maxiter, tol, eigenvalues_out, eigenvectors_complex_out, result_info, initial_vector_complex);
+    return qkrylov_lanczos_solve_lowest_fp64(h, n_eig, maxiter, tol, eigenvalues_out, eigenvectors_complex_out, result_info, initial_vector_complex);
 }
 
-int qkrylov_davidson_lowest_complex(qkrylov_hamiltonian_h h,
+int qkrylov_davidson_solve(qkrylov_hamiltonian_h h,
                                     int n_eig,
                                     int max_subspace,
                                     double tol,
                                     double* eigenvalues_out,
                                     double* eigenvectors_complex_out,
                                     qkrylov_davidson_result_c_t* result_info) {
-    return qkrylov_davidson_lowest_complex_fp64(h, n_eig, max_subspace, tol, eigenvalues_out, eigenvectors_complex_out, result_info);
+    return qkrylov_davidson_solve_fp64(h, n_eig, max_subspace, tol, eigenvalues_out, eigenvectors_complex_out, result_info);
 }
 
-int qkrylov_continued_fraction_coeffs_complex(qkrylov_hamiltonian_h h,
+int qkrylov_continued_fraction_coeffs(qkrylov_hamiltonian_h h,
                                               const double* phi0_complex,
-                                              int n_iter,
+                                              int n_steps,
                                               double* alphas_out,
                                               double* betas_out,
                                               double* norm_phi0_out,
                                               int* num_coeffs_out) {
-    return qkrylov_continued_fraction_coeffs_complex_fp64(h, phi0_complex, n_iter, alphas_out, betas_out, norm_phi0_out, num_coeffs_out);
+    return qkrylov_continued_fraction_coeffs_fp64(h, phi0_complex, n_steps, alphas_out, betas_out, norm_phi0_out, num_coeffs_out);
 }
 
-double qkrylov_evaluate_spectral_function(const double* alphas,
+double qkrylov_spectral_function_evaluate(const double* alphas,
                                           const double* betas,
                                           size_t n,
                                           double norm_phi0,
                                           double omega,
                                           double E0,
                                           double eta) {
-    return qkrylov_evaluate_spectral_function_fp64(alphas, betas, n, norm_phi0, omega, E0, eta);
+    return qkrylov_spectral_function_evaluate_fp64(alphas, betas, n, norm_phi0, omega, E0, eta);
 }
 
-int qkrylov_ftlm(qkrylov_hamiltonian_h h,
+int qkrylov_ftlm_solve(qkrylov_hamiltonian_h h,
                  double beta,
                  int n_random,
                  int n_steps,
                  qkrylov_ftlm_result_c_t* result) {
-    return qkrylov_ftlm_fp64(h, beta, n_random, n_steps, result);
+    return qkrylov_ftlm_solve_fp64(h, beta, n_random, n_steps, result);
 }
 
 int qkrylov_ftlm_sweep(qkrylov_hamiltonian_h h,
@@ -1263,16 +1263,16 @@ int qkrylov_ftlm_samples_precision(qkrylov_ftlm_samples_h samples) {
 }
 
 
-int qkrylov_solver_correction_vector(qkrylov_hamiltonian_h h,
+int qkrylov_correction_vector_solve(qkrylov_hamiltonian_h h,
                                      const double* op_psi0_complex,
                                      double e0,
                                      double omega,
                                      double eta,
-                                     int max_iter,
+                                     int maxiter,
                                      double tol,
                                      qkrylov_correction_vector_result_c_t* result,
                                      double* correction_vector_out_complex) {
-    return qkrylov_solver_correction_vector_fp64(h, op_psi0_complex, e0, omega, eta, max_iter, tol, result, correction_vector_out_complex);
+    return qkrylov_correction_vector_solve_fp64(h, op_psi0_complex, e0, omega, eta, maxiter, tol, result, correction_vector_out_complex);
 }
 
 int qkrylov_vector_dot(uint64_t dim, const double* x_complex, const double* y_complex, double* dot_re, double* dot_im) {

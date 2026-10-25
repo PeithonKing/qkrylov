@@ -311,7 +311,7 @@ using QuantumKrylov
         # 6. DynamicsProblem with ContinuedFraction
         dyn_prob = DynamicsProblem(H, psi)
         @test dyn_prob isa AbstractQuantumProblem
-        sol_dyn = solve(dyn_prob, ContinuedFraction(n_iter=10))
+        sol_dyn = solve(dyn_prob, ContinuedFraction(n_steps=10))
         @test length(sol_dyn.alphas) > 0
 
         # 7. SpectralProblem with CorrectionVector
@@ -358,7 +358,7 @@ using QuantumKrylov
         phi0 = zeros(ComplexF64, 16)
         phi0[1] = 1.0
 
-        cfr = continued_fraction_coeffs(H, phi0, n_iter=10)
+        cfr = continued_fraction_coeffs(H, phi0, n_steps=10)
         @test length(cfr.alphas) > 0
         @test length(cfr.betas) >= 0
 

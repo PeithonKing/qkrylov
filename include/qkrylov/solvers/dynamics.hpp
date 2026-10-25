@@ -36,7 +36,7 @@ template <typename ExecSpace>
 DynamicsResult continued_fraction_coeffs(
     const MatrixFreeHamiltonian<ExecSpace>& H,
     const HostVector& phi0,
-    int n_iter = 100
+    int n_steps = 100
 );
 
 // Helper function to evaluate S(omega) from coefficients

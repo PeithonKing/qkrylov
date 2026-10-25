@@ -303,7 +303,7 @@ davidson_lowest(
 continued_fraction_coeffs(
     H::MatrixFreeHamiltonian,
     phi0::AbstractVector{<:Number};
-    n_iter::Integer=100
+    n_steps::Integer=100
 )::ContinuedFractionResult
 ```
 - **Description**: Computes Lanczos tridiagonal coefficients ($\alpha_n, \beta_n$) starting from state vector `phi0`.
@@ -387,7 +387,7 @@ sol_dav = solve(ExcitedStatesProblem(H, 3), Davidson(n_eig=3, max_subspace=20))
 sol_th = solve(ThermalProblem(H, [0.1, 0.5, 1.0, 2.0]; observables=[H]), FTLM(n_random=20, n_steps=50))
 
 # Continued Fraction Dynamics
-sol_dyn = solve(DynamicalProblem(H, phi0; e0=E0), ContinuedFraction(n_iter=100))
+sol_dyn = solve(DynamicalProblem(H, phi0; e0=E0), ContinuedFraction(n_steps=100))
 
 # Correction Vector Dynamics
 sol_cv = solve(CorrectionVectorProblem(H, phi0; e0=E0, omega=1.0, eta=0.05), CorrectionVector(maxiter=500))

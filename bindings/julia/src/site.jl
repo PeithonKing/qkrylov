@@ -18,7 +18,7 @@ mutable struct SpinHalfSite <: AbstractSite
     ptr::Ptr{Cvoid}
 
     function SpinHalfSite()
-        ptr = ccall((:qkrylov_spinhalf_site_create, libqkrylov), Ptr{Cvoid}, ())
+        ptr = ccall((:qkrylov_site_create_spin_half, libqkrylov), Ptr{Cvoid}, ())
         ptr == C_NULL && error("Failed to create SpinHalfSite")
         obj = new(ptr)
         finalizer(obj) do o
@@ -35,7 +35,7 @@ mutable struct FermionSite <: AbstractSite
     ptr::Ptr{Cvoid}
 
     function FermionSite()
-        ptr = ccall((:qkrylov_fermion_site_create, libqkrylov), Ptr{Cvoid}, ())
+        ptr = ccall((:qkrylov_site_create_fermion, libqkrylov), Ptr{Cvoid}, ())
         ptr == C_NULL && error("Failed to create FermionSite")
         obj = new(ptr)
         finalizer(obj) do o
@@ -52,7 +52,7 @@ mutable struct HubbardSite <: AbstractSite
     ptr::Ptr{Cvoid}
 
     function HubbardSite()
-        ptr = ccall((:qkrylov_hubbard_site_create, libqkrylov), Ptr{Cvoid}, ())
+        ptr = ccall((:qkrylov_site_create_hubbard, libqkrylov), Ptr{Cvoid}, ())
         ptr == C_NULL && error("Failed to create HubbardSite")
         obj = new(ptr)
         finalizer(obj) do o
@@ -69,7 +69,7 @@ mutable struct TJSite <: AbstractSite
     ptr::Ptr{Cvoid}
 
     function TJSite()
-        ptr = ccall((:qkrylov_tj_site_create, libqkrylov), Ptr{Cvoid}, ())
+        ptr = ccall((:qkrylov_site_create_tj, libqkrylov), Ptr{Cvoid}, ())
         ptr == C_NULL && error("Failed to create TJSite")
         obj = new(ptr)
         finalizer(obj) do o

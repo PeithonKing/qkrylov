@@ -21,7 +21,7 @@ def main():
     # Initial vector phi0 = gs eigenvector
     phi0 = gs.eigenvector
 
-    res = qkrylov.continued_fraction_coeffs(H, phi0, n_iter=20)
+    res = qkrylov.continued_fraction_coeffs(H, phi0, n_steps=20)
 
     omegas = np.linspace(0, 5, 100)
     S = [qkrylov.evaluate_spectral_function(res, w, gs.energy, eta=0.1) for w in omegas]

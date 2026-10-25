@@ -28,8 +28,8 @@ int main(int argc, char** argv) {
 
     qkrylov_sector_h sector = qkrylov_sector_create();
     CHECK(sector && qkrylov_sector_set_sz(sector, 0) == QKRYLOV_SUCCESS, "sector");   /* 2*Sz = 0 */
-    qkrylov_basis_h basis = qkrylov_spinhalf_basis_create(L, sector);                /* sector only: no states built yet */
-    qkrylov_site_h site = qkrylov_spinhalf_site_create();
+    qkrylov_basis_h basis = qkrylov_basis_create_spin_half(L, sector);                /* sector only: no states built yet */
+    qkrylov_site_h site = qkrylov_site_create_spin_half();
     qkrylov_opsum_h ops = qkrylov_opsum_create();
     CHECK(basis && site && ops, "basis/site/opsum");
 

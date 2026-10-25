@@ -18,7 +18,7 @@ template <typename ExecSpace>
 DynamicsResult continued_fraction_coeffs(
     const MatrixFreeHamiltonian<ExecSpace>& H,
     const HostVector& phi0,
-    int n_iter
+    int n_steps
 )
 {
     const Index dim = H.dimension();
@@ -34,8 +34,8 @@ DynamicsResult continued_fraction_coeffs(
     if (norm_phi < mach_eps) return { {}, {}, Real(0.0) };
 
     LanczosConfig cfg;
-    cfg.maxiter = n_iter;
-    cfg.min_iterations = n_iter;
+    cfg.maxiter = n_steps;
+    cfg.min_iterations = n_steps;
     cfg.tol = Real(0.0);
     cfg.initial_vector = phi0;
     cfg.compute_eigenvectors = false;

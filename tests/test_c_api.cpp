@@ -48,8 +48,8 @@ int main() {
     }
 
     // Verify exception capture during Hamiltonian creation with unknown operator
-    qkrylov_basis_h dummy_basis = qkrylov_spinhalf_basis_create(2, nullptr);
-    qkrylov_site_h dummy_site = qkrylov_spinhalf_site_create();
+    qkrylov_basis_h dummy_basis = qkrylov_basis_create_spin_half(2, nullptr);
+    qkrylov_site_h dummy_site = qkrylov_site_create_spin_half();
     qkrylov_opsum_h bad_opsum = qkrylov_opsum_create();
     assert(qkrylov_opsum_add_term_1body(bad_opsum, 1.0, 0.0, "NONEXISTENT_OPERATOR", 0) == QKRYLOV_SUCCESS);
     qkrylov_clear_last_error();
@@ -85,12 +85,12 @@ int main() {
 
     // 2. Test Basis API (4-site SpinHalfBasis with total Sz = 0)
     int N = 4;
-    qkrylov_basis_h basis = qkrylov_spinhalf_basis_create(N, sec);
+    qkrylov_basis_h basis = qkrylov_basis_create_spin_half(N, sec);
     assert(basis != NULL);
     uint64_t dim = qkrylov_basis_dimension(basis);
     std::cout << "Basis dimension for N=4, Sz=0: " << dim << std::endl;
     assert(dim == 6); // 4 choose 2 = 6 states in Sz=0 sector
-    assert(qkrylov_basis_nsites(basis) == 4);
+    assert(qkrylov_basis_num_sites(basis) == 4);
 
     // Test Basis state lookups
     uint64_t s0 = qkrylov_basis_state(basis, 0);
@@ -126,17 +126,17 @@ int main() {
     qkrylov_basis_destroy(s1_basis);
 
     // Test FermionBasis, HubbardBasis, TJBasis Reflection
-    qkrylov_basis_h ferm_b = qkrylov_fermion_basis_create(2, nullptr);
+    qkrylov_basis_h ferm_b = qkrylov_basis_create_fermion(2, nullptr);
     assert(qkrylov_basis_get_type(ferm_b, &b_type) == QKRYLOV_SUCCESS && b_type == QKRYLOV_BASIS_FERMION);
     assert(qkrylov_basis_get_dimension_per_site(ferm_b, &b_d) == QKRYLOV_SUCCESS && b_d == 2);
     qkrylov_basis_destroy(ferm_b);
 
-    qkrylov_basis_h hubb_b = qkrylov_hubbard_basis_create(2, nullptr);
+    qkrylov_basis_h hubb_b = qkrylov_basis_create_hubbard(2, nullptr);
     assert(qkrylov_basis_get_type(hubb_b, &b_type) == QKRYLOV_SUCCESS && b_type == QKRYLOV_BASIS_HUBBARD);
     assert(qkrylov_basis_get_dimension_per_site(hubb_b, &b_d) == QKRYLOV_SUCCESS && b_d == 4);
     qkrylov_basis_destroy(hubb_b);
 
-    qkrylov_basis_h tj_b = qkrylov_tj_basis_create(2, nullptr);
+    qkrylov_basis_h tj_b = qkrylov_basis_create_tj(2, nullptr);
     assert(qkrylov_basis_get_type(tj_b, &b_type) == QKRYLOV_SUCCESS && b_type == QKRYLOV_BASIS_TJ);
     assert(qkrylov_basis_get_dimension_per_site(tj_b, &b_d) == QKRYLOV_SUCCESS && b_d == 3);
     qkrylov_basis_destroy(tj_b);
@@ -148,7 +148,7 @@ int main() {
 
     // 3. Test Site API & Site Reflection & Site::apply
     std::cout << "\n--- Testing Site API & Local Action Evaluation ---" << std::endl;
-    qkrylov_site_h site = qkrylov_spinhalf_site_create();
+    qkrylov_site_h site = qkrylov_site_create_spin_half();
     assert(site != NULL);
 
     qkrylov_site_type_t s_type;
@@ -206,7 +206,7 @@ int main() {
     qkrylov_site_destroy(s1_site);
 
     // Test FermionSite reflection & apply
-    qkrylov_site_h ferm_site = qkrylov_fermion_site_create();
+    qkrylov_site_h ferm_site = qkrylov_site_create_fermion();
     assert(ferm_site != nullptr);
     assert(qkrylov_site_get_type(ferm_site, &s_type) == QKRYLOV_SUCCESS && s_type == QKRYLOV_SITE_FERMION);
     assert(qkrylov_site_get_dimension_per_site(ferm_site, &s_d) == QKRYLOV_SUCCESS && s_d == 2);
@@ -465,7 +465,7 @@ int main() {
     std::vector<double> dav_evals(n_eig);
     std::vector<std::complex<double>> dav_evecs(n_eig * dim);
     qkrylov_davidson_result_c_t dav_info;
-    int dav_status = qkrylov_davidson_lowest_complex(H, n_eig, 20, 1e-10, dav_evals.data(), reinterpret_cast<double*>(dav_evecs.data()), &dav_info);
+    int dav_status = qkrylov_davidson_solve(H, n_eig, 20, 1e-10, dav_evals.data(), reinterpret_cast<double*>(dav_evecs.data()), &dav_info);
     assert(dav_status == QKRYLOV_SUCCESS);
     assert(dav_info.converged == 1);
 
@@ -485,22 +485,22 @@ int main() {
     }
 
     // Test Dynamics & Spectral Function (FP64)
-    int n_iter = 20;
-    std::vector<double> alphas(n_iter);
-    std::vector<double> betas(n_iter);
+    int n_steps = 20;
+    std::vector<double> alphas(n_steps);
+    std::vector<double> betas(n_steps);
     double norm_phi0 = 0.0;
     int num_coeffs = 0;
-    int dyn_status = qkrylov_continued_fraction_coeffs_complex(H, reinterpret_cast<const double*>(psi_cx.data()), n_iter, alphas.data(), betas.data(), &norm_phi0, &num_coeffs);
+    int dyn_status = qkrylov_continued_fraction_coeffs(H, reinterpret_cast<const double*>(psi_cx.data()), n_steps, alphas.data(), betas.data(), &norm_phi0, &num_coeffs);
     assert(dyn_status == QKRYLOV_SUCCESS);
     assert(num_coeffs > 0);
     assert(std::abs(norm_phi0 - 1.0) < 1e-10);
 
-    double spec_val = qkrylov_evaluate_spectral_function(alphas.data(), betas.data(), num_coeffs, norm_phi0, 0.5, lanczos_res.energy, 0.1);
+    double spec_val = qkrylov_spectral_function_evaluate(alphas.data(), betas.data(), num_coeffs, norm_phi0, 0.5, lanczos_res.energy, 0.1);
     assert(spec_val > 0.0);
 
     // Test FTLM (FP64)
     qkrylov_ftlm_result_c_t ftlm_res;
-    int ftlm_status = qkrylov_ftlm(H, 1.0, 10, 20, &ftlm_res);
+    int ftlm_status = qkrylov_ftlm_solve(H, 1.0, 10, 20, &ftlm_res);
     assert(ftlm_status == QKRYLOV_SUCCESS);
     assert(ftlm_res.partition_function > 0.0);
 
@@ -643,7 +643,7 @@ int main() {
     std::vector<float> dav_evals32(n_eig);
     std::vector<std::complex<float>> dav_evecs32(n_eig * dim);
     qkrylov_davidson_result_c_t dav_info32;
-    int dav_status32 = qkrylov_davidson_lowest_complex_fp32(H32, n_eig, 20, 1e-5f, dav_evals32.data(), reinterpret_cast<float*>(dav_evecs32.data()), &dav_info32);
+    int dav_status32 = qkrylov_davidson_solve_fp32(H32, n_eig, 20, 1e-5f, dav_evals32.data(), reinterpret_cast<float*>(dav_evecs32.data()), &dav_info32);
     assert(dav_status32 == QKRYLOV_SUCCESS);
     assert(dav_info32.converged == 1);
     assert(std::abs(dav_evals32[0] - lanczos_res32.energy) < 1e-4f);
@@ -783,7 +783,7 @@ int main() {
     std::vector<std::complex<double>> cv_vec_out(dim_s1);
     double omega = 1.5;
     double eta = 0.1;
-    int cv_status = qkrylov_solver_correction_vector(
+    int cv_status = qkrylov_correction_vector_solve(
         H_s1,
         reinterpret_cast<const double*>(op_psi0.data()),
         lanczos_s1_res.energy,
@@ -806,7 +806,7 @@ int main() {
         op_psi0_32[i] = std::complex<float>(static_cast<float>(op_psi0[i].real()), static_cast<float>(op_psi0[i].imag()));
     }
     qkrylov_correction_vector_result_fp32_t cv_result32;
-    int cv_status32 = qkrylov_solver_correction_vector_fp32(
+    int cv_status32 = qkrylov_correction_vector_solve_fp32(
         H_s1_32,
         reinterpret_cast<const float*>(op_psi0_32.data()),
         static_cast<float>(lanczos_s1_res.energy),
@@ -951,8 +951,8 @@ int main() {
     std::cout << "\n--- Testing Device-Resident Vectors & Zero-Copy SpMV ---" << std::endl;
 
     // 1. Setup Hamiltonian (Heisenberg 2-site)
-    qkrylov_basis_h b_dev = qkrylov_spinhalf_basis_create(2, nullptr);
-    qkrylov_site_h s_dev = qkrylov_spinhalf_site_create();
+    qkrylov_basis_h b_dev = qkrylov_basis_create_spin_half(2, nullptr);
+    qkrylov_site_h s_dev = qkrylov_site_create_spin_half();
     qkrylov_opsum_h ops_dev = qkrylov_opsum_create();
     assert(qkrylov_opsum_add_term_2body(ops_dev, 1.0, 0.0, "Sz", 0, "Sz", 1) == QKRYLOV_SUCCESS);
     assert(qkrylov_opsum_add_term_2body(ops_dev, 0.5, 0.0, "Sp", 0, "Sm", 1) == QKRYLOV_SUCCESS);

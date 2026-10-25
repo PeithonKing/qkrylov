@@ -377,7 +377,7 @@ is_conv  = res_dav.converged     # Convergence boolean flag
 v0 = H * psi0
 
 # 2. Compute continued-fraction Lanczos coefficients alpha_k, beta_k
-cfr = continued_fraction_coeffs(H, v0, n_iter=100)
+cfr = continued_fraction_coeffs(H, v0, n_steps=100)
 println(cfr) # Outputs: ContinuedFractionResult(n_coeffs = 100, norm_phi0 = 1.0)
 
 # 3. Evaluate dynamical spectral function I(omega) at energy omega
@@ -391,7 +391,7 @@ I_omega = evaluate_spectral_function(cfr, omega, E0, eta)
 
 | Function | Parameters | Default Values | Description |
 | :--- | :--- | :--- | :--- |
-| `continued_fraction_coeffs(H, phi0)` | `H::MatrixFreeHamiltonian`<br>`phi0::AbstractVector`<br>`n_iter::Integer` | `n_iter=100` | Computes tridiagonal Lanczos coefficients $\alpha_k, \beta_k$. Returns `ContinuedFractionResult`. |
+| `continued_fraction_coeffs(H, phi0)` | `H::MatrixFreeHamiltonian`<br>`phi0::AbstractVector`<br>`n_steps::Integer` | `n_steps=100` | Computes tridiagonal Lanczos coefficients $\alpha_k, \beta_k$. Returns `ContinuedFractionResult`. |
 | `evaluate_spectral_function(cfr, omega, E0, eta)` | `cfr::ContinuedFractionResult`<br>`omega::Real`<br>`E0::Real`<br>`eta::Real` | None (required) | Evaluates spectral response function $I(\omega) = -\frac{1}{\pi} \text{Im} G(\omega + E_0 + i\eta)$. |
 
 ---
@@ -515,7 +515,7 @@ sol_th  = solve(prob_th, FTLM(n_random=20, n_steps=50))
 
 # 4. Dynamical response
 prob_dyn = DynamicalProblem(H, v0; e0=E0)
-sol_dyn  = solve(prob_dyn, ContinuedFraction(n_iter=100))
+sol_dyn  = solve(prob_dyn, ContinuedFraction(n_steps=100))
 
 # 5. Correction vector shifted linear solve
 prob_cv = CorrectionVectorProblem(H, v0; e0=E0, omega=1.0, eta=0.05)
@@ -645,7 +645,7 @@ println("Lowest 3 eigenvalues: ", res_dav.eigenvalues)
 
 # Dynamical spectral function calculation:
 v0 = H * res_gs.state
-cfr = continued_fraction_coeffs(H, v0, n_iter=50)
+cfr = continued_fraction_coeffs(H, v0, n_steps=50)
 I_omega = evaluate_spectral_function(cfr, 0.5, res_gs.energy, 0.05)
 println("Spectral function I(omega=0.5): ", I_omega)
 ```

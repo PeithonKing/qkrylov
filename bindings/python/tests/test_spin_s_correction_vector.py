@@ -220,7 +220,7 @@ def test_spin1_correction_vector_4site_heisenberg_e2e(dtype):
         E0=lgs.energy,
         omega=omega,
         eta=eta,
-        max_iter=500,
+        maxiter=500,
         tol=tol_cg
     )
 

@@ -80,7 +80,7 @@ Real norm2_of(const V& x) {
 template <class ExecSpace, class V>
 CorrectionVectorResult run(
     const MatrixFreeHamiltonian<ExecSpace>& H, const HostVector& Op_psi0,
-    Real E0, Real omega, Real eta, int max_iter, Real tol)
+    Real E0, Real omega, Real eta, int maxiter, Real tol)
 {
     using namespace krylov_detail;
     const Index dim = H.dimension();
@@ -120,7 +120,7 @@ CorrectionVectorResult run(
     int iter = 0;
     const Real denom_min = std::numeric_limits<Real>::epsilon() * std::numeric_limits<Real>::epsilon();
 
-    for (iter = 0; iter < max_iter; ++iter) {
+    for (iter = 0; iter < maxiter; ++iter) {
         // Ap = A p in three passes: z = H p - shift p ; Ap = H z ; Ap += -shift z + eta^2 p (with Re <p|Ap>)
         apply_h(H, p, z);
         Kokkos::parallel_for("qkrylov::cv_shift", RP(0, dim), ShiftSub<V>{z, p, shift});
@@ -180,7 +180,7 @@ CorrectionVectorResult correction_vector_spectral(
     Real E0,
     Real omega,
     Real eta,
-    int max_iter,
+    int maxiter,
     Real tol
 )
 {
@@ -194,9 +194,9 @@ CorrectionVectorResult correction_vector_spectral(
 
     // A real Hamiltonian with a real right-hand side keeps the whole CG in real vectors: half the memory traffic.
     if (H.has_real_coefficients() && krylov_detail::all_real(Op_psi0)) {
-        return cv_detail::run<ExecSpace, RealVectorView<ExecSpace>>(H, Op_psi0, E0, omega, eta, max_iter, tol);
+        return cv_detail::run<ExecSpace, RealVectorView<ExecSpace>>(H, Op_psi0, E0, omega, eta, maxiter, tol);
     }
-    return cv_detail::run<ExecSpace, VectorView<ExecSpace>>(H, Op_psi0, E0, omega, eta, max_iter, tol);
+    return cv_detail::run<ExecSpace, VectorView<ExecSpace>>(H, Op_psi0, E0, omega, eta, maxiter, tol);
 }
 
 // Explicit instantiations

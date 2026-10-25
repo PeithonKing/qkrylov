@@ -26,7 +26,7 @@ int main(void) {
     /* a normal create / use / destroy round trip */
     qkrylov_sector_h sector = qkrylov_sector_create();
     if (!sector || qkrylov_sector_set_sz(sector, 0) != QKRYLOV_SUCCESS) return 1;
-    qkrylov_basis_h basis = qkrylov_spinhalf_basis_create(6, sector);
+    qkrylov_basis_h basis = qkrylov_basis_create_spin_half(6, sector);
     if (!basis || qkrylov_basis_dimension(basis) != 20u) return 1;   /* C(6,3) */
     qkrylov_basis_destroy(basis);
     qkrylov_sector_destroy(sector);

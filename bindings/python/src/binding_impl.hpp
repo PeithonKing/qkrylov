@@ -155,19 +155,19 @@ static void bind_backend(nb::module_& m, const std::string& suffix, const std::s
 
     std::string dyn_name = "continued_fraction_coeffs_" + suffix + type_suffix;
     m.def(dyn_name.c_str(),
-        [](const HType& H, CxArray phi0, int n_iter) {
+        [](const HType& H, CxArray phi0, int n_steps) {
             if (phi0.shape(0) != static_cast<size_t>(H.dimension())) {
                 throw std::invalid_argument("phi0 vector size does not match Hamiltonian dimension");
             }
             const HostVector phi0_vec(phi0.data(), phi0.data() + phi0.shape(0));
-            auto res = continued_fraction_coeffs<ExecSpace>(H, phi0_vec, n_iter);
+            auto res = continued_fraction_coeffs<ExecSpace>(H, phi0_vec, n_steps);
             return nb::make_tuple(
                 dvec_to_numpy(std::move(res.alphas)),
                 dvec_to_numpy(std::move(res.betas)),
                 res.norm_phi0
             );
         },
-        "H"_a, "phi0"_a, "n_iter"_a = 100);
+        "H"_a, "phi0"_a, "n_steps"_a = 100);
 
     std::string ftlm_name = "ftlm_" + suffix + type_suffix;
     m.def(ftlm_name.c_str(), [](const HType& H, Real beta, int n_random, int n_steps) {
@@ -234,12 +234,12 @@ static void bind_backend(nb::module_& m, const std::string& suffix, const std::s
 
     std::string cv_name = "correction_vector_spectral_" + suffix + type_suffix;
     m.def(cv_name.c_str(),
-        [](const HType& H, CxArray op_psi0, Real E0, Real omega, Real eta, int max_iter, Real tol) {
+        [](const HType& H, CxArray op_psi0, Real E0, Real omega, Real eta, int maxiter, Real tol) {
             if (op_psi0.shape(0) != static_cast<size_t>(H.dimension())) {
                 throw std::invalid_argument("op_psi0 vector size does not match Hamiltonian dimension");
             }
             const HostVector op_psi0_vec(op_psi0.data(), op_psi0.data() + op_psi0.shape(0));
-            auto res = correction_vector_spectral<ExecSpace>(H, op_psi0_vec, E0, omega, eta, max_iter, tol);
+            auto res = correction_vector_spectral<ExecSpace>(H, op_psi0_vec, E0, omega, eta, maxiter, tol);
             return nb::make_tuple(
                 vec_to_numpy(std::move(res.correction_vector)),
                 res.spectral_function,
@@ -247,7 +247,7 @@ static void bind_backend(nb::module_& m, const std::string& suffix, const std::s
                 res.converged
             );
         },
-        "H"_a, "op_psi0"_a, "E0"_a, "omega"_a, "eta"_a = static_cast<Real>(0.1), "max_iter"_a = 500, "tol"_a = static_cast<Real>(1e-8));
+        "H"_a, "op_psi0"_a, "E0"_a, "omega"_a, "eta"_a = static_cast<Real>(0.1), "maxiter"_a = 500, "tol"_a = static_cast<Real>(1e-8));
 }
 
 static void bind_impl(nb::module_& m, const std::string& type_suffix) {

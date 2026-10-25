@@ -21,7 +21,7 @@ CorrectionVectorResult correction_vector_spectral(
     Real E0,
     Real omega,
     Real eta = 0.1,
-    int max_iter = 500,
+    int maxiter = 500,
     Real tol = 1e-8
 );
 
