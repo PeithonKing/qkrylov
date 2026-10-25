@@ -18,7 +18,6 @@ namespace qkrylov {
 namespace QKRYLOV_PRECISION_NAMESPACE {
 
 /// \brief Configuration parameters for Lanczos iteration.
-/// <TODO-LLM: Detail convergence criteria and Ritz value residual estimation here>
 struct LanczosConfig
 {
     int n_eig = 1;                               // Number of lowest eigenpairs to compute (OnePass_DKGS)
@@ -48,7 +47,6 @@ struct LanczosConfig
 };
 
 /// \brief Container holding the converged ground state energy and eigenvector.
-/// <TODO-LLM: Document tridiagonal matrix projection and eigenvector reconstruction here>
 struct LanczosResult
 {
     Real energy = Real(0.0);                     // Lowest eigenvalue (lambda_0)
@@ -88,10 +86,6 @@ struct LanczosResult
     }
 };
 
-// Aliases for unified result types
-using LanczosLowestResult = LanczosResult;
-using LanczosLowestConfig = LanczosConfig;
-
 template <std::size_t I>
 decltype(auto) get(const LanczosResult& res) {
     return res.template get<I>();
@@ -113,8 +107,6 @@ namespace solvers {
 
 using QKRYLOV_PRECISION_NAMESPACE::LanczosConfig;
 using QKRYLOV_PRECISION_NAMESPACE::LanczosResult;
-using QKRYLOV_PRECISION_NAMESPACE::LanczosLowestConfig;
-using QKRYLOV_PRECISION_NAMESPACE::LanczosLowestResult;
 
 template <typename Policy = policy::Default, typename ExecSpace>
 LanczosResult lanczos(

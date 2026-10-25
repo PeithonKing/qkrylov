@@ -6,8 +6,6 @@
 
 Abstract supertype for all quantum problem specifications compatible with the SciML interface.
 
-# Notes
-<TODO-LLM: Explain SciML Common Problem interface for quantum mechanics here>
 """
 abstract type AbstractQuantumProblem end
 
@@ -63,10 +61,6 @@ abstract type AbstractLanczosVariation end
 struct OnePass <: AbstractLanczosVariation end
 struct TwoPass <: AbstractLanczosVariation end
 
-# C++ policy parity aliases
-const OnePass_DKGS = OnePass
-const OnePass_DGKS = OnePass
-
 """
     Lanczos(; variation=OnePass(), maxiter=200, tol=1e-12, return_state=true, early_stopping=true)
 
@@ -101,11 +95,12 @@ end
 struct Davidson <: AbstractQuantumAlgorithm
     n_eig::Int
     max_subspace::Int
+    maxiter::Int
     tol::Float64
     compute_eigenvectors::Bool
 end
-Davidson(; n_eig::Integer=1, max_subspace::Integer=20, tol::Real=1e-8, compute_eigenvectors::Bool=true) =
-    Davidson(Int(n_eig), Int(max_subspace), Float64(tol), compute_eigenvectors)
+Davidson(; n_eig::Integer=1, max_subspace::Integer=20, maxiter::Integer=100, tol::Real=1e-8, compute_eigenvectors::Bool=true) =
+    Davidson(Int(n_eig), Int(max_subspace), Int(maxiter), Float64(tol), compute_eigenvectors)
 
 struct FTLM <: AbstractQuantumAlgorithm
     beta::Float64
@@ -119,9 +114,9 @@ FTLM(beta::Real, n_random::Integer, n_steps::Integer) =
     FTLM(Float64(beta), Int(n_random), Int(n_steps), UInt64(42))
 
 struct ContinuedFraction <: AbstractQuantumAlgorithm
-    n_iter::Int
+    n_steps::Int
 end
-ContinuedFraction(; n_iter::Integer=100) = ContinuedFraction(Int(n_iter))
+ContinuedFraction(; n_steps::Integer=100) = ContinuedFraction(Int(n_steps))
 
 struct CorrectionVector <: AbstractQuantumAlgorithm
     e0::Float64
@@ -387,7 +382,7 @@ function solve(prob::ExcitedStatesProblem, alg::Lanczos{TwoPass}; kwargs...)
 end
 
 function solve(prob::ExcitedStatesProblem, alg::Davidson=Davidson(); kwargs...)
-    return davidson_lowest(prob.H; n_eig=alg.n_eig, max_subspace=alg.max_subspace, tol=alg.tol, compute_eigenvectors=alg.compute_eigenvectors)
+    return davidson_lowest(prob.H; n_eig=alg.n_eig, max_subspace=alg.max_subspace, maxiter=alg.maxiter, tol=alg.tol, compute_eigenvectors=alg.compute_eigenvectors)
 end
 
 function solve(prob::ThermalProblem, alg::FTLM=FTLM(); kwargs...)
@@ -399,7 +394,7 @@ function solve(prob::ThermalProblem, alg::FTLM=FTLM(); kwargs...)
 end
 
 function solve(prob::DynamicsProblem, alg::ContinuedFraction=ContinuedFraction(); kwargs...)
-    return continued_fraction_coeffs(prob.H, prob.phi0; n_iter=alg.n_iter)
+    return continued_fraction_coeffs(prob.H, prob.phi0; n_steps=alg.n_steps)
 end
 
 function solve(prob::SpectralProblem, alg::CorrectionVector=CorrectionVector(); kwargs...)
@@ -409,7 +404,7 @@ end
 function lanczos_ground_state(
     H::MatrixFreeHamiltonian;
     maxiter::Integer=100,
-    tol::Real=(H.precision === Float32 ? 1e-6 : 1e-12),
+    tol::Real=(H.dtype === Float32 ? 1e-6 : 1e-12),
     return_state::Bool=false,
     compute_eigenvector::Bool=return_state,
     early_stopping::Bool=true,
@@ -461,6 +456,7 @@ function davidson_lowest(
     H::MatrixFreeHamiltonian{Float64};
     n_eig::Integer=1,
     max_subspace::Integer=20,
+    maxiter::Integer=100,
     tol::Real=1e-8,
     compute_eigenvectors::Bool=true
 )::DavidsonResult{Float64}
@@ -472,10 +468,10 @@ function davidson_lowest(
     GC.@preserve evals evecs_flat begin
         evecs_ptr = compute_eigenvectors ? pointer(evecs_flat) : Ptr{ComplexF64}(C_NULL)
         status = ccall(
-            (:qkrylov_davidson_lowest_complex_fp64, libqkrylov),
+            (:qkrylov_davidson_solve_fp64, libqkrylov),
             Cint,
-            (Ptr{Cvoid}, Cint, Cint, Cdouble, Ptr{Cdouble}, Ptr{Cdouble}, Ref{DavidsonResultC}),
-            H.ptr, Cint(n_eig), Cint(max_subspace), Cdouble(tol), pointer(evals), Ptr{Cdouble}(evecs_ptr), dav_c
+            (Ptr{Cvoid}, Cint, Cint, Cint, Cdouble, Ptr{Cdouble}, Ptr{Cdouble}, Ref{DavidsonResultC}),
+            H.ptr, Cint(n_eig), Cint(max_subspace), Cint(maxiter), Cdouble(tol), pointer(evals), Ptr{Cdouble}(evecs_ptr), dav_c
         )
         _check_status(status, "Davidson solver failed")
     end
@@ -498,6 +494,7 @@ function davidson_lowest(
     H::MatrixFreeHamiltonian{Float32};
     n_eig::Integer=1,
     max_subspace::Integer=20,
+    maxiter::Integer=100,
     tol::Real=1e-5,
     compute_eigenvectors::Bool=true
 )::DavidsonResult{Float32}
@@ -509,10 +506,10 @@ function davidson_lowest(
     GC.@preserve evals evecs_flat begin
         evecs_ptr = compute_eigenvectors ? pointer(evecs_flat) : Ptr{ComplexF32}(C_NULL)
         status = ccall(
-            (:qkrylov_davidson_lowest_complex_fp32, libqkrylov),
+            (:qkrylov_davidson_solve_fp32, libqkrylov),
             Cint,
-            (Ptr{Cvoid}, Cint, Cint, Cfloat, Ptr{Cfloat}, Ptr{Cfloat}, Ref{DavidsonResultC}),
-            H.ptr, Cint(n_eig), Cint(max_subspace), Cfloat(tol), pointer(evals), Ptr{Cfloat}(evecs_ptr), dav_c
+            (Ptr{Cvoid}, Cint, Cint, Cint, Cfloat, Ptr{Cfloat}, Ptr{Cfloat}, Ref{DavidsonResultC}),
+            H.ptr, Cint(n_eig), Cint(max_subspace), Cint(maxiter), Cfloat(tol), pointer(evals), Ptr{Cfloat}(evecs_ptr), dav_c
         )
         _check_status(status, "Davidson solver failed")
     end
@@ -555,7 +552,7 @@ function lanczos_lowest(
     GC.@preserve evals evecs_flat init_vec begin
         evecs_ptr = compute_eigenvectors ? pointer(evecs_flat) : Ptr{ComplexF64}(C_NULL)
         status = ccall(
-            (:qkrylov_lanczos_lowest_complex_fp64, libqkrylov),
+            (:qkrylov_lanczos_solve_lowest_fp64, libqkrylov),
             Cint,
             (Ptr{Cvoid}, Cint, Cint, Cdouble, Ptr{Cdouble}, Ptr{Cdouble}, Ref{LanczosLowestResultC}, Ptr{Cdouble}),
             H.ptr, Cint(n_eig), Cint(maxiter), Cdouble(tol), pointer(evals), Ptr{Cdouble}(evecs_ptr), res_c, init_ptr
@@ -601,7 +598,7 @@ function lanczos_lowest(
     GC.@preserve evals evecs_flat init_vec begin
         evecs_ptr = compute_eigenvectors ? pointer(evecs_flat) : Ptr{ComplexF32}(C_NULL)
         status = ccall(
-            (:qkrylov_lanczos_lowest_complex_fp32, libqkrylov),
+            (:qkrylov_lanczos_solve_lowest_fp32, libqkrylov),
             Cint,
             (Ptr{Cvoid}, Cint, Cint, Cfloat, Ptr{Cfloat}, Ptr{Cfloat}, Ref{LanczosLowestResultC}, Ptr{Cfloat}),
             H.ptr, Cint(n_eig), Cint(maxiter), Cfloat(tol), pointer(evals), Ptr{Cfloat}(evecs_ptr), res_c, init_ptr
@@ -633,23 +630,23 @@ end
 function continued_fraction_coeffs(
     H::MatrixFreeHamiltonian{Float64},
     phi0::AbstractVector{<:Number};
-    n_iter::Integer=100
+    n_steps::Integer=100
 )::ContinuedFractionResult{Float64}
     dim = Int(dimension(H))
     @assert length(phi0) == dim "Initial vector phi0 size $(length(phi0)) does not match Hamiltonian dimension $dim"
 
     phi0_c = (phi0 isa Vector{ComplexF64}) ? phi0 : Vector{ComplexF64}(phi0)
-    alphas_buf = Vector{Float64}(undef, n_iter)
-    betas_buf  = Vector{Float64}(undef, n_iter)
+    alphas_buf = Vector{Float64}(undef, n_steps)
+    betas_buf  = Vector{Float64}(undef, n_steps)
     norm_ref   = Ref{Cdouble}(0.0)
     num_coeffs = Ref{Cint}(0)
 
     GC.@preserve phi0_c alphas_buf betas_buf begin
         status = ccall(
-            (:qkrylov_continued_fraction_coeffs_complex_fp64, libqkrylov),
+            (:qkrylov_continued_fraction_coeffs_fp64, libqkrylov),
             Cint,
             (Ptr{Cvoid}, Ptr{Cdouble}, Cint, Ptr{Cdouble}, Ptr{Cdouble}, Ref{Cdouble}, Ref{Cint}),
-            H.ptr, pointer(phi0_c), Cint(n_iter), pointer(alphas_buf), pointer(betas_buf), norm_ref, num_coeffs
+            H.ptr, pointer(phi0_c), Cint(n_steps), pointer(alphas_buf), pointer(betas_buf), norm_ref, num_coeffs
         )
         _check_status(status, "Continued fraction solver failed")
     end
@@ -663,23 +660,23 @@ end
 function continued_fraction_coeffs(
     H::MatrixFreeHamiltonian{Float32},
     phi0::AbstractVector{<:Number};
-    n_iter::Integer=100
+    n_steps::Integer=100
 )::ContinuedFractionResult{Float32}
     dim = Int(dimension(H))
     @assert length(phi0) == dim "Initial vector phi0 size $(length(phi0)) does not match Hamiltonian dimension $dim"
 
     phi0_c = (phi0 isa Vector{ComplexF32}) ? phi0 : Vector{ComplexF32}(phi0)
-    alphas_buf = Vector{Float32}(undef, n_iter)
-    betas_buf  = Vector{Float32}(undef, n_iter)
+    alphas_buf = Vector{Float32}(undef, n_steps)
+    betas_buf  = Vector{Float32}(undef, n_steps)
     norm_ref   = Ref{Cfloat}(0.0f0)
     num_coeffs = Ref{Cint}(0)
 
     GC.@preserve phi0_c alphas_buf betas_buf begin
         status = ccall(
-            (:qkrylov_continued_fraction_coeffs_complex_fp32, libqkrylov),
+            (:qkrylov_continued_fraction_coeffs_fp32, libqkrylov),
             Cint,
             (Ptr{Cvoid}, Ptr{Cfloat}, Cint, Ptr{Cfloat}, Ptr{Cfloat}, Ref{Cfloat}, Ref{Cint}),
-            H.ptr, pointer(phi0_c), Cint(n_iter), pointer(alphas_buf), pointer(betas_buf), norm_ref, num_coeffs
+            H.ptr, pointer(phi0_c), Cint(n_steps), pointer(alphas_buf), pointer(betas_buf), norm_ref, num_coeffs
         )
         _check_status(status, "Continued fraction solver failed")
     end
@@ -713,7 +710,7 @@ function evaluate_spectral_function(
 
     GC.@preserve alphas_buf betas_buf begin
         val = ccall(
-            (:qkrylov_evaluate_spectral_function_fp64, libqkrylov),
+            (:qkrylov_spectral_function_evaluate_fp64, libqkrylov),
             Cdouble,
             (Ptr{Cdouble}, Ptr{Cdouble}, Csize_t, Cdouble, Cdouble, Cdouble, Cdouble),
             pointer(alphas_buf), pointer(betas_buf), Csize_t(n),
@@ -737,7 +734,7 @@ function evaluate_spectral_function(
 
     GC.@preserve alphas_buf betas_buf begin
         val = ccall(
-            (:qkrylov_evaluate_spectral_function_fp32, libqkrylov),
+            (:qkrylov_spectral_function_evaluate_fp32, libqkrylov),
             Cfloat,
             (Ptr{Cfloat}, Ptr{Cfloat}, Csize_t, Cfloat, Cfloat, Cfloat, Cfloat),
             pointer(alphas_buf), pointer(betas_buf), Csize_t(n),
@@ -774,7 +771,7 @@ function ftlm(
 )::FTLMResult{Float64}
     res_c = Ref{FTLMResultFP64C}(FTLMResultFP64C(0.0, 0.0, 0.0, 0.0))
     status = ccall(
-        (:qkrylov_ftlm_fp64, libqkrylov),
+        (:qkrylov_ftlm_solve_fp64, libqkrylov),
         Cint,
         (Ptr{Cvoid}, Cdouble, Cint, Cint, Ref{FTLMResultFP64C}),
         H.ptr, Cdouble(beta), Cint(n_random), Cint(n_steps), res_c
@@ -796,7 +793,7 @@ function ftlm(
 )::FTLMResult{Float32}
     res_c = Ref{FTLMResultFP32C}(FTLMResultFP32C(0.0f0, 0.0f0, 0.0f0, 0.0f0))
     status = ccall(
-        (:qkrylov_ftlm_fp32, libqkrylov),
+        (:qkrylov_ftlm_solve_fp32, libqkrylov),
         Cint,
         (Ptr{Cvoid}, Cfloat, Cint, Cint, Ref{FTLMResultFP32C}),
         H.ptr, Cfloat(beta), Cint(n_random), Cint(n_steps), res_c
@@ -1049,7 +1046,7 @@ observable matrices. Allows zero-cost re-evaluation across arbitrary temperature
 """
 mutable struct FTLMSamples{T<:Union{Float32, Float64}}
     ptr::Ptr{Cvoid}
-    precision::Type{T}
+    dtype::Type{T}
 
     function FTLMSamples{T}(ptr::Ptr{Cvoid}) where {T<:Union{Float32, Float64}}
         obj = new{T}(ptr, T)
@@ -1062,9 +1059,6 @@ mutable struct FTLMSamples{T<:Union{Float32, Float64}}
         return obj
     end
 end
-
-Base.getproperty(x::FTLMSamples, s::Symbol) = s === :dtype ? getfield(x, :precision) : getfield(x, s)
-Base.propertynames(x::FTLMSamples, private::Bool=false) = (fieldnames(FTLMSamples)..., :dtype)
 
 Base.unsafe_convert(::Type{Ptr{Cvoid}}, s::FTLMSamples) = s.ptr
 Base.show(io::IO, s::FTLMSamples{T}) where {T} = print(io, "FTLMSamples{$T}(ptr = $(s.ptr))")
@@ -1264,7 +1258,7 @@ function solver_correction_vector(
     GC.@preserve op_psi0_c vec_out begin
         vec_ptr = return_vector ? pointer(vec_out) : Ptr{ComplexF64}(C_NULL)
         status = ccall(
-            (:qkrylov_solver_correction_vector_fp64, libqkrylov),
+            (:qkrylov_correction_vector_solve_fp64, libqkrylov),
             Cint,
             (Ptr{Cvoid}, Ptr{Cdouble}, Cdouble, Cdouble, Cdouble, Cint, Cdouble, Ref{CorrectionVectorResultFP64C}, Ptr{Cdouble}),
             H.ptr, pointer(op_psi0_c), Cdouble(e0), Cdouble(omega), Cdouble(eta), Cint(maxiter), Cdouble(tol), res_c, Ptr{Cdouble}(vec_ptr)
@@ -1294,7 +1288,7 @@ function solver_correction_vector(
     GC.@preserve op_psi0_c vec_out begin
         vec_ptr = return_vector ? pointer(vec_out) : Ptr{ComplexF32}(C_NULL)
         status = ccall(
-            (:qkrylov_solver_correction_vector_fp32, libqkrylov),
+            (:qkrylov_correction_vector_solve_fp32, libqkrylov),
             Cint,
             (Ptr{Cvoid}, Ptr{Cfloat}, Cfloat, Cfloat, Cfloat, Cint, Cfloat, Ref{CorrectionVectorResultFP32C}, Ptr{Cfloat}),
             H.ptr, pointer(op_psi0_c), Cfloat(e0), Cfloat(omega), Cfloat(eta), Cint(maxiter), Cfloat(tol), res_c, Ptr{Cfloat}(vec_ptr)

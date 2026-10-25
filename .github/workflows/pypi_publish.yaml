@@ -10,6 +10,11 @@ on:
         description: "Version to build (e.g. 0.1.0). Leave blank to auto-detect from git tag."
         required: false
         default: ""
+      publish:
+        description: "Also upload to PyPI. Off by default: a manual run only builds and checks the wheels. A published release always uploads."
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   build_sdist:
@@ -184,9 +189,34 @@ jobs:
           name: cibw-wheels-cuda-${{ matrix.python.tag }}
           path: ./wheelhouse/*.whl
 
+  check_distributions:
+    name: Check the built distributions
+    needs: [build_wheels, build_cuda, build_sdist]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the CPU wheels and sdist
+        uses: actions/download-artifact@v4
+        with:
+          path: ./pypi_wheels
+          pattern: cibw-wheels-{cpu,sdist}*
+          merge-multiple: true
+
+      - name: Download the CUDA wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: ./cuda_wheels
+          pattern: cibw-wheels-cuda*
+          merge-multiple: true
+
+      - name: List everything that was built
+        run: ls -lh ./pypi_wheels ./cuda_wheels
+
+      - name: Check the metadata PyPI will validate
+        run: pipx run twine check --strict ./pypi_wheels/* ./cuda_wheels/*
+
   publish_and_index:
     name: Publish to PyPI and Generate Index
-    needs: [build_wheels, build_cuda, build_sdist]
+    needs: [check_distributions]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -195,7 +225,8 @@ jobs:
       contents: write
       id-token: write
       actions: read
-    if: (github.event_name == 'release' && github.event.action == 'published') || github.event_name == 'workflow_dispatch'
+    # A published release always uploads. A manual run uploads only when the "publish" box is ticked.
+    if: (github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'workflow_dispatch' && inputs.publish)
 
     steps:
       - uses: actions/checkout@v4

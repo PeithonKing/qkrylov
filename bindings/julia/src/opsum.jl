@@ -17,8 +17,6 @@ Container for symbolic Hamiltonian terms passed to C++ backend compilation.
 # Constructors
 - `OpSum()`: Create an empty operator sum.
 
-# Notes
-<TODO-LLM: Explain OpSum compilation to matrix-free SpMV kernel representation here>
 """
 mutable struct OpSum
     ptr::Ptr{Cvoid}

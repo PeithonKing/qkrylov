@@ -513,68 +513,6 @@ int SUFFIX(qkrylov_hamiltonian_diagonal_device)(
     }
 }
 
-int SUFFIX(qkrylov_lanczos_ground_state)(
-    qkrylov_hamiltonian_h h,
-    int maxiter,
-    Scalar tol,
-    LanczosResT* result)
-{
-    return SUFFIX(qkrylov_lanczos_ground_state_complex)(h, maxiter, tol, result, nullptr);
-}
-
-int SUFFIX(qkrylov_lanczos_ground_state_complex)(
-    qkrylov_hamiltonian_h h,
-    int maxiter,
-    Scalar tol,
-    LanczosResT* result,
-    Scalar* eigenvector_complex)
-{
-    if (!h) {
-        set_last_error("qkrylov_lanczos_ground_state_complex: hamiltonian handle is null");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (h->precision != PREC_ID) {
-        set_last_error("qkrylov_lanczos_ground_state_complex: precision mismatch");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (!h->impl || !result) {
-        set_last_error("qkrylov_lanczos_ground_state_complex: null result pointer or uninitialized hamiltonian");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (maxiter <= 0) {
-        set_last_error("qkrylov_lanczos_ground_state_complex: maxiter must be positive");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    try {
-        return qk_dispatch(h->space, [&](auto sp) -> int {
-            using Space = typename decltype(sp)::type;
-            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
-            LanczosConfig cfg;
-            cfg.maxiter = maxiter;
-            cfg.tol = static_cast<Real>(tol);
-            auto res = eigenvector_complex
-                ? solvers::lanczos<solvers::policy::OnePass_DKGS>(*H, cfg)
-                : solvers::lanczos<solvers::policy::OnePass>(*H, cfg);
-            result->energy     = static_cast<Scalar>(res.energy);
-            result->iterations = res.iterations;
-            result->converged  = res.converged ? 1 : 0;
-            if (eigenvector_complex && !res.eigenvector.empty()) {
-                for (size_t i = 0; i < res.eigenvector.size(); ++i) {
-                    eigenvector_complex[2 * i]     = static_cast<Scalar>(res.eigenvector[i].real());
-                    eigenvector_complex[2 * i + 1] = static_cast<Scalar>(res.eigenvector[i].imag());
-                }
-            }
-            return QKRYLOV_SUCCESS;
-        });
-    } catch (const std::exception& e) {
-        set_last_error(e.what());
-        return QKRYLOV_ERROR_EXCEPTION;
-    } catch (...) {
-        set_last_error("Unknown exception in qkrylov_lanczos_ground_state_complex");
-        return QKRYLOV_ERROR_EXCEPTION;
-    }
-}
-
 int SUFFIX(qkrylov_hamiltonian_is_real)(qkrylov_hamiltonian_h h)
 {
     if (!h || !h->impl) {
@@ -674,67 +612,7 @@ int SUFFIX(qkrylov_lanczos_solve)(
     }
 }
 
-int SUFFIX(qkrylov_lanczos_two_pass_ground_state)(
-    qkrylov_hamiltonian_h h,
-    int maxiter,
-    Scalar tol,
-    LanczosResT* result)
-{
-    return SUFFIX(qkrylov_lanczos_two_pass_ground_state_complex)(h, maxiter, tol, result, nullptr);
-}
-
-int SUFFIX(qkrylov_lanczos_two_pass_ground_state_complex)(
-    qkrylov_hamiltonian_h h,
-    int maxiter,
-    Scalar tol,
-    LanczosResT* result,
-    Scalar* eigenvector_complex)
-{
-    if (!h) {
-        set_last_error("qkrylov_lanczos_two_pass_ground_state_complex: hamiltonian handle is null");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (h->precision != PREC_ID) {
-        set_last_error("qkrylov_lanczos_two_pass_ground_state_complex: precision mismatch");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (!h->impl || !result) {
-        set_last_error("qkrylov_lanczos_two_pass_ground_state_complex: null result pointer or uninitialized hamiltonian");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    if (maxiter <= 0) {
-        set_last_error("qkrylov_lanczos_two_pass_ground_state_complex: maxiter must be positive");
-        return QKRYLOV_ERROR_INVALID_ARG;
-    }
-    try {
-        return qk_dispatch(h->space, [&](auto sp) -> int {
-            using Space = typename decltype(sp)::type;
-            auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
-            LanczosConfig cfg;
-            cfg.maxiter = maxiter;
-            cfg.tol = static_cast<Real>(tol);
-            auto res = solvers::lanczos<solvers::policy::TwoPass>(*H, cfg);
-            result->energy     = static_cast<Scalar>(res.energy);
-            result->iterations = res.iterations;
-            result->converged  = res.converged ? 1 : 0;
-            if (eigenvector_complex && !res.eigenvector.empty()) {
-                for (size_t i = 0; i < res.eigenvector.size(); ++i) {
-                    eigenvector_complex[2 * i]     = static_cast<Scalar>(res.eigenvector[i].real());
-                    eigenvector_complex[2 * i + 1] = static_cast<Scalar>(res.eigenvector[i].imag());
-                }
-            }
-            return QKRYLOV_SUCCESS;
-        });
-    } catch (const std::exception& e) {
-        set_last_error(e.what());
-        return QKRYLOV_ERROR_EXCEPTION;
-    } catch (...) {
-        set_last_error("Unknown exception in qkrylov_lanczos_two_pass_ground_state_complex");
-        return QKRYLOV_ERROR_EXCEPTION;
-    }
-}
-
-int SUFFIX(qkrylov_lanczos_lowest_complex)(
+int SUFFIX(qkrylov_lanczos_solve_lowest)(
     qkrylov_hamiltonian_h h,
     int n_eig,
     int maxiter,
@@ -745,23 +623,23 @@ int SUFFIX(qkrylov_lanczos_lowest_complex)(
     const Scalar* initial_vector_complex)
 {
     if (!h) {
-        set_last_error("qkrylov_lanczos_lowest_complex: hamiltonian handle is null");
+        set_last_error("qkrylov_lanczos_solve_lowest: hamiltonian handle is null");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (h->precision != PREC_ID) {
-        set_last_error("qkrylov_lanczos_lowest_complex: precision mismatch");
+        set_last_error("qkrylov_lanczos_solve_lowest: precision mismatch");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (!h->impl || !eigenvalues_out) {
-        set_last_error("qkrylov_lanczos_lowest_complex: null eigenvalues output pointer or uninitialized hamiltonian");
+        set_last_error("qkrylov_lanczos_solve_lowest: null eigenvalues output pointer or uninitialized hamiltonian");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (n_eig <= 0) {
-        set_last_error("qkrylov_lanczos_lowest_complex: n_eig must be positive");
+        set_last_error("qkrylov_lanczos_solve_lowest: n_eig must be positive");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (maxiter <= 0) {
-        set_last_error("qkrylov_lanczos_lowest_complex: maxiter must be positive");
+        set_last_error("qkrylov_lanczos_solve_lowest: maxiter must be positive");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
@@ -811,45 +689,50 @@ int SUFFIX(qkrylov_lanczos_lowest_complex)(
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_lanczos_lowest_complex");
+        set_last_error("Unknown exception in qkrylov_lanczos_solve_lowest");
         return QKRYLOV_ERROR_EXCEPTION;
     }
 }
 
-int SUFFIX(qkrylov_davidson_lowest_complex)(
+int SUFFIX(qkrylov_davidson_solve)(
     qkrylov_hamiltonian_h h,
     int n_eig,
     int max_subspace,
+    int maxiter,
     Scalar tol,
     Scalar* eigenvalues_out,
     Scalar* eigenvectors_complex_out,
     qkrylov_davidson_result_c_t* result_info)
 {
     if (!h) {
-        set_last_error("qkrylov_davidson_lowest_complex: hamiltonian handle is null");
+        set_last_error("qkrylov_davidson_solve: hamiltonian handle is null");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (h->precision != PREC_ID) {
-        set_last_error("qkrylov_davidson_lowest_complex: precision mismatch");
+        set_last_error("qkrylov_davidson_solve: precision mismatch");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (!h->impl || !eigenvalues_out) {
-        set_last_error("qkrylov_davidson_lowest_complex: null eigenvalues output pointer or uninitialized hamiltonian");
+        set_last_error("qkrylov_davidson_solve: null eigenvalues output pointer or uninitialized hamiltonian");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (n_eig <= 0) {
-        set_last_error("qkrylov_davidson_lowest_complex: n_eig must be positive");
+        set_last_error("qkrylov_davidson_solve: n_eig must be positive");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (max_subspace <= 0) {
-        set_last_error("qkrylov_davidson_lowest_complex: max_subspace must be positive");
+        set_last_error("qkrylov_davidson_solve: max_subspace must be positive");
+        return QKRYLOV_ERROR_INVALID_ARG;
+    }
+    if (maxiter <= 0) {
+        set_last_error("qkrylov_davidson_solve: maxiter must be positive");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
         return qk_dispatch(h->space, [&](auto sp) -> int {
             using Space = typename decltype(sp)::type;
             auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
-            auto res = davidson_lowest(*H, n_eig, max_subspace, static_cast<Real>(tol));
+            auto res = davidson_lowest(*H, n_eig, max_subspace, static_cast<Real>(tol), maxiter);
             const size_t k = std::min(static_cast<size_t>(n_eig), res.eigenvalues.size());
             for (size_t i = 0; i < k; ++i) {
                 eigenvalues_out[i] = static_cast<Scalar>(res.eigenvalues[i]);
@@ -877,34 +760,34 @@ int SUFFIX(qkrylov_davidson_lowest_complex)(
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_davidson_lowest_complex");
+        set_last_error("Unknown exception in qkrylov_davidson_solve");
         return QKRYLOV_ERROR_EXCEPTION;
     }
 }
 
-int SUFFIX(qkrylov_continued_fraction_coeffs_complex)(
+int SUFFIX(qkrylov_continued_fraction_coeffs)(
     qkrylov_hamiltonian_h h,
     const Scalar* phi0_complex,
-    int n_iter,
+    int n_steps,
     Scalar* alphas_out,
     Scalar* betas_out,
     Scalar* norm_phi0_out,
     int* num_coeffs_out)
 {
     if (!h) {
-        set_last_error("qkrylov_continued_fraction_coeffs_complex: hamiltonian handle is null");
+        set_last_error("qkrylov_continued_fraction_coeffs: hamiltonian handle is null");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (h->precision != PREC_ID) {
-        set_last_error("qkrylov_continued_fraction_coeffs_complex: precision mismatch");
+        set_last_error("qkrylov_continued_fraction_coeffs: precision mismatch");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (!h->impl || !phi0_complex || !alphas_out || !betas_out || !norm_phi0_out) {
-        set_last_error("qkrylov_continued_fraction_coeffs_complex: null pointer argument");
+        set_last_error("qkrylov_continued_fraction_coeffs: null pointer argument");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
-    if (n_iter <= 0) {
-        set_last_error("qkrylov_continued_fraction_coeffs_complex: n_iter must be positive");
+    if (n_steps <= 0) {
+        set_last_error("qkrylov_continued_fraction_coeffs: n_steps must be positive");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
@@ -917,16 +800,16 @@ int SUFFIX(qkrylov_continued_fraction_coeffs_complex)(
                 phi0[i] = Complex(static_cast<Real>(phi0_complex[2 * i]), static_cast<Real>(phi0_complex[2 * i + 1]));
             }
 
-            auto res = continued_fraction_coeffs(*H, phi0, n_iter);
+            auto res = continued_fraction_coeffs(*H, phi0, n_steps);
             *norm_phi0_out = static_cast<Scalar>(res.norm_phi0);
 
             const size_t n_alpha = res.alphas.size();
             const size_t n_beta  = res.betas.size();
 
-            for (size_t i = 0; i < n_alpha && i < static_cast<size_t>(n_iter); ++i) {
+            for (size_t i = 0; i < n_alpha && i < static_cast<size_t>(n_steps); ++i) {
                 alphas_out[i] = static_cast<Scalar>(res.alphas[i]);
             }
-            for (size_t i = 0; i < n_beta && i < static_cast<size_t>(n_iter); ++i) {
+            for (size_t i = 0; i < n_beta && i < static_cast<size_t>(n_steps); ++i) {
                 betas_out[i] = static_cast<Scalar>(res.betas[i]);
             }
 
@@ -940,12 +823,12 @@ int SUFFIX(qkrylov_continued_fraction_coeffs_complex)(
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_continued_fraction_coeffs_complex");
+        set_last_error("Unknown exception in qkrylov_continued_fraction_coeffs");
         return QKRYLOV_ERROR_EXCEPTION;
     }
 }
 
-Scalar SUFFIX(qkrylov_evaluate_spectral_function)(
+Scalar SUFFIX(qkrylov_spectral_function_evaluate)(
     const Scalar* alphas,
     const Scalar* betas,
     size_t n,
@@ -955,7 +838,7 @@ Scalar SUFFIX(qkrylov_evaluate_spectral_function)(
     Scalar eta)
 {
     if (!alphas || !betas || n == 0) {
-        set_last_error("qkrylov_evaluate_spectral_function: invalid arguments (null pointer or n == 0)");
+        set_last_error("qkrylov_spectral_function_evaluate: invalid arguments (null pointer or n == 0)");
         return Scalar(0.0);
     }
     try {
@@ -978,12 +861,12 @@ Scalar SUFFIX(qkrylov_evaluate_spectral_function)(
         set_last_error(e.what());
         return Scalar(0.0);
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_evaluate_spectral_function");
+        set_last_error("Unknown exception in qkrylov_spectral_function_evaluate");
         return Scalar(0.0);
     }
 }
 
-int SUFFIX(qkrylov_ftlm)(
+int SUFFIX(qkrylov_ftlm_solve)(
     qkrylov_hamiltonian_h h,
     Scalar beta,
     int n_random,
@@ -991,19 +874,19 @@ int SUFFIX(qkrylov_ftlm)(
     FTLMResT* result)
 {
     if (!h) {
-        set_last_error("qkrylov_ftlm: hamiltonian handle is null");
+        set_last_error("qkrylov_ftlm_solve: hamiltonian handle is null");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (h->precision != PREC_ID) {
-        set_last_error("qkrylov_ftlm: precision mismatch");
+        set_last_error("qkrylov_ftlm_solve: precision mismatch");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (!h->impl || !result) {
-        set_last_error("qkrylov_ftlm: null pointer argument");
+        set_last_error("qkrylov_ftlm_solve: null pointer argument");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (n_random <= 0 || n_steps <= 0) {
-        set_last_error("qkrylov_ftlm: n_random and n_steps must be positive");
+        set_last_error("qkrylov_ftlm_solve: n_random and n_steps must be positive");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
@@ -1021,7 +904,7 @@ int SUFFIX(qkrylov_ftlm)(
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_ftlm");
+        set_last_error("Unknown exception in qkrylov_ftlm_solve");
         return QKRYLOV_ERROR_EXCEPTION;
     }
 }
@@ -1531,31 +1414,31 @@ void SUFFIX(qkrylov_ftlm_dynamics_result_free)(FTLMDynamicsResT* result) {
     result->num_times = 0;
 }
 
-int SUFFIX(qkrylov_solver_correction_vector)(
+int SUFFIX(qkrylov_correction_vector_solve)(
     qkrylov_hamiltonian_h h,
     const Scalar* op_psi0_complex,
     Scalar e0,
     Scalar omega,
     Scalar eta,
-    int max_iter,
+    int maxiter,
     Scalar tol,
     CorrVecResT* result,
     Scalar* correction_vector_out_complex)
 {
     if (!h) {
-        set_last_error("qkrylov_solver_correction_vector: hamiltonian handle is null");
+        set_last_error("qkrylov_correction_vector_solve: hamiltonian handle is null");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (h->precision != PREC_ID) {
-        set_last_error("qkrylov_solver_correction_vector: precision mismatch");
+        set_last_error("qkrylov_correction_vector_solve: precision mismatch");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     if (!h->impl || !op_psi0_complex || !result) {
-        set_last_error("qkrylov_solver_correction_vector: null pointer argument");
+        set_last_error("qkrylov_correction_vector_solve: null pointer argument");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
-    if (max_iter <= 0) {
-        set_last_error("qkrylov_solver_correction_vector: max_iter must be positive");
+    if (maxiter <= 0) {
+        set_last_error("qkrylov_correction_vector_solve: maxiter must be positive");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
     try {
@@ -1575,7 +1458,7 @@ int SUFFIX(qkrylov_solver_correction_vector)(
                 static_cast<Real>(e0),
                 static_cast<Real>(omega),
                 static_cast<Real>(eta),
-                max_iter,
+                maxiter,
                 static_cast<Real>(tol)
             );
 
@@ -1596,7 +1479,7 @@ int SUFFIX(qkrylov_solver_correction_vector)(
         set_last_error(e.what());
         return QKRYLOV_ERROR_EXCEPTION;
     } catch (...) {
-        set_last_error("Unknown exception in qkrylov_solver_correction_vector");
+        set_last_error("Unknown exception in qkrylov_correction_vector_solve");
         return QKRYLOV_ERROR_EXCEPTION;
     }
 }

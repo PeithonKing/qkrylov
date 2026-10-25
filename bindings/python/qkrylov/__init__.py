@@ -4,6 +4,30 @@ A modern C++20 framework for matrix-free Krylov methods in quantum many-body phy
 now with a Pythonic wrapper layer.
 """
 
+import ctypes as _ctypes
+import glob as _glob
+import os as _os
+import sys as _sys
+
+
+def _preload_cuda_runtime():
+    """Load libcudart from the ``nvidia-cuda-runtime-cu12`` pip package, if installed.
+
+    The CUDA wheel does not bundle the CUDA runtime. ``pip install qkrylov[cuda]`` puts it under
+    ``site-packages/nvidia/cuda_runtime/lib``, which the dynamic loader does not search, so it has to be loaded
+    before the compiled extension is imported. A system CUDA installation needs nothing here.
+    """
+    for entry in _sys.path:
+        for lib in _glob.glob(_os.path.join(entry, "nvidia", "cuda_runtime", "lib", "libcudart.so*")):
+            try:
+                _ctypes.CDLL(lib, mode=_os.RTLD_GLOBAL)
+                return
+            except OSError:
+                pass
+
+
+_preload_cuda_runtime()
+
 from .operators import (
     Op, OpSum,
     Sz, Sp, Sm, Sx, Sy,
@@ -51,26 +75,7 @@ from .solvers import (
     ftlm_dynamics,
     CorrectionVectorResult,
     correction_vector,
-    correction_vector_spectral,
 )
-
-import os
-import site as _py_site
-import glob
-import ctypes
-
-# Preload NVIDIA CUDA libraries from pip packages if they exist
-try:
-    for site_dir in _py_site.getsitepackages():
-        cuda_libs = glob.glob(os.path.join(site_dir, "nvidia", "*", "lib"))
-        for lib_dir in cuda_libs:
-            for so_file in glob.glob(os.path.join(lib_dir, "*.so*")):
-                try:
-                    ctypes.CDLL(so_file, mode=os.RTLD_GLOBAL)
-                except OSError:
-                    pass
-except Exception:
-    pass
 
 from typing import Optional
 from ._qkrylov_cpp import Device_FP32 as Device
@@ -221,7 +226,6 @@ __all__ = [
     "ftlm_dynamics",
     "CorrectionVectorResult",
     "correction_vector",
-    "correction_vector_spectral",
     
     # Utilities
     "find_gpu",

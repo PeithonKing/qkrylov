@@ -10,7 +10,6 @@ namespace qkrylov {
 /// \brief Abstract base class representing a many-body Hilbert space basis.
 ///
 /// Maps between dense linear indices \f$i \in [0, D-1]\f$ and sparse Fock bitstrings \f$s \in \mathbb{N}\f$.
-/// <TODO-LLM: Document asymptotic lookup complexity (O(1) binary search / hashing) and memory consumption tradeoffs here>
 class Basis
 {
 public:

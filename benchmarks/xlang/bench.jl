@@ -17,7 +17,7 @@ function build_and_solve(L, T, mode, iters, device)
         j = mod(i + 1, L)
         ops += 1.0 * Sz(i) * Sz(j) + 0.5 * (Sp(i) * Sm(j) + Sm(i) * Sp(j))
     end
-    H = MatrixFreeHamiltonian(basis, SpinHalfSite(), ops; precision=T, device=device)
+    H = MatrixFreeHamiltonian(basis, SpinHalfSite(), ops; dtype=T, device=device)
     t1 = time_ns()
     res = solve(GroundStateProblem(H), Lanczos(variation=TwoPass(), maxiter=iters, tol=1e-12,
                                                return_state=(mode == "state"), early_stopping=false))

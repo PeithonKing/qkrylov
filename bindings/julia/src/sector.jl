@@ -9,8 +9,6 @@ Allows restricting the many-body Hilbert space to targeted symmetry sectors.
 # Constructors
 - `Sector()`: Create an unconstrained symmetry sector.
 
-# Notes
-<TODO-LLM: Explain Abelian symmetry conservation, block-diagonal Hamiltonian decomposition, and memory savings here>
 """
 mutable struct Sector
     ptr::Ptr{Cvoid}
@@ -52,8 +50,6 @@ Doubling the spin projection avoids half-integer representation for odd numbers 
 - `sec::Sector`: Sector object to modify.
 - `sz2::Integer`: Value of \$2 S_z = N_\\uparrow - N_\\downarrow\$.
 
-# Notes
-<TODO-LLM: Explain 2*Sz doubling convention and spin sector filtering here>
 """
 function set_sz!(sec::Sector, sz2::Integer)
     status = ccall((:qkrylov_sector_set_sz, libqkrylov), Cint, (Ptr{Cvoid}, Cint), sec.ptr, Cint(sz2))

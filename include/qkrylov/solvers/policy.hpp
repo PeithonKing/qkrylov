@@ -13,7 +13,6 @@ struct OnePass_full {};  // Ground state only + vector: m vectors in RAM, no DGK
 struct TwoPass {};       // Ground state only + vector: 4 vectors in RAM, seed replay
 
 using Default      = OnePass;
-using OnePass_DGKS = OnePass_DKGS; // Spelling convenience alias
 
 // Policy Traits
 template <typename Policy>

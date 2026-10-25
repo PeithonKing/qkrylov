@@ -12,11 +12,8 @@ Supports dual-precision floating-point arithmetic (`Float64` and `Float32`) acro
 - `MatrixFreeHamiltonian(basis, site, opsum; device=CPUDevice(), dtype=Float64)`
 - `MatrixFreeHamiltonian(basis, opsum; device=CPUDevice(), dtype=Float64)`
 
-`dtype` is `Float64` or `Float32` and defaults to `Float64` on every device. `precision=` is accepted as an alias
-of `dtype=`; `H.dtype` returns the element type.
+`dtype` is `Float64` or `Float32` and defaults to `Float64` on every device; `H.dtype` returns the element type.
 
-# Notes
-<TODO-LLM: Explain matrix-free SpMV algorithm, Kokkos parallel kernel dispatch, and zero-RAM scaling here>
 """
 mutable struct MatrixFreeHamiltonian{T<:Union{Float32, Float64}}
     ptr::Ptr{Cvoid}
@@ -24,7 +21,7 @@ mutable struct MatrixFreeHamiltonian{T<:Union{Float32, Float64}}
     site::AbstractSite
     opsum::OpSum
     device::AbstractDevice
-    precision::Type{T}
+    dtype::Type{T}
 
     function MatrixFreeHamiltonian{T}(
         basis::AbstractBasis,
@@ -83,9 +80,9 @@ mutable struct MatrixFreeHamiltonian{T<:Union{Float32, Float64}}
         if ptr == C_NULL
             err = get_last_error_message()
             if !isempty(err)
-                error("Failed to create MatrixFreeHamiltonian on device: $dev_str with precision: $T: $err")
+                error("Failed to create MatrixFreeHamiltonian on device: $dev_str with dtype: $T: $err")
             else
-                error("Failed to create MatrixFreeHamiltonian on device: $dev_str with precision: $T")
+                error("Failed to create MatrixFreeHamiltonian on device: $dev_str with dtype: $T")
             end
         end
 
@@ -105,15 +102,10 @@ function MatrixFreeHamiltonian(
     site::AbstractSite,
     opsum::OpSum;
     device::Union{AbstractDevice, AbstractString} = CPUDevice(),
-    dtype = nothing,
-    precision = nothing
+    dtype = Float64
 )
-    return MatrixFreeHamiltonian{resolve_dtype(dtype, precision)}(basis, site, opsum; device=device)
+    return MatrixFreeHamiltonian{check_dtype(dtype)}(basis, site, opsum; device=device)
 end
-
-# `H.dtype` mirrors the Python attribute; the stored field keeps its historical name `precision`.
-Base.getproperty(H::MatrixFreeHamiltonian, s::Symbol) = s === :dtype ? getfield(H, :precision) : getfield(H, s)
-Base.propertynames(H::MatrixFreeHamiltonian, private::Bool=false) = (fieldnames(MatrixFreeHamiltonian)..., :dtype)
 
 default_site(b::SpinHalfBasis) = SpinHalfSite()
 default_site(b::SpinSBasis)    = SpinSSite(b.spin_s)
@@ -128,11 +120,10 @@ function MatrixFreeHamiltonian(
     basis::AbstractBasis,
     opsum::OpSum;
     device::Union{AbstractDevice, AbstractString} = CPUDevice(),
-    dtype = nothing,
-    precision = nothing
+    dtype = Float64
 )
     site = default_site(basis)
-    return MatrixFreeHamiltonian{resolve_dtype(dtype, precision)}(basis, site, opsum; device=device)
+    return MatrixFreeHamiltonian{check_dtype(dtype)}(basis, site, opsum; device=device)
 end
 
 function MatrixFreeHamiltonian{T}(
@@ -266,7 +257,6 @@ function Base.show(io::IO, H::MatrixFreeHamiltonian{T}) where {T}
     print(io, "MatrixFreeHamiltonian{$T}(dim = $d, device = \"$(H.device)\", basis = $(H.basis))")
 end
 
-
 """
     isreal(H::MatrixFreeHamiltonian) -> Bool
 
@@ -278,7 +268,6 @@ function Base.isreal(H::MatrixFreeHamiltonian)
     status < 0 && error("qkrylov_hamiltonian_is_real failed: $(get_last_error_message())")
     return status == 1
 end
-
 
 """
     active_device(H::MatrixFreeHamiltonian) -> String

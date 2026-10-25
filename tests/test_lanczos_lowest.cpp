@@ -99,8 +99,8 @@ int main()
     std::cout << "\n--- Testing C API lanczos_lowest ---" << std::endl;
     qkrylov_sector_h sec = qkrylov_sector_create();
     qkrylov_sector_set_sz(sec, 0);
-    qkrylov_basis_h c_basis = qkrylov_spinhalf_basis_create(N, sec);
-    qkrylov_site_h  c_site  = qkrylov_spinhalf_site_create();
+    qkrylov_basis_h c_basis = qkrylov_basis_create_spin_half(N, sec);
+    qkrylov_site_h  c_site  = qkrylov_site_create_spin_half();
     qkrylov_opsum_h c_ops   = qkrylov_opsum_create();
 
     for (int i = 0; i < N; ++i) {
@@ -117,16 +117,16 @@ int main()
     double c_evecs[3 * 6 * 2]; // 3 vectors, dim 6, complex
     qkrylov_lanczos_lowest_result_c_t c_res_info;
 
-    int rc = qkrylov_lanczos_lowest_complex_fp64(c_H, 3, 100, 1e-10, c_evals, c_evecs, &c_res_info, nullptr);
+    int rc = qkrylov_lanczos_solve_lowest_fp64(c_H, 3, 100, 1e-10, c_evals, c_evecs, &c_res_info, nullptr);
     assert(rc == QKRYLOV_SUCCESS);
     assert(c_res_info.converged == 1);
     for (int k = 0; k < 3; ++k) {
         assert(std::abs(c_evals[k] - lowest_res.eigenvalues[k]) < 1e-6);
     }
-    std::cout << "C API qkrylov_lanczos_lowest_complex_fp64 passed." << std::endl;
+    std::cout << "C API qkrylov_lanczos_solve_lowest_fp64 passed." << std::endl;
 
     // Test C API with warm start
-    int rc_warm = qkrylov_lanczos_lowest_complex_fp64(c_H, 1, 100, 1e-10, c_evals, nullptr, &c_res_info, c_evecs);
+    int rc_warm = qkrylov_lanczos_solve_lowest_fp64(c_H, 1, 100, 1e-10, c_evals, nullptr, &c_res_info, c_evecs);
     assert(rc_warm == QKRYLOV_SUCCESS);
     assert(std::abs(c_evals[0] - lowest_res.eigenvalues[0]) < 1e-6);
     std::cout << "C API warm-start passed." << std::endl;

@@ -1,0 +1,19 @@
+# Linker version script for the shared library on ELF platforms (Linux, BSD).
+# Exports the C API and the C++ API (namespace qkrylov); everything else stays internal. Without it every Kokkos and
+# libstdc++ template instance in the library, and helpers such as ::set_last_error, would be visible to the host
+# program and could clash with its own copies.
+{
+  global:
+    qkrylov_*;
+    extern "C++" {
+      qkrylov::*;
+    };
+    # Class tables of qkrylov:: types, by mangled name (vtable, typeinfo, typeinfo name, VTT): the demangled
+    # patterns do not match these special symbols.
+    _ZTVN7qkrylov*;
+    _ZTIN7qkrylov*;
+    _ZTSN7qkrylov*;
+    _ZTTN7qkrylov*;
+  local:
+    *;
+};

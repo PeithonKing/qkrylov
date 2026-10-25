@@ -135,7 +135,6 @@ class MatrixFreeHamiltonian:
         self.dtype = dtype
         s_dtype = "_FP64" if dtype == np.float64 else "_FP32"
         site: Site = self.site
-        ops_val: OpSum = self.ops
 
         dev_obj = getattr(_cpp, f"Device{s_dtype}")(device)
         d_lower = device.lower()

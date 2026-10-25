@@ -9,6 +9,8 @@ set(QKRYLOV_TESTS
     test_fermion_basis
     test_fermion_site
     test_davidson
+    test_davidson_exact
+    test_solvers_exact
     test_lanczos_ritz
     test_dynamics
     test_tj_basis
@@ -41,6 +43,8 @@ set(QKRYLOV_FP32_TESTS
     test_lanczos_2site
     test_lanczos_ritz
     test_davidson
+    test_davidson_exact
+    test_solvers_exact
     test_dynamics
     test_ftlm
     test_lanczos_policies
@@ -64,3 +68,10 @@ add_executable(test_c_api test_c_api.cpp)
 target_link_libraries(test_c_api PRIVATE qkrylov::qkrylov)
 target_compile_options(test_c_api PRIVATE ${QKRYLOV_TEST_KEEP_ASSERTS})
 add_test(NAME test_c_api COMMAND test_c_api)
+
+# The public C header must compile as plain C (the other tests are C++).
+enable_language(C)
+add_executable(test_c_header test_c_header.c)
+set_target_properties(test_c_header PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRED ON)
+target_link_libraries(test_c_header PRIVATE qkrylov::qkrylov)
+add_test(NAME test_c_header COMMAND test_c_header)

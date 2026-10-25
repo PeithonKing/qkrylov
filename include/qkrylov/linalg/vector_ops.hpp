@@ -11,6 +11,35 @@ namespace QKRYLOV_PRECISION_NAMESPACE {
 
 
 
+// Device kernels are named functors, not KOKKOS_LAMBDAs: these templates are instantiated in many translation
+// units, and NVCC does not give an extended lambda from an inline template a single, consistent device entry point
+// across units (one unit's registration can end up serving another's call -> a null kernel pointer at run time).
+namespace vecops_detail {
+
+template <class V> struct DotFunctor {
+    using Acc = Kokkos::complex<double>;
+    V x, y;
+    KOKKOS_INLINE_FUNCTION void operator()(const Index i, Acc& sum) const {
+        const KComplex p = Kokkos::conj(x(i)) * y(i);
+        sum += Acc(p.real(), p.imag());
+    }
+};
+
+template <class V> struct ScalFunctor {
+    V x;
+    KComplex a;
+    KOKKOS_INLINE_FUNCTION void operator()(const Index i) const { x(i) *= a; }
+};
+
+template <class X, class Y> struct AxpyFunctor {
+    KComplex a;
+    X x;
+    Y y;
+    KOKKOS_INLINE_FUNCTION void operator()(const Index i) const { y(i) += a * x(i); }
+};
+
+}  // namespace vecops_detail
+
 /// Compute the inner product <x|y> = sum_i conj(x_i) * y_i
 ///
 /// Each product is formed in working precision but the sum is accumulated in double,
@@ -27,10 +56,7 @@ inline KComplex dot(
 
     Kokkos::parallel_reduce("qkrylov::dot",
         Kokkos::RangePolicy<ExecSpace, Index>(0, x.extent(0)),
-        KOKKOS_LAMBDA(const Index i, Acc& sum) {
-            const KComplex p = Kokkos::conj(x(i)) * y(i);
-            sum += Acc(p.real(), p.imag());
-        },
+        vecops_detail::DotFunctor<ViewType>{x, y},
         result
     );
 
@@ -58,9 +84,7 @@ inline void scal(
     using ExecSpace = typename ViewType::execution_space;
     Kokkos::parallel_for("qkrylov::scal",
         Kokkos::RangePolicy<ExecSpace, Index>(0, x.extent(0)),
-        KOKKOS_LAMBDA(const Index i) {
-            x(i) *= a;
-        }
+        vecops_detail::ScalFunctor<ViewType>{x, a}
     );
 }
 
@@ -85,9 +109,7 @@ inline void axpy(
     using ExecSpace = typename ViewType::execution_space;
     Kokkos::parallel_for("qkrylov::axpy",
         Kokkos::RangePolicy<ExecSpace, Index>(0, x.extent(0)),
-        KOKKOS_LAMBDA(const Index i) {
-            y(i) += a * x(i);
-        }
+        vecops_detail::AxpyFunctor<ViewType, ViewType>{a, x, y}
     );
 }
 
@@ -119,6 +141,29 @@ KOKKOS_INLINE_FUNCTION Kokkos::complex<double> dot_term(KComplex x, KComplex v) 
     return Kokkos::complex<double>(p.real(), p.imag());
 }
 
+namespace vecops_detail {
+
+template <class V> struct LanczosUpdateFunctor {
+    V w, v, p;
+    Real a, b;
+    bool has_p;
+    KOKKOS_INLINE_FUNCTION void operator()(const Index i, double& sum) const {
+        typename V::non_const_value_type r = w(i) - a * v(i);
+        if (has_p) r -= b * p(i);
+        w(i) = r;
+        sum += abs2(r);
+    }
+};
+
+template <class Dst, class Src> struct ScaleIntoFunctor {
+    Dst dst;
+    Src src;
+    Real s;
+    KOKKOS_INLINE_FUNCTION void operator()(const Index i) const { dst(i) = s * src(i); }
+};
+
+}  // namespace vecops_detail
+
 /// w <- w - a*v - b*p (p skipped when has_p is false) and return ||w||^2, in one pass.
 /// The Lanczos three-term update fused with the norm of the new residual.
 template <typename ViewType>
@@ -130,12 +175,7 @@ inline Real lanczos_update_norm2(
     double result = 0.0;
     Kokkos::parallel_reduce("qkrylov::lanczos_update",
         Kokkos::RangePolicy<ExecSpace, Index>(0, w.extent(0)),
-        KOKKOS_LAMBDA(const Index i, double& sum) {
-            typename ViewType::non_const_value_type r = w(i) - a * v(i);
-            if (has_p) r -= b * p(i);
-            w(i) = r;
-            sum += abs2(r);
-        },
+        vecops_detail::LanczosUpdateFunctor<ViewType>{w, v, p, a, b, has_p},
         result
     );
     return static_cast<Real>(result);
@@ -148,7 +188,7 @@ inline void scale_into(ViewType& dst, const ViewType& src, Real s)
     using ExecSpace = typename ViewType::execution_space;
     Kokkos::parallel_for("qkrylov::scale_into",
         Kokkos::RangePolicy<ExecSpace, Index>(0, src.extent(0)),
-        KOKKOS_LAMBDA(const Index i) { dst(i) = s * src(i); }
+        vecops_detail::ScaleIntoFunctor<ViewType, ViewType>{dst, src, s}
     );
 }
 
@@ -159,6 +199,22 @@ KOKKOS_INLINE_FUNCTION uint64_t splitmix64(uint64_t z) {
     return z ^ (z >> 31);
 }
 
+namespace vecops_detail {
+
+template <class V> struct FillRandomFunctor {
+    V x;
+    uint64_t seed;
+    KOKKOS_INLINE_FUNCTION void operator()(const Index i) const {
+        const uint64_t a = splitmix64(seed ^ (2 * static_cast<uint64_t>(i)));
+        const uint64_t b = splitmix64(seed ^ (2 * static_cast<uint64_t>(i) + 1));
+        const double inv = 1.0 / 9007199254740992.0; // 2^-53
+        x(i) = make_random_value(typename V::non_const_value_type{},
+                                 (a >> 11) * inv * 2.0 - 1.0, (b >> 11) * inv * 2.0 - 1.0);
+    }
+};
+
+}  // namespace vecops_detail
+
 /// Deterministic, parallel pseudo-random fill with entries uniform in [-1, 1) (+ i[-1, 1) if complex).
 /// Counter-based (splitmix64 of seed and index), so the result does not depend on thread
 /// scheduling -- two-pass solvers can regenerate exactly the same start vector.
@@ -168,13 +224,51 @@ inline void fill_random(ViewType& x, uint64_t seed)
     using ExecSpace = typename ViewType::execution_space;
     Kokkos::parallel_for("qkrylov::fill_random",
         Kokkos::RangePolicy<ExecSpace, Index>(0, x.extent(0)),
-        KOKKOS_LAMBDA(const Index i) {
-            const uint64_t a = splitmix64(seed ^ (2 * static_cast<uint64_t>(i)));
-            const uint64_t b = splitmix64(seed ^ (2 * static_cast<uint64_t>(i) + 1));
-            const double inv = 1.0 / 9007199254740992.0; // 2^-53
-            x(i) = make_random_value(typename ViewType::non_const_value_type{},
-                                     (a >> 11) * inv * 2.0 - 1.0, (b >> 11) * inv * 2.0 - 1.0);
-        }
+        vecops_detail::FillRandomFunctor<ViewType>{x, seed}
+    );
+}
+
+/// Standard-normal pair from two 64-bit words (Box-Muller; u1 in (0,1], u2 in [0,1)).
+KOKKOS_INLINE_FUNCTION void gaussian_pair(uint64_t a, uint64_t b, double& g1, double& g2) {
+    const double inv = 1.0 / 9007199254740992.0; // 2^-53
+    const double u1 = (static_cast<double>(a >> 11) + 1.0) * inv;
+    const double u2 = static_cast<double>(b >> 11) * inv;
+    const double r = Kokkos::sqrt(-2.0 * Kokkos::log(u1));
+    const double th = 6.283185307179586476925 * u2;
+    g1 = r * Kokkos::cos(th);
+    g2 = r * Kokkos::sin(th);
+}
+KOKKOS_INLINE_FUNCTION Real make_normal_value(Real, double g1, double) { return static_cast<Real>(g1); }
+KOKKOS_INLINE_FUNCTION KComplex make_normal_value(KComplex, double g1, double g2) {
+    return KComplex(static_cast<Real>(g1), static_cast<Real>(g2));
+}
+
+namespace vecops_detail {
+
+template <class V> struct FillNormalFunctor {
+    V x;
+    uint64_t seed;
+    KOKKOS_INLINE_FUNCTION void operator()(const Index i) const {
+        const uint64_t a = splitmix64(seed ^ (2 * static_cast<uint64_t>(i)));
+        const uint64_t b = splitmix64(seed ^ (2 * static_cast<uint64_t>(i) + 1));
+        double g1, g2;
+        gaussian_pair(a, b, g1, g2);
+        x(i) = make_normal_value(typename V::non_const_value_type{}, g1, g2);
+    }
+};
+
+}  // namespace vecops_detail
+
+/// Deterministic, parallel fill with independent standard-normal entries (real part and, for complex views,
+/// imaginary part each N(0,1)). Counter-based like fill_random, so a given (seed) always gives the same vector
+/// on any device and thread count -- used to replay the random start vectors of stochastic-trace methods.
+template <typename ViewType>
+inline void fill_random_normal(ViewType& x, uint64_t seed)
+{
+    using ExecSpace = typename ViewType::execution_space;
+    Kokkos::parallel_for("qkrylov::fill_random_normal",
+        Kokkos::RangePolicy<ExecSpace, Index>(0, x.extent(0)),
+        vecops_detail::FillNormalFunctor<ViewType>{x, seed}
     );
 }
 

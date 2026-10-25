@@ -117,8 +117,6 @@ class Lanczos(Solver):
         Maximum Lanczos iteration steps.
     tol : float, default=1e-12
         Convergence tolerance on the lowest Ritz value residual norm.
-    max_iter : Optional[int], default=None
-        Alias for maxiter (for SciPy-style compatibility).
     early_stopping : bool, default=True
         Stop once converged. ``False`` runs exactly ``maxiter`` iterations (fixed work, for
         benchmarking and profiling); only an exhausted Krylov space ends it sooner.
@@ -140,22 +138,12 @@ class Lanczos(Solver):
     -7.1420...
     """
 
-    def __init__(self, maxiter: int = 200, tol: float = 1e-12, max_iter: Optional[int] = None,
+    def __init__(self, maxiter: int = 200, tol: float = 1e-12,
                  early_stopping: bool = True, return_state: bool = True):
-        if max_iter is not None:
-            maxiter = max_iter
         self.maxiter = int(maxiter)
         self.tol = float(tol)
         self.early_stopping = bool(early_stopping)
         self.return_state = bool(return_state)
-
-    @property
-    def max_iter(self) -> int:
-        return self.maxiter
-
-    @max_iter.setter
-    def max_iter(self, val: int):
-        self.maxiter = int(val)
 
     def solve(self, H: MatrixFreeHamiltonian) -> LanczosResult:
         s_dtype = "_FP64" if getattr(H, "dtype", np.float32) == np.float64 else "_FP32"
@@ -199,8 +187,6 @@ class LanczosTwoPass(Solver):
         Maximum Lanczos iteration steps.
     tol : float, default=1e-12
         Eigenvalue convergence tolerance.
-    max_iter : Optional[int], default=None
-        Alias for maxiter.
     early_stopping : bool, default=True
         Stop once converged. ``False`` runs exactly ``maxiter`` iterations (fixed work, for
         benchmarking and profiling); only an exhausted Krylov space ends it sooner.
@@ -223,22 +209,12 @@ class LanczosTwoPass(Solver):
     -10.7...
     """
 
-    def __init__(self, maxiter: int = 200, tol: float = 1e-12, max_iter: Optional[int] = None,
+    def __init__(self, maxiter: int = 200, tol: float = 1e-12,
                  early_stopping: bool = True, return_state: bool = True):
-        if max_iter is not None:
-            maxiter = max_iter
         self.maxiter = int(maxiter)
         self.tol = float(tol)
         self.early_stopping = bool(early_stopping)
         self.return_state = bool(return_state)
-
-    @property
-    def max_iter(self) -> int:
-        return self.maxiter
-
-    @max_iter.setter
-    def max_iter(self, val: int):
-        self.maxiter = int(val)
 
     def solve(self, H: MatrixFreeHamiltonian) -> LanczosResult:
         s_dtype = "_FP64" if getattr(H, "dtype", np.float32) == np.float64 else "_FP32"
@@ -392,6 +368,9 @@ class Davidson(Solver):
         Maximum dimension of the projected subspace before collapse.
     tol : float, default=1e-8
         Convergence tolerance for residual norms.
+    maxiter : int, default=100
+        Most outer iterations. If it is reached before every pair has converged, the best pairs found so far
+        are returned.
 
     Examples
     --------
@@ -401,15 +380,16 @@ class Davidson(Solver):
     ...     print(f"E{i} = {E:.8f}")
     """
 
-    def __init__(self, n_eig: int = 1, max_subspace: int = 20, tol: float = 1e-8):
+    def __init__(self, n_eig: int = 1, max_subspace: int = 20, tol: float = 1e-8, maxiter: int = 100):
         self.n_eig = int(n_eig)
         self.max_subspace = int(max_subspace)
         self.tol = float(tol)
+        self.maxiter = int(maxiter)
 
     def solve(self, H: MatrixFreeHamiltonian) -> DavidsonResult:
         s_dtype = "_FP64" if getattr(H, "dtype", np.float32) == np.float64 else "_FP32"
         fn = getattr(_cpp, f"davidson_lowest_{H._backend_suffix}{s_dtype}")
-        res = fn(H._cpp_obj, self.n_eig, self.max_subspace, self.tol)
+        res = fn(H._cpp_obj, self.n_eig, self.max_subspace, self.tol, self.maxiter)
         return DavidsonResult(
             eigenvalues=np.array(res.eigenvalues, dtype=float),
             eigenvectors=[np.asarray(ev) for ev in res.eigenvectors]
@@ -420,7 +400,8 @@ def davidson_lowest(
     H: MatrixFreeHamiltonian,
     n_eig: int = 1,
     max_subspace: int = 20,
-    tol: float = 1e-8
+    tol: float = 1e-8,
+    maxiter: int = 100
 ) -> DavidsonResult:
     """Find the lowest eigenpairs using the Davidson algorithm.
 
@@ -438,13 +419,15 @@ def davidson_lowest(
         Maximum projected subspace size before collapse.
     tol : float, default=1e-8
         Residual norm convergence tolerance.
+    maxiter : int, default=100
+        Most outer iterations.
 
     Returns
     -------
     DavidsonResult
         Eigenvalues and eigenvectors.
     """
-    return Davidson(n_eig=n_eig, max_subspace=max_subspace, tol=tol).solve(H)
+    return Davidson(n_eig=n_eig, max_subspace=max_subspace, tol=tol, maxiter=maxiter).solve(H)
 
 
 class DynamicsResult:
@@ -521,7 +504,7 @@ class ContinuedFraction(Solver):
 
     Parameters
     ----------
-    n_iter : int, default=100
+    n_steps : int, default=100
         Number of Lanczos recursion steps.
     phi0 : Optional[np.ndarray], default=None
         Initial perturbed state vector |phi0> = Op |psi0>.
@@ -530,13 +513,13 @@ class ContinuedFraction(Solver):
     --------
     >>> E0, psi0 = qk.solvers.lanczos_ground_state(H)
     >>> op_psi0  = H.apply(psi0)  # or any Op applied to psi0
-    >>> dyn = qk.solvers.ContinuedFraction(n_iter=200).solve(H, phi0=op_psi0)
+    >>> dyn = qk.solvers.ContinuedFraction(n_steps=200).solve(H, phi0=op_psi0)
     >>> omegas = np.linspace(-10, 10, 500)
     >>> Sw     = qk.solvers.spectral_function(dyn, omegas, eta=0.05)
     """
 
-    def __init__(self, n_iter: int = 100, phi0: Optional[np.ndarray] = None):
-        self.n_iter = int(n_iter)
+    def __init__(self, n_steps: int = 100, phi0: Optional[np.ndarray] = None):
+        self.n_steps = int(n_steps)
         self.phi0 = phi0
 
     def solve(self, H: MatrixFreeHamiltonian, phi0: Optional[np.ndarray] = None) -> DynamicsResult:
@@ -549,17 +532,17 @@ class ContinuedFraction(Solver):
         )
         s_dtype = "_FP64" if getattr(H, "dtype", np.float32) == np.float64 else "_FP32"
         fn = getattr(_cpp, f"continued_fraction_coeffs_{H._backend_suffix}{s_dtype}")
-        alphas, betas, norm_phi0 = fn(H._cpp_obj, vec, self.n_iter)
+        alphas, betas, norm_phi0 = fn(H._cpp_obj, vec, self.n_steps)
         return DynamicsResult(alphas, betas, norm_phi0)
 
 
 def continued_fraction_coeffs(
     H: MatrixFreeHamiltonian,
     phi0: np.ndarray,
-    n_iter: int = 100
+    n_steps: int = 100
 ) -> DynamicsResult:
     """Compute continued fraction coefficients for dynamical spectral function."""
-    return ContinuedFraction(n_iter=n_iter).solve(H, phi0)
+    return ContinuedFraction(n_steps=n_steps).solve(H, phi0)
 
 
 def evaluate_spectral_function(
@@ -1054,7 +1037,7 @@ class CorrectionVector(Solver):
 
     This method gives **exact** (within CG tolerance) spectral weights at any
     frequency, unlike the continued fraction method which requires analytic
-    continuation. The cost scales as O(N * max_iter) SpMV operations.
+    continuation. The cost scales as O(N * maxiter) SpMV operations.
 
     See Also
     --------
@@ -1069,14 +1052,12 @@ class CorrectionVector(Solver):
         Probe frequency / energy transfer.
     eta : float, default=0.1
         Lorentzian broadening factor.
-    max_iter : int, default=500
+    maxiter : int, default=500
         Maximum CG iterations.
     tol : float, default=1e-8
         CG residual convergence tolerance.
     op_psi0 : Optional[np.ndarray], default=None
         Excited state vector Op |psi0>.
-    maxiter : Optional[int], default=None
-        Alias for max_iter.
     """
 
     def __init__(
@@ -1084,17 +1065,14 @@ class CorrectionVector(Solver):
         e0: float,
         omega: float,
         eta: float = 0.1,
-        max_iter: int = 500,
+        maxiter: int = 500,
         tol: float = 1e-8,
         op_psi0: Optional[np.ndarray] = None,
-        maxiter: Optional[int] = None,
     ):
-        if maxiter is not None:
-            max_iter = maxiter
         self.e0 = float(e0)
         self.omega = float(omega)
         self.eta = float(eta)
-        self.max_iter = int(max_iter)
+        self.maxiter = int(maxiter)
         self.tol = float(tol)
         self.op_psi0 = op_psi0
 
@@ -1109,7 +1087,7 @@ class CorrectionVector(Solver):
         s_dtype = "_FP64" if getattr(H, "dtype", np.float32) == np.float64 else "_FP32"
         fn = getattr(_cpp, f"correction_vector_spectral_{H._backend_suffix}{s_dtype}")
         corr_vec, spec_fn, iters, conv = fn(
-            H._cpp_obj, vec, float(self.e0), float(self.omega), float(self.eta), int(self.max_iter), float(self.tol)
+            H._cpp_obj, vec, float(self.e0), float(self.omega), float(self.eta), int(self.maxiter), float(self.tol)
         )
         return CorrectionVectorResult(
             correction_vector=corr_vec,
@@ -1125,12 +1103,10 @@ def correction_vector(
     E0: float,
     omega: float,
     eta: float = 0.1,
-    max_iter: int = 500,
+    maxiter: int = 500,
     tol: float = 1e-8
 ) -> CorrectionVectorResult:
     """Compute correction vector and spectral function using conjugate gradient."""
-    return CorrectionVector(e0=E0, omega=omega, eta=eta, max_iter=max_iter, tol=tol).solve(H, op_psi0)
+    return CorrectionVector(e0=E0, omega=omega, eta=eta, maxiter=maxiter, tol=tol).solve(H, op_psi0)
 
-
-correction_vector_spectral = correction_vector
 

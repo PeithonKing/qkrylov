@@ -234,7 +234,7 @@ op += -1.0 * (CdagUp(0) * CUp(1) + CdagDn(0) * CDn(1)) + 4.0 * Nupdn(0)
   Constructs a matrix-free Hamiltonian. Holds reference guards to `basis`, `site`, and `opsum` to guarantee GC safety.
 - **`MatrixFreeHamiltonian(basis, opsum; device="cpu", dtype=Float64)`**:
   Convenience constructor that automatically infers the default `Site` model from `basis`.
-- **`dtype` Keyword**: `Float64` (default, on every device) or `Float32`, same name as in the Python API. `precision=` is accepted as an alias; `H.dtype` returns the element type.
+- **`dtype` Keyword**: `Float64` (default, on every device) or `Float32`, same name as in the Python API. `H.dtype` returns the element type.
 - **`device` Keyword**: Specifies the execution target for *this* Hamiltonian: `"cpu"` (always the host CPU), `"gpu"` (whatever GPU backend this build has), or a specific backend such as `"cuda:0"`, `"hip"`, `"sycl"`. A GPU-enabled install contains both the CPU and the GPU backend, so you can create CPU and GPU Hamiltonians side by side in one session. Throws an `ArgumentError` if a GPU is requested on a CPU-only build, or if the backend does not match the one the build was made for (e.g. `"hip"` in a CUDA build). `active_device(H)` tells you where `H` really runs.
 
 #### `dimension(H::MatrixFreeHamiltonian)::UInt64`
@@ -303,7 +303,7 @@ davidson_lowest(
 continued_fraction_coeffs(
     H::MatrixFreeHamiltonian,
     phi0::AbstractVector{<:Number};
-    n_iter::Integer=100
+    n_steps::Integer=100
 )::ContinuedFractionResult
 ```
 - **Description**: Computes Lanczos tridiagonal coefficients ($\alpha_n, \beta_n$) starting from state vector `phi0`.
@@ -387,7 +387,7 @@ sol_dav = solve(ExcitedStatesProblem(H, 3), Davidson(n_eig=3, max_subspace=20))
 sol_th = solve(ThermalProblem(H, [0.1, 0.5, 1.0, 2.0]; observables=[H]), FTLM(n_random=20, n_steps=50))
 
 # Continued Fraction Dynamics
-sol_dyn = solve(DynamicalProblem(H, phi0; e0=E0), ContinuedFraction(n_iter=100))
+sol_dyn = solve(DynamicalProblem(H, phi0; e0=E0), ContinuedFraction(n_steps=100))
 
 # Correction Vector Dynamics
 sol_cv = solve(CorrectionVectorProblem(H, phi0; e0=E0, omega=1.0, eta=0.05), CorrectionVector(maxiter=500))

@@ -42,21 +42,29 @@ def test_solver_hierarchy():
 def test_lanczos_parameters():
     s1 = Lanczos(maxiter=150, tol=1e-10)
     assert s1.maxiter == 150
-    assert s1.max_iter == 150
     assert s1.tol == 1e-10
 
-    s2 = Lanczos(max_iter=300, tol=1e-8)
-    assert s2.maxiter == 300
-    assert s2.max_iter == 300
+    s2 = LanczosTwoPass(maxiter=250, tol=1e-9)
+    assert s2.maxiter == 250
+    assert s2.tol == 1e-9
 
-    s3 = LanczosTwoPass(maxiter=250, tol=1e-9)
-    assert s3.maxiter == 250
-    assert s3.max_iter == 250
-    assert s3.tol == 1e-9
 
-    s4 = LanczosTwoPass(max_iter=400, tol=1e-11)
-    assert s4.maxiter == 400
-    assert s4.max_iter == 400
+def test_iteration_limit_has_one_name():
+    """Every iterative solver calls its iteration limit `maxiter`; the alias `max_iter` is gone."""
+    for cls in (Lanczos, LanczosTwoPass):
+        with pytest.raises(TypeError):
+            cls(max_iter=100)
+    assert CorrectionVector(e0=0.0, omega=1.0, maxiter=77).maxiter == 77
+    with pytest.raises(TypeError):
+        CorrectionVector(e0=0.0, omega=1.0, max_iter=77)
+
+
+def test_step_counts_are_called_n_steps():
+    """Fixed numbers of Krylov steps are `n_steps` everywhere (FTLM, time evolution, continued fraction)."""
+    assert ContinuedFraction(n_steps=40).n_steps == 40
+    with pytest.raises(TypeError):
+        ContinuedFraction(n_iter=40)
+    assert FTLM(beta=1.0, n_random=3, n_steps=25).n_steps == 25
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
@@ -192,11 +200,20 @@ def test_davidson_oop_solver():
     assert len(evecs[0]) == 6
 
 
+def test_davidson_iteration_limit():
+    _, _, _, H = _build_heisenberg_model(N=4, dtype=np.float64)
+    assert qk.solvers.Davidson(maxiter=100).maxiter == 100
+    evals, _ = qk.solvers.Davidson(n_eig=1, max_subspace=10, maxiter=100).solve(H)
+    assert math.isclose(evals[0], -1.6160254038, abs_tol=1e-5)
+    with pytest.raises((ValueError, RuntimeError)):
+        qk.solvers.Davidson(maxiter=0).solve(H)
+
+
 def test_continued_fraction_oop_solver():
     _, _, _, H = _build_heisenberg_model(N=4, dtype=np.float64)
     phi0 = np.zeros(H.dimension, dtype=np.complex128)
     phi0[0] = 1.0
-    solver = qk.solvers.ContinuedFraction(n_iter=10)
+    solver = qk.solvers.ContinuedFraction(n_steps=10)
     res = solver.solve(H, phi0)
     assert isinstance(res, DynamicsResult)
     alphas, betas, norm = solver.solve(H, phi0)
@@ -215,7 +232,7 @@ def test_correction_vector_oop_solver():
     H_sz = qk.Hamiltonian(H.basis, ops)
     op_psi0 = H_sz @ psi0
 
-    solver = qk.solvers.CorrectionVector(e0=e0, omega=1.0, eta=0.1, max_iter=200, tol=1e-6)
+    solver = qk.solvers.CorrectionVector(e0=e0, omega=1.0, eta=0.1, maxiter=200, tol=1e-6)
     res = solver.solve(H, op_psi0)
     assert isinstance(res, CorrectionVectorResult)
     assert res.spectral_function >= 0.0

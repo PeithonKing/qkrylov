@@ -5,8 +5,6 @@
 
 Abstract base type for many-body Hilbert space bases.
 
-# Notes
-<TODO-LLM: Explain basis indexing, combinatorial state generation, and symmetry pruning here>
 """
 abstract type AbstractBasis end
 
@@ -15,7 +13,7 @@ function dimension(b::AbstractBasis)::UInt64
 end
 
 function nsites(b::AbstractBasis)::Int
-    return Int(ccall((:qkrylov_basis_nsites, libqkrylov), Cint, (Ptr{Cvoid},), b.ptr))
+    return Int(ccall((:qkrylov_basis_num_sites, libqkrylov), Cint, (Ptr{Cvoid},), b.ptr))
 end
 
 function state(b::AbstractBasis, index::Integer)::UInt64
@@ -79,7 +77,7 @@ mutable struct SpinHalfBasis <: AbstractBasis
             set_sz!(effective_sec, round(Int, 2 * sz))
         end
         sec_ptr = effective_sec === nothing ? C_NULL : effective_sec.ptr
-        ptr = ccall((:qkrylov_spinhalf_basis_create, libqkrylov), Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(num_sites), sec_ptr)
+        ptr = ccall((:qkrylov_basis_create_spin_half, libqkrylov), Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(num_sites), sec_ptr)
         ptr == C_NULL && error("Failed to create SpinHalfBasis")
         obj = new(ptr, effective_sec)
         finalizer(obj) do o
@@ -133,7 +131,7 @@ mutable struct FermionBasis <: AbstractBasis
             set_n!(effective_sec, Int(n))
         end
         sec_ptr = effective_sec === nothing ? C_NULL : effective_sec.ptr
-        ptr = ccall((:qkrylov_fermion_basis_create, libqkrylov), Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(num_sites), sec_ptr)
+        ptr = ccall((:qkrylov_basis_create_fermion, libqkrylov), Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(num_sites), sec_ptr)
         ptr == C_NULL && error("Failed to create FermionBasis")
         obj = new(ptr, effective_sec)
         finalizer(obj) do o
@@ -157,7 +155,7 @@ mutable struct HubbardBasis <: AbstractBasis
             set_hubbard_particles!(effective_sec, something(nup, 0), something(ndn, 0))
         end
         sec_ptr = effective_sec === nothing ? C_NULL : effective_sec.ptr
-        ptr = ccall((:qkrylov_hubbard_basis_create, libqkrylov), Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(num_sites), sec_ptr)
+        ptr = ccall((:qkrylov_basis_create_hubbard, libqkrylov), Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(num_sites), sec_ptr)
         ptr == C_NULL && error("Failed to create HubbardBasis")
         obj = new(ptr, effective_sec)
         finalizer(obj) do o
@@ -181,7 +179,7 @@ mutable struct TJBasis <: AbstractBasis
             set_hubbard_particles!(effective_sec, something(nup, 0), something(ndn, 0))
         end
         sec_ptr = effective_sec === nothing ? C_NULL : effective_sec.ptr
-        ptr = ccall((:qkrylov_tj_basis_create, libqkrylov), Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(num_sites), sec_ptr)
+        ptr = ccall((:qkrylov_basis_create_tj, libqkrylov), Ptr{Cvoid}, (Cint, Ptr{Cvoid}), Cint(num_sites), sec_ptr)
         ptr == C_NULL && error("Failed to create TJBasis")
         obj = new(ptr, effective_sec)
         finalizer(obj) do o

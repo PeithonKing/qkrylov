@@ -61,31 +61,78 @@ jobs:
         cp -R bindings/python/tests "$TMP_TESTS/tests"
         python -m pytest "$TMP_TESTS/tests" -v
 
-  # test-julia:
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       julia-version: ['1.10', '1.11', '1.12']
-  #     fail-fast: false
+  # The Julia package calls the C API of a shared libqkrylov, so the library is built once and handed to the test
+  # jobs for each supported Julia version.
+  build-julia-lib:
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #   - uses: actions/checkout@v4
+    steps:
+    - uses: actions/checkout@v4
 
-  #   - name: Build C++ library
-  #     run: |
-  #       cmake -B build -S . -DQKRYLOV_BUILD_TESTS=OFF -DQKRYLOV_BUILD_PYTHON=OFF -DBUILD_SHARED_LIBS=ON
-  #       cmake --build build --config Release
+    - name: Build and install the shared library
+      run: |
+        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON \
+              -DQKRYLOV_BUILD_TESTS=OFF -DQKRYLOV_BUILD_PYTHON=OFF -DCMAKE_INSTALL_PREFIX="$PWD/install"
+        cmake --build build -j4
+        cmake --install build
 
+    # What a C or C++ user does: find the installed package, link one program of each, run them. This fails if the
+    # shared library stops exporting something the headers need (for example the C++ classes' tables).
+    - name: Link and run a C and a C++ program against the installed library
+      run: |
+        mkdir consumer
+        cp examples/quickstart.c consumer/main.c
+        cp examples/quickstart.cpp consumer/main.cpp
+        cat > consumer/CMakeLists.txt <<'EOF'
+        cmake_minimum_required(VERSION 3.20)
+        project(consumer LANGUAGES C CXX)
+        find_package(qkrylov REQUIRED)
+        add_executable(c_app main.c)
+        target_link_libraries(c_app PRIVATE qkrylov::qkrylov m)
+        add_executable(cpp_app main.cpp)
+        target_link_libraries(cpp_app PRIVATE qkrylov::qkrylov)
+        EOF
+        cmake -S consumer -B consumer/build -DCMAKE_PREFIX_PATH="$PWD/install"
+        cmake --build consumer/build
+        OMP_PROC_BIND=spread ./consumer/build/c_app
+        OMP_PROC_BIND=spread ./consumer/build/cpp_app
 
-  #   - name: Set up Julia ${{ matrix.julia-version }}
-  #     uses: julia-actions/setup-julia@v2
-  #     with:
-  #       version: ${{ matrix.julia-version }}
+    - name: Pack the library
+      run: |
+        # one tarball keeps the libqkrylov.so -> libqkrylov.so.X.Y symlinks intact
+        tar czf qkrylov-lib.tgz -C install lib
 
-  #   - name: Run Julia tests
-  #     run: |
-  #       export QKRYLOV_LIB_PATH="${GITHUB_WORKSPACE}/build/libqkrylov.so"
-  #       julia --project=bindings/julia -e 'using Pkg; Pkg.test()'
+    - uses: actions/upload-artifact@v4
+      with:
+        name: qkrylov-lib
+        path: qkrylov-lib.tgz
+        retention-days: 1
 
+  test-julia:
+    needs: build-julia-lib
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        julia-version: ['1.10', '1.11', '1.12']
+      fail-fast: false
 
+    steps:
+    - uses: actions/checkout@v4
 
+    - uses: actions/download-artifact@v4
+      with:
+        name: qkrylov-lib
+
+    - name: Unpack the shared library
+      run: tar xzf qkrylov-lib.tgz
+
+    - name: Set up Julia ${{ matrix.julia-version }}
+      uses: julia-actions/setup-julia@v2
+      with:
+        version: ${{ matrix.julia-version }}
+
+    - name: Run Julia tests
+      run: |
+        export QKRYLOV_LIB_PATH="${GITHUB_WORKSPACE}/lib/libqkrylov.so"
+        export OMP_PROC_BIND=spread OMP_PLACES=threads
+        julia --project=bindings/julia -e 'using Pkg; Pkg.instantiate(); Pkg.test()'

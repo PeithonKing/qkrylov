@@ -15,7 +15,6 @@ from qkrylov import (
     Sm,
     lanczos_ground_state,
     correction_vector,
-    correction_vector_spectral,
     CorrectionVectorResult,
 )
 
@@ -220,7 +219,7 @@ def test_spin1_correction_vector_4site_heisenberg_e2e(dtype):
         E0=lgs.energy,
         omega=omega,
         eta=eta,
-        max_iter=500,
+        maxiter=500,
         tol=tol_cg
     )
 
@@ -268,22 +267,11 @@ def test_correction_vector_zero_vector_edge_case(dtype):
     assert np.all(res.correction_vector == 0.0)
 
 
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-def test_correction_vector_alias_equivalence(dtype):
-    """Test correction_vector is identical to correction_vector_spectral."""
-    assert correction_vector is correction_vector_spectral
+def test_correction_vector_has_one_name():
+    import qkrylov
 
-    N = 2
-    S = 1.0
-    basis, site, H = _build_heisenberg_chain(N, S, sz=0.0, dtype=dtype)
-    vec = np.ones(H.dimension, dtype=np.complex128 if dtype == np.float64 else np.complex64)
-
-    res1 = correction_vector(H, vec, E0=-1.0, omega=0.5, eta=0.1)
-    res2 = correction_vector_spectral(H, vec, E0=-1.0, omega=0.5, eta=0.1)
-
-    assert res1.converged == res2.converged
-    assert res1.iterations == res2.iterations
-    assert math.isclose(res1.spectral_function, res2.spectral_function, rel_tol=1e-5)
+    assert not hasattr(qkrylov, "correction_vector_spectral")
+    assert not hasattr(qkrylov.solvers, "correction_vector_spectral")
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
