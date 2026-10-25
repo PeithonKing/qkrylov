@@ -13,7 +13,9 @@ const PRECISIONS = [32, 64], DEVICES = ["cpu", "gpu"], PASSES = [1, 2];
 const key = (p, d, n) => `${p} ${d} ${n}`;
 const name = (p, d, n) => `FP${p} ${d.toUpperCase()} ${n === 1 ? "Single" : "Two"}-Pass`;
 
-const state = { enabled: new Set(Object.keys(COLORS)), ds: null, Ls: [], devs: new Set(DEVICES) };
+const state = { enabled: new Set(Object.keys(COLORS)), ds: null, Ls: [], devs: new Set(DEVICES),
+  // L range the user chose, kept when switching dataset (not across page reloads). "min"/"max" follow the dataset's ends.
+  lrange: { lo: "min", hi: "max" } };
 
 function fmtTime(s) { return s >= 100 ? s.toFixed(1) : s >= 1 ? s.toFixed(3) : s.toFixed(4); }
 function fmtVal(v, metric) {
@@ -42,6 +44,8 @@ function buildControls() {
     // The knob being dragged pushes the other one along, so the lower limit never passes the upper.
     const lo = $("lmin"), hi = $("lmax");
     if (+lo.value > +hi.value) (e.target === lo ? hi : lo).value = e.target.value;
+    const last = state.Ls.length - 1;
+    state.lrange = { lo: +lo.value === 0 ? "min" : state.Ls[+lo.value], hi: +hi.value === last ? "max" : state.Ls[+hi.value] };
     draw();
   };
 
@@ -87,7 +91,11 @@ function selectDataset(ds) {
     const el = $(id);
     el.min = 0; el.max = state.Ls.length - 1; el.step = 1;
   }
-  $("lmin").value = $("lmax").value = state.Ls.length - 1; // start on the largest size, like a single group of labelled bars
+  const { lo, hi } = state.lrange, last = state.Ls.length - 1;
+  let i = lo === "min" ? 0 : state.Ls.findIndex((L) => L >= lo);          // first size at or above the remembered lower limit
+  let j = hi === "max" ? last : state.Ls.map((L) => L <= hi).lastIndexOf(true); // last size at or below the upper limit
+  if (i < 0 || j < 0 || i > j) { i = 0; j = last; }                       // remembered range does not overlap this dataset
+  $("lmin").value = i; $("lmax").value = j;
   // Hide the device rows the dataset has no data for (e.g. a CPU-only machine).
   const devs = new Set(ds.results.map((r) => r.device));
   state.devs = devs;
