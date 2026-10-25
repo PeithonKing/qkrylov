@@ -151,7 +151,7 @@ static void bind_backend(nb::module_& m, const std::string& suffix, const std::s
 
     std::string dav_name = "davidson_lowest_" + suffix + type_suffix;
     m.def(dav_name.c_str(), &davidson_lowest<ExecSpace>,
-          "H"_a, "n_eig"_a = 1, "max_subspace"_a = 20, "tol"_a = 1e-8);
+          "H"_a, "n_eig"_a = 1, "max_subspace"_a = 20, "tol"_a = 1e-8, "maxiter"_a = 100);
 
     std::string dyn_name = "continued_fraction_coeffs_" + suffix + type_suffix;
     m.def(dyn_name.c_str(),

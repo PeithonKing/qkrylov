@@ -12,6 +12,7 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <stdexcept>
 
 using namespace qkrylov;
 using namespace qkrylov::QKRYLOV_PRECISION_NAMESPACE;
@@ -89,6 +90,14 @@ void check_against_lanczos(int L, bool complex_terms, int n_eig, int max_subspac
     const auto again = davidson_lowest<Exec>(H, n_eig, max_subspace, kDavidsonTol);
     assert(again.iterations == res.iterations);
     for (int k = 0; k < n_eig; ++k) assert(again.eigenvalues[k] == res.eigenvalues[k]);
+
+    // the iteration limit is honoured: one outer iteration is not enough, and says so
+    assert(res.iterations > 1);
+    const auto capped = davidson_lowest<Exec>(H, n_eig, max_subspace, kDavidsonTol, 1);
+    assert(!capped.converged && capped.iterations == 1);
+    bool rejected = false;
+    try { davidson_lowest<Exec>(H, n_eig, max_subspace, kDavidsonTol, 0); } catch (const std::invalid_argument&) { rejected = true; }
+    assert(rejected);
 
     std::cout << (complex_terms ? "complex" : "real   ") << " H, L=" << L << ", n_eig=" << n_eig
               << ": iterations=" << res.iterations << ", E0=" << res.eigenvalues[0] << std::endl;

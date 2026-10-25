@@ -200,6 +200,15 @@ def test_davidson_oop_solver():
     assert len(evecs[0]) == 6
 
 
+def test_davidson_iteration_limit():
+    _, _, _, H = _build_heisenberg_model(N=4, dtype=np.float64)
+    assert qk.solvers.Davidson(maxiter=100).maxiter == 100
+    evals, _ = qk.solvers.Davidson(n_eig=1, max_subspace=10, maxiter=100).solve(H)
+    assert math.isclose(evals[0], -1.6160254038, abs_tol=1e-5)
+    with pytest.raises((ValueError, RuntimeError)):
+        qk.solvers.Davidson(maxiter=0).solve(H)
+
+
 def test_continued_fraction_oop_solver():
     _, _, _, H = _build_heisenberg_model(N=4, dtype=np.float64)
     phi0 = np.zeros(H.dimension, dtype=np.complex128)

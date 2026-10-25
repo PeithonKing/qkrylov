@@ -340,6 +340,11 @@ using QuantumKrylov
         @test res.eigenvectors !== nothing
         @test length(res.eigenvectors) == 2
         @test length(res.eigenvectors[1]) == 16
+
+        # the iteration limit is honoured and reported
+        capped = davidson_lowest(H, n_eig=2, max_subspace=10, tol=1e-12, maxiter=1)
+        @test capped.iterations == 1 && !capped.converged
+        @test_throws Exception davidson_lowest(H, n_eig=2, maxiter=0)
     end
 
     @testset "Dynamics & Spectral Function" begin

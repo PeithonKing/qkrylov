@@ -1138,11 +1138,12 @@ int qkrylov_lanczos_solve_lowest(qkrylov_hamiltonian_h h,
 int qkrylov_davidson_solve(qkrylov_hamiltonian_h h,
                                     int n_eig,
                                     int max_subspace,
+                                    int maxiter,
                                     double tol,
                                     double* eigenvalues_out,
                                     double* eigenvectors_complex_out,
                                     qkrylov_davidson_result_c_t* result_info) {
-    return qkrylov_davidson_solve_fp64(h, n_eig, max_subspace, tol, eigenvalues_out, eigenvectors_complex_out, result_info);
+    return qkrylov_davidson_solve_fp64(h, n_eig, max_subspace, maxiter, tol, eigenvalues_out, eigenvectors_complex_out, result_info);
 }
 
 int qkrylov_continued_fraction_coeffs(qkrylov_hamiltonian_h h,

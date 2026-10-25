@@ -368,6 +368,9 @@ class Davidson(Solver):
         Maximum dimension of the projected subspace before collapse.
     tol : float, default=1e-8
         Convergence tolerance for residual norms.
+    maxiter : int, default=100
+        Most outer iterations. If it is reached before every pair has converged, the best pairs found so far
+        are returned.
 
     Examples
     --------
@@ -377,15 +380,16 @@ class Davidson(Solver):
     ...     print(f"E{i} = {E:.8f}")
     """
 
-    def __init__(self, n_eig: int = 1, max_subspace: int = 20, tol: float = 1e-8):
+    def __init__(self, n_eig: int = 1, max_subspace: int = 20, tol: float = 1e-8, maxiter: int = 100):
         self.n_eig = int(n_eig)
         self.max_subspace = int(max_subspace)
         self.tol = float(tol)
+        self.maxiter = int(maxiter)
 
     def solve(self, H: MatrixFreeHamiltonian) -> DavidsonResult:
         s_dtype = "_FP64" if getattr(H, "dtype", np.float32) == np.float64 else "_FP32"
         fn = getattr(_cpp, f"davidson_lowest_{H._backend_suffix}{s_dtype}")
-        res = fn(H._cpp_obj, self.n_eig, self.max_subspace, self.tol)
+        res = fn(H._cpp_obj, self.n_eig, self.max_subspace, self.tol, self.maxiter)
         return DavidsonResult(
             eigenvalues=np.array(res.eigenvalues, dtype=float),
             eigenvectors=[np.asarray(ev) for ev in res.eigenvectors]
@@ -396,7 +400,8 @@ def davidson_lowest(
     H: MatrixFreeHamiltonian,
     n_eig: int = 1,
     max_subspace: int = 20,
-    tol: float = 1e-8
+    tol: float = 1e-8,
+    maxiter: int = 100
 ) -> DavidsonResult:
     """Find the lowest eigenpairs using the Davidson algorithm.
 
@@ -414,13 +419,15 @@ def davidson_lowest(
         Maximum projected subspace size before collapse.
     tol : float, default=1e-8
         Residual norm convergence tolerance.
+    maxiter : int, default=100
+        Most outer iterations.
 
     Returns
     -------
     DavidsonResult
         Eigenvalues and eigenvectors.
     """
-    return Davidson(n_eig=n_eig, max_subspace=max_subspace, tol=tol).solve(H)
+    return Davidson(n_eig=n_eig, max_subspace=max_subspace, tol=tol, maxiter=maxiter).solve(H)
 
 
 class DynamicsResult:

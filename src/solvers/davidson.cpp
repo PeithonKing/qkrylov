@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -193,7 +194,7 @@ Real norm_of(const VecT& x) {
 }
 
 template <class ExecSpace, class Scalar>
-DavidsonResult davidson_run(const MatrixFreeHamiltonian<ExecSpace>& H, int n_eig, int max_subspace, Real tol)
+DavidsonResult davidson_run(const MatrixFreeHamiltonian<ExecSpace>& H, int n_eig, int max_subspace, Real tol, int maxiter)
 {
     using MemSpace = typename ExecSpace::memory_space;
     using Vec = vec_t<ExecSpace, Scalar>;
@@ -308,7 +309,7 @@ DavidsonResult davidson_run(const MatrixFreeHamiltonian<ExecSpace>& H, int n_eig
         return c;
     };
 
-    for (int iter = 0; iter < 100; ++iter) {
+    for (int iter = 0; iter < maxiter; ++iter) {
         if (m == 0) return {};
         std::vector<std::vector<Complex>> Hsub(m, std::vector<Complex>(m));
         for (int i = 0; i < m; ++i)
@@ -331,7 +332,7 @@ DavidsonResult davidson_run(const MatrixFreeHamiltonian<ExecSpace>& H, int n_eig
             }
         }
 
-        if (all_converged || iter == 99) {
+        if (all_converged || iter == maxiter - 1) {
             DavidsonResult res;
             res.iterations = iter + 1;
             res.converged = all_converged;
@@ -387,34 +388,36 @@ DavidsonResult davidson_lowest(
     const MatrixFreeHamiltonian<ExecSpace>& H,
     int n_eig,
     int max_subspace,
-    Real tol
+    Real tol,
+    int maxiter
 )
 {
+    if (maxiter <= 0) throw std::invalid_argument("davidson_lowest: maxiter must be positive");
     if (H.dimension() == 0) return {};
     // Real Hamiltonian: the whole iteration runs in real arithmetic (half the memory and traffic).
-    if (H.has_real_coefficients()) return davidson_detail::davidson_run<ExecSpace, Real>(H, n_eig, max_subspace, tol);
-    return davidson_detail::davidson_run<ExecSpace, KComplex>(H, n_eig, max_subspace, tol);
+    if (H.has_real_coefficients()) return davidson_detail::davidson_run<ExecSpace, Real>(H, n_eig, max_subspace, tol, maxiter);
+    return davidson_detail::davidson_run<ExecSpace, KComplex>(H, n_eig, max_subspace, tol, maxiter);
 }
 
 
 // Explicit instantiations
 #ifdef KOKKOS_ENABLE_SERIAL
-template DavidsonResult davidson_lowest<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, int, int, Real);
+template DavidsonResult davidson_lowest<Kokkos::Serial>(const MatrixFreeHamiltonian<Kokkos::Serial>&, int, int, Real, int);
 #endif
 #ifdef KOKKOS_ENABLE_OPENMP
-template DavidsonResult davidson_lowest<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, int, int, Real);
+template DavidsonResult davidson_lowest<Kokkos::OpenMP>(const MatrixFreeHamiltonian<Kokkos::OpenMP>&, int, int, Real, int);
 #endif
 #ifdef KOKKOS_ENABLE_THREADS
-template DavidsonResult davidson_lowest<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, int, int, Real);
+template DavidsonResult davidson_lowest<Kokkos::Threads>(const MatrixFreeHamiltonian<Kokkos::Threads>&, int, int, Real, int);
 #endif
 #ifdef KOKKOS_ENABLE_CUDA
-template DavidsonResult davidson_lowest<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, int, int, Real);
+template DavidsonResult davidson_lowest<Kokkos::Cuda>(const MatrixFreeHamiltonian<Kokkos::Cuda>&, int, int, Real, int);
 #endif
 #ifdef KOKKOS_ENABLE_HIP
-template DavidsonResult davidson_lowest<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, int, int, Real);
+template DavidsonResult davidson_lowest<Kokkos::HIP>(const MatrixFreeHamiltonian<Kokkos::HIP>&, int, int, Real, int);
 #endif
 #ifdef KOKKOS_ENABLE_SYCL
-template DavidsonResult davidson_lowest<Kokkos::Experimental::SYCL>(const MatrixFreeHamiltonian<Kokkos::Experimental::SYCL>&, int, int, Real);
+template DavidsonResult davidson_lowest<Kokkos::Experimental::SYCL>(const MatrixFreeHamiltonian<Kokkos::Experimental::SYCL>&, int, int, Real, int);
 #endif
 }
 

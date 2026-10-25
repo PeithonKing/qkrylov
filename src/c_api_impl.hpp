@@ -698,6 +698,7 @@ int SUFFIX(qkrylov_davidson_solve)(
     qkrylov_hamiltonian_h h,
     int n_eig,
     int max_subspace,
+    int maxiter,
     Scalar tol,
     Scalar* eigenvalues_out,
     Scalar* eigenvectors_complex_out,
@@ -723,11 +724,15 @@ int SUFFIX(qkrylov_davidson_solve)(
         set_last_error("qkrylov_davidson_solve: max_subspace must be positive");
         return QKRYLOV_ERROR_INVALID_ARG;
     }
+    if (maxiter <= 0) {
+        set_last_error("qkrylov_davidson_solve: maxiter must be positive");
+        return QKRYLOV_ERROR_INVALID_ARG;
+    }
     try {
         return qk_dispatch(h->space, [&](auto sp) -> int {
             using Space = typename decltype(sp)::type;
             auto* H = static_cast<MatrixFreeHamiltonian<Space>*>(h->impl.get());
-            auto res = davidson_lowest(*H, n_eig, max_subspace, static_cast<Real>(tol));
+            auto res = davidson_lowest(*H, n_eig, max_subspace, static_cast<Real>(tol), maxiter);
             const size_t k = std::min(static_cast<size_t>(n_eig), res.eigenvalues.size());
             for (size_t i = 0; i < k; ++i) {
                 eigenvalues_out[i] = static_cast<Scalar>(res.eigenvalues[i]);

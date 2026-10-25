@@ -99,11 +99,12 @@ end
 struct Davidson <: AbstractQuantumAlgorithm
     n_eig::Int
     max_subspace::Int
+    maxiter::Int
     tol::Float64
     compute_eigenvectors::Bool
 end
-Davidson(; n_eig::Integer=1, max_subspace::Integer=20, tol::Real=1e-8, compute_eigenvectors::Bool=true) =
-    Davidson(Int(n_eig), Int(max_subspace), Float64(tol), compute_eigenvectors)
+Davidson(; n_eig::Integer=1, max_subspace::Integer=20, maxiter::Integer=100, tol::Real=1e-8, compute_eigenvectors::Bool=true) =
+    Davidson(Int(n_eig), Int(max_subspace), Int(maxiter), Float64(tol), compute_eigenvectors)
 
 struct FTLM <: AbstractQuantumAlgorithm
     beta::Float64
@@ -385,7 +386,7 @@ function solve(prob::ExcitedStatesProblem, alg::Lanczos{TwoPass}; kwargs...)
 end
 
 function solve(prob::ExcitedStatesProblem, alg::Davidson=Davidson(); kwargs...)
-    return davidson_lowest(prob.H; n_eig=alg.n_eig, max_subspace=alg.max_subspace, tol=alg.tol, compute_eigenvectors=alg.compute_eigenvectors)
+    return davidson_lowest(prob.H; n_eig=alg.n_eig, max_subspace=alg.max_subspace, maxiter=alg.maxiter, tol=alg.tol, compute_eigenvectors=alg.compute_eigenvectors)
 end
 
 function solve(prob::ThermalProblem, alg::FTLM=FTLM(); kwargs...)
@@ -459,6 +460,7 @@ function davidson_lowest(
     H::MatrixFreeHamiltonian{Float64};
     n_eig::Integer=1,
     max_subspace::Integer=20,
+    maxiter::Integer=100,
     tol::Real=1e-8,
     compute_eigenvectors::Bool=true
 )::DavidsonResult{Float64}
@@ -472,8 +474,8 @@ function davidson_lowest(
         status = ccall(
             (:qkrylov_davidson_solve_fp64, libqkrylov),
             Cint,
-            (Ptr{Cvoid}, Cint, Cint, Cdouble, Ptr{Cdouble}, Ptr{Cdouble}, Ref{DavidsonResultC}),
-            H.ptr, Cint(n_eig), Cint(max_subspace), Cdouble(tol), pointer(evals), Ptr{Cdouble}(evecs_ptr), dav_c
+            (Ptr{Cvoid}, Cint, Cint, Cint, Cdouble, Ptr{Cdouble}, Ptr{Cdouble}, Ref{DavidsonResultC}),
+            H.ptr, Cint(n_eig), Cint(max_subspace), Cint(maxiter), Cdouble(tol), pointer(evals), Ptr{Cdouble}(evecs_ptr), dav_c
         )
         _check_status(status, "Davidson solver failed")
     end
@@ -496,6 +498,7 @@ function davidson_lowest(
     H::MatrixFreeHamiltonian{Float32};
     n_eig::Integer=1,
     max_subspace::Integer=20,
+    maxiter::Integer=100,
     tol::Real=1e-5,
     compute_eigenvectors::Bool=true
 )::DavidsonResult{Float32}
@@ -509,8 +512,8 @@ function davidson_lowest(
         status = ccall(
             (:qkrylov_davidson_solve_fp32, libqkrylov),
             Cint,
-            (Ptr{Cvoid}, Cint, Cint, Cfloat, Ptr{Cfloat}, Ptr{Cfloat}, Ref{DavidsonResultC}),
-            H.ptr, Cint(n_eig), Cint(max_subspace), Cfloat(tol), pointer(evals), Ptr{Cfloat}(evecs_ptr), dav_c
+            (Ptr{Cvoid}, Cint, Cint, Cint, Cfloat, Ptr{Cfloat}, Ptr{Cfloat}, Ref{DavidsonResultC}),
+            H.ptr, Cint(n_eig), Cint(max_subspace), Cint(maxiter), Cfloat(tol), pointer(evals), Ptr{Cfloat}(evecs_ptr), dav_c
         )
         _check_status(status, "Davidson solver failed")
     end

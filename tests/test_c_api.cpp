@@ -465,9 +465,10 @@ int main() {
     std::vector<double> dav_evals(n_eig);
     std::vector<std::complex<double>> dav_evecs(n_eig * dim);
     qkrylov_davidson_result_c_t dav_info;
-    int dav_status = qkrylov_davidson_solve(H, n_eig, 20, 1e-10, dav_evals.data(), reinterpret_cast<double*>(dav_evecs.data()), &dav_info);
+    int dav_status = qkrylov_davidson_solve(H, n_eig, 20, 100, 1e-10, dav_evals.data(), reinterpret_cast<double*>(dav_evecs.data()), &dav_info);
     assert(dav_status == QKRYLOV_SUCCESS);
     assert(dav_info.converged == 1);
+    assert(qkrylov_davidson_solve(H, n_eig, 20, 0, 1e-10, dav_evals.data(), reinterpret_cast<double*>(dav_evecs.data()), &dav_info) == QKRYLOV_ERROR_INVALID_ARG);
 
     std::cout << "C API Davidson FP64 Lowest Eigenvalues: E0=" << dav_evals[0] << ", E1=" << dav_evals[1] << std::endl;
     assert(std::abs(dav_evals[0] - lanczos_res.energy) < 1e-10);
@@ -643,7 +644,7 @@ int main() {
     std::vector<float> dav_evals32(n_eig);
     std::vector<std::complex<float>> dav_evecs32(n_eig * dim);
     qkrylov_davidson_result_c_t dav_info32;
-    int dav_status32 = qkrylov_davidson_solve_fp32(H32, n_eig, 20, 1e-5f, dav_evals32.data(), reinterpret_cast<float*>(dav_evecs32.data()), &dav_info32);
+    int dav_status32 = qkrylov_davidson_solve_fp32(H32, n_eig, 20, 100, 1e-5f, dav_evals32.data(), reinterpret_cast<float*>(dav_evecs32.data()), &dav_info32);
     assert(dav_status32 == QKRYLOV_SUCCESS);
     assert(dav_info32.converged == 1);
     assert(std::abs(dav_evals32[0] - lanczos_res32.energy) < 1e-4f);
