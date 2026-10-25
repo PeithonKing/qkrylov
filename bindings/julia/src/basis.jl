@@ -5,8 +5,6 @@
 
 Abstract base type for many-body Hilbert space bases.
 
-# Notes
-<TODO-LLM: Explain basis indexing, combinatorial state generation, and symmetry pruning here>
 """
 abstract type AbstractBasis end
 

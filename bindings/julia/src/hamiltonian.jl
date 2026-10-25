@@ -15,8 +15,6 @@ Supports dual-precision floating-point arithmetic (`Float64` and `Float32`) acro
 `dtype` is `Float64` or `Float32` and defaults to `Float64` on every device. `precision=` is accepted as an alias
 of `dtype=`; `H.dtype` returns the element type.
 
-# Notes
-<TODO-LLM: Explain matrix-free SpMV algorithm, Kokkos parallel kernel dispatch, and zero-RAM scaling here>
 """
 mutable struct MatrixFreeHamiltonian{T<:Union{Float32, Float64}}
     ptr::Ptr{Cvoid}
@@ -266,7 +264,6 @@ function Base.show(io::IO, H::MatrixFreeHamiltonian{T}) where {T}
     print(io, "MatrixFreeHamiltonian{$T}(dim = $d, device = \"$(H.device)\", basis = $(H.basis))")
 end
 
-
 """
     isreal(H::MatrixFreeHamiltonian) -> Bool
 
@@ -278,7 +275,6 @@ function Base.isreal(H::MatrixFreeHamiltonian)
     status < 0 && error("qkrylov_hamiltonian_is_real failed: $(get_last_error_message())")
     return status == 1
 end
-
 
 """
     active_device(H::MatrixFreeHamiltonian) -> String

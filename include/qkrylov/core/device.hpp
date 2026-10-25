@@ -38,7 +38,6 @@ struct sycl { int id = 0; };
 ///
 /// Accepted string formats: "cpu", "cuda:0", "cuda:1", "hip:0",
 /// "gpu:0", "gpu:1", "sycl:0", or just "gpu" (defaults to device 0).
-/// <TODO-LLM: Document device string grammar, multi-GPU rank binding, and NUMA node affinity here>
 struct Device {
     int id = 0;
 
