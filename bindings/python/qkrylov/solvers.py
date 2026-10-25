@@ -1103,5 +1103,3 @@ def correction_vector(
     return CorrectionVector(e0=E0, omega=omega, eta=eta, maxiter=maxiter, tol=tol).solve(H, op_psi0)
 
 
-correction_vector_spectral = correction_vector
-

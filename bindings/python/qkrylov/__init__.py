@@ -75,7 +75,6 @@ from .solvers import (
     ftlm_dynamics,
     CorrectionVectorResult,
     correction_vector,
-    correction_vector_spectral,
 )
 
 from typing import Optional
@@ -227,7 +226,6 @@ __all__ = [
     "ftlm_dynamics",
     "CorrectionVectorResult",
     "correction_vector",
-    "correction_vector_spectral",
     
     # Utilities
     "find_gpu",
