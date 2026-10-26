@@ -10,7 +10,7 @@
 
 namespace qkrylov {
 
-class OperatorTerm; // Forward declaration
+struct OperatorTerm; // Forward declaration (it is defined as a struct; MSVC puts the keyword in the symbol name)
 
 class Site
 {
